@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Local Environment Variables
+.env
+.env.*
+.env.local
+**/.env
+**/.env.*
+**/.env.local
+!.env.example
+!**/.env.example
+!**/.env.example.secure
+
+# Next.js / React Builds
+.next/
+**/dist/
+**/build/
+**/out/
+**/.next/
+
+# Logs and Debug files
+*.log
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+otp_debug.txt
+**/otp_debug.txt
+**/login_debug.txt
+**/api_debug_status.txt
+**/LATEST_CRASH.txt
+**/error_log*.txt
+
+# Uploads / Dynamic Data (Backend)
+backend/uploads/
+backend/temp/
+**/uploads/
+**/temp/
+*.pdf
+*.zip
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Private Service Accounts & Secrets
+backend/config/superadmin-*.json
+backend/config/mbk-tsmg-drive-31c901fee365.json
+**/superadmin-*.json
+
+# OS / Editor configuration
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db

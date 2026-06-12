@@ -1,0 +1,830 @@
+import axios from "axios";
+import {
+  discoverApiOrigin,
+  getApiOrigin,
+  getApiBaseUrl,
+  LOCAL_API_PORT_FALLBACKS,
+  resetDiscoveredApiOrigin,
+} from "@/config/apiConfig";
+
+const cleanBaseUrl = getApiOrigin();
+const hasExplicitOrigin = Boolean(
+  (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_ORIGIN || "").trim(),
+);
+
+// Use explicit origin when configured; otherwise proxy via Next.js /api rewrite in dev
+export const API_BASE_URL = hasExplicitOrigin ? getApiBaseUrl() : "/api";
+export const FILE_BASE_URL = cleanBaseUrl || "";
+const API_DEBUG = process.env.NEXT_PUBLIC_ENABLE_API_DEBUG === "true";
+const debugLog = (...args) => {
+  if (API_DEBUG) {
+    console.log(...args);
+  }
+};
+
+const isAbortedFetchError = (error, signal) =>
+  Boolean(
+    signal?.aborted ||
+      error?.name === "AbortError" ||
+      error?.code === 20 ||
+      /aborted/i.test(String(error?.message || "")),
+  );
+
+export const isAbortRequestError = (error, signal) =>
+  isAbortedFetchError(error, signal) || error?.__aborted === true;
+
+const createNormalizedAbortError = (originalError) => {
+  if (originalError?.name === "AbortError" || originalError?.__aborted) {
+    return originalError;
+  }
+  const abortError = new Error(originalError?.message || "Request aborted");
+  abortError.name = "AbortError";
+  abortError.__aborted = true;
+  abortError.cause = originalError;
+  return abortError;
+};
+
+const getLocalhostPortFallbackUrls = (requestUrl) => {
+  try {
+    const parsedUrl = new URL(requestUrl, typeof window !== "undefined" ? window.location.origin : undefined);
+    const host = parsedUrl.hostname?.toLowerCase();
+    const isLocalHost = host === "localhost" || host === "127.0.0.1";
+    if (!isLocalHost) return [];
+
+    const urls = [];
+    const pushUrl = (port) => {
+      const nextUrl = new URL(parsedUrl.toString());
+      nextUrl.port = String(port);
+      const rendered = nextUrl.toString();
+      if (!urls.includes(rendered)) {
+        urls.push(rendered);
+      }
+    };
+
+    const currentPort = parsedUrl.port || "";
+    LOCAL_API_PORT_FALLBACKS.forEach((port) => {
+      if (String(port) !== currentPort) {
+        pushUrl(port);
+      }
+    });
+
+    return urls;
+  } catch {
+    return [];
+  }
+};
+
+const GET_CACHE_BUSTER_PARAMS = new Set(["t"]);
+const apiResponseCache = new Map();
+const apiInFlightRequests = new Map();
+const latestRequestStartByCacheKey = new Map();
+const recentApiErrorLogs = new Map();
+const API_METRICS_ENABLED =
+  process.env.NEXT_PUBLIC_ENABLE_API_METRICS === "true";
+const API_METRICS_WINDOW_SIZE = Number(
+  process.env.NEXT_PUBLIC_API_METRICS_WINDOW_SIZE || 200,
+);
+const apiLatencyMetrics = new Map();
+const nowMs = () =>
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now();
+const DEFAULT_REQUEST_TIMEOUT_MS = Number(
+  process.env.NEXT_PUBLIC_API_TIMEOUT_MS || 20000,
+);
+const DEFAULT_UPLOAD_TIMEOUT_MS = Number(
+  process.env.NEXT_PUBLIC_API_UPLOAD_TIMEOUT_MS || 180000,
+);
+
+const resolveTimeoutMs = (timeoutMs, fallbackMs) => {
+  const parsed = Number(timeoutMs);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return fallbackMs;
+};
+
+const shouldLogApiError = (signature, cooldownMs = 2500) => {
+  const now = Date.now();
+  const lastLoggedAt = Number(recentApiErrorLogs.get(signature) || 0);
+  if (now - lastLoggedAt < cooldownMs) {
+    return false;
+  }
+  recentApiErrorLogs.set(signature, now);
+  return true;
+};
+
+const toMetricRouteKey = (endpoint = "") => {
+  const normalized = normalizeApiCacheKey(endpoint);
+  const pathOnly = String(normalized || "").split("?")[0] || "/";
+  // Remove object ids to reduce cardinality for p50/p95 tracking.
+  return pathOnly.replace(
+    /\b[0-9a-f]{24}\b/gi,
+    ":id",
+  );
+};
+
+const computePercentile = (values = [], percentile = 0.5) => {
+  if (!Array.isArray(values) || values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(percentile * sorted.length) - 1),
+  );
+  return Number(sorted[index] || 0);
+};
+
+const recordApiLatencyMetric = ({
+  method,
+  endpoint,
+  status,
+  durationMs,
+  ok,
+}) => {
+  if (!API_METRICS_ENABLED) return;
+
+  const metricMethod = String(method || "GET").toUpperCase();
+  const metricRoute = toMetricRouteKey(endpoint);
+  const key = `${metricMethod} ${metricRoute}`;
+  const duration = Math.max(0, Number(durationMs) || 0);
+
+  const metric = apiLatencyMetrics.get(key) || {
+    method: metricMethod,
+    endpoint: metricRoute,
+    count: 0,
+    errors: 0,
+    durations: [],
+    lastStatus: null,
+  };
+
+  metric.count += 1;
+  if (!ok || Number(status) >= 400 || Number(status) === 0) {
+    metric.errors += 1;
+  }
+  metric.lastStatus = Number(status) || 0;
+  metric.durations.push(duration);
+  if (metric.durations.length > API_METRICS_WINDOW_SIZE) {
+    metric.durations = metric.durations.slice(-API_METRICS_WINDOW_SIZE);
+  }
+
+  apiLatencyMetrics.set(key, metric);
+  debugLog("[API_METRIC]", {
+    method: metricMethod,
+    endpoint: metricRoute,
+    status: metric.lastStatus,
+    durationMs: Number(duration.toFixed(1)),
+    count: metric.count,
+    errorRate: Number((metric.errors / Math.max(metric.count, 1)).toFixed(3)),
+    p50: Number(computePercentile(metric.durations, 0.5).toFixed(1)),
+    p95: Number(computePercentile(metric.durations, 0.95).toFixed(1)),
+  });
+};
+
+export const getApiLatencyMetricsSnapshot = () =>
+  Array.from(apiLatencyMetrics.values()).map((metric) => ({
+    method: metric.method,
+    endpoint: metric.endpoint,
+    count: metric.count,
+    errors: metric.errors,
+    errorRate: Number((metric.errors / Math.max(metric.count, 1)).toFixed(3)),
+    p50: Number(computePercentile(metric.durations, 0.5).toFixed(1)),
+    p95: Number(computePercentile(metric.durations, 0.95).toFixed(1)),
+    lastStatus: metric.lastStatus,
+  }));
+
+const cloneApiValue = (value) => {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+
+  // Optimization: Small objects with few keys are often faster to clone via spread
+  // if they aren't deeply nested. However, for API safety, we prefer deep clone.
+  if (typeof structuredClone === "function") {
+    try {
+      return structuredClone(value);
+    } catch (e) {
+      // Fallback for non-cloneable objects (rare in API JSON)
+      return JSON.parse(JSON.stringify(value));
+    }
+  }
+
+  return JSON.parse(JSON.stringify(value));
+};
+
+const normalizeApiCacheKey = (endpoint = "") => {
+  const normalizedEndpoint = String(endpoint || "").trim();
+  if (!normalizedEndpoint) return normalizedEndpoint;
+
+  const [pathPart = "", queryPart = ""] = normalizedEndpoint.split("?", 2);
+  const normalizedPath =
+    pathPart !== "/" ? pathPart.replace(/\/+$/, "") || "/" : "/";
+
+  const params = new URLSearchParams(queryPart);
+  const normalizedParams = [];
+
+  for (const [key, value] of params.entries()) {
+    if (!key) continue;
+    if (GET_CACHE_BUSTER_PARAMS.has(key)) continue;
+    normalizedParams.push([key, value]);
+  }
+
+  normalizedParams.sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+    const keyOrder = leftKey.localeCompare(rightKey);
+    return keyOrder !== 0 ? keyOrder : leftValue.localeCompare(rightValue);
+  });
+
+  if (normalizedParams.length === 0) {
+    return normalizedPath;
+  }
+
+  const nextParams = new URLSearchParams();
+  normalizedParams.forEach(([key, value]) => {
+    nextParams.append(key, value);
+  });
+
+  return `${normalizedPath}?${nextParams.toString()}`;
+};
+
+export const getApiCacheKey = (endpoint) => normalizeApiCacheKey(endpoint);
+
+export const primeApiCache = (endpoint, data) => {
+  const cacheKey = normalizeApiCacheKey(endpoint);
+  if (!cacheKey) return;
+  apiResponseCache.set(cacheKey, cloneApiValue(data));
+};
+
+export const clearApiCache = (matcher) => {
+  if (typeof matcher !== "function") {
+    apiResponseCache.clear();
+    apiInFlightRequests.clear();
+    latestRequestStartByCacheKey.clear();
+    return;
+  }
+
+  Array.from(apiResponseCache.keys()).forEach((key) => {
+    if (matcher(key)) {
+      apiResponseCache.delete(key);
+    }
+  });
+
+  Array.from(apiInFlightRequests.keys()).forEach((key) => {
+    if (matcher(key)) {
+      apiInFlightRequests.delete(key);
+    }
+  });
+
+  Array.from(latestRequestStartByCacheKey.keys()).forEach((key) => {
+    if (matcher(key)) {
+      latestRequestStartByCacheKey.delete(key);
+    }
+  });
+};
+
+/**
+ * Chat System API Instance (Axios)
+ * Used by the new chat system components
+ */
+export const API = axios.create({
+  baseURL: cleanBaseUrl ? `${cleanBaseUrl}/api` : "/api",
+});
+
+API.interceptors.request.use((config) => {
+  // Maintaining consistency with existing localStorage key "accessToken"
+  const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  config.__startedAt = nowMs();
+
+  return config;
+});
+
+API.interceptors.response.use(
+  (response) => {
+    recordApiLatencyMetric({
+      method: response?.config?.method || "GET",
+      endpoint: response?.config?.url || "/",
+      status: response?.status || 0,
+      durationMs: nowMs() - Number(response?.config?.__startedAt || nowMs()),
+      ok: true,
+    });
+    return response;
+  },
+  (error) => {
+    const config = error?.config || {};
+    recordApiLatencyMetric({
+      method: config?.method || "GET",
+      endpoint: config?.url || "/",
+      status: Number(error?.response?.status || 0),
+      durationMs: nowMs() - Number(config?.__startedAt || nowMs()),
+      ok: false,
+    });
+    return Promise.reject(error);
+  },
+);
+
+/**
+ * Get authentication headers with JWT token
+ */
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("accessToken");
+  return {
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+};
+
+/**
+ * Handle API response errors
+ */
+const handleResponse = async (response) => {
+  debugLog("[API] Response status:", response.status, response.statusText);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    debugLog("[API] Error response text:", errorText);
+
+    let errorMessage;
+    let errorJson = null;
+    try {
+      errorJson = JSON.parse(errorText);
+      debugLog("[API] Error JSON:", errorJson);
+      errorMessage = errorJson.message || errorText;
+    } catch {
+      errorMessage = errorText;
+    }
+    const error = new Error(
+      errorMessage || `HTTP error! status: ${response.status}`,
+    );
+    error.status = response.status;
+    error.data = errorJson?.data || null;
+    error.response = errorJson;
+    throw error;
+  }
+
+  const data = await response.json();
+  debugLog("[API] Success response:", data);
+  return data;
+};
+
+/**
+ * Refresh Access Token
+ */
+const refreshAccessToken = async () => {
+  try {
+    const storedRefreshToken = localStorage.getItem("refreshToken") || "";
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ refreshToken: storedRefreshToken }),
+    });
+
+    if (!response.ok) throw new Error("Refresh failed");
+
+    const data = await response.json();
+    const payload = data.data || data;
+    const accessToken = payload.accessToken || data.accessToken;
+    const refreshToken = payload.refreshToken || data.refreshToken;
+    if (!accessToken) throw new Error("Refresh failed");
+
+    localStorage.setItem("accessToken", accessToken);
+    if (refreshToken) {
+      localStorage.setItem("refreshToken", refreshToken);
+    }
+    return accessToken;
+  } catch (error) {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        document.cookie = "portal_session=; Path=/; Max-Age=0; SameSite=Lax";
+        document.cookie = "portal_role=; Path=/; Max-Age=0; SameSite=Lax";
+      } catch (cleanupError) {
+        console.warn("Failed to clear local auth state:", cleanupError);
+      }
+
+      const pathname = window.location.pathname || "/";
+      const search = window.location.search || "";
+      const isAuthRoute =
+        pathname === "/login" ||
+        pathname === "/signup" ||
+        pathname === "/trainer-signup" ||
+        pathname === "/forgot-password";
+
+      if (!isAuthRoute) {
+        window.location.replace("/?login=true");
+      }
+    }
+
+    throw error;
+  }
+};
+
+/**
+ * Fetch wrapper with retry logic for 401s
+ */
+const fetchWithAuth = async (endpoint, options = {}) => {
+  // Intelligent URL construction:
+  let url;
+  if (endpoint.startsWith("/api/")) {
+    url = `${FILE_BASE_URL}${endpoint}`;
+  } else {
+    url = `${API_BASE_URL}${endpoint}`;
+  }
+
+  const method = (options.method || "GET").toUpperCase();
+  const useCache = method === "GET" && !options.skipCache;
+  const cacheKey = useCache ? normalizeApiCacheKey(endpoint) : "";
+  const shouldDedupeInFlight =
+    options.disableDedupe !== true &&
+    (method === "GET" || options.allowUnsafeDedupe === true);
+  const dedupeKey = shouldDedupeInFlight
+    ? `${method}:${normalizeApiCacheKey(endpoint)}:${String(options.dedupeKey || "")}`
+    : "";
+
+  if (useCache && apiResponseCache.has(cacheKey)) {
+    return cloneApiValue(apiResponseCache.get(cacheKey));
+  }
+
+  if (shouldDedupeInFlight && apiInFlightRequests.has(dedupeKey)) {
+    return apiInFlightRequests
+      .get(dedupeKey)
+      .then((result) => cloneApiValue(result));
+  }
+
+  const publicTrainerEndpoints = [
+    { path: "/api/trainers/create-step1" },
+    { path: "/api/trainers/update-step2" },
+    { path: "/api/trainers/update-step3" },
+    { path: "/api/trainers/submit" },
+    { path: "/api/trainers/save-step" },
+    { path: "/api/trainers/progress" },
+    { path: "/api/trainers/nda-template", methods: ["GET"] },
+    { path: "/api/trainer-documents/upload", methods: ["POST"] },
+  ];
+  const skipAuthHeaders =
+    options.skipAuth ||
+    publicTrainerEndpoints.some(
+      (rule) =>
+        url.includes(rule.path) &&
+        (!rule.methods || rule.methods.includes(method)),
+    );
+
+  const headers = {
+    ...(skipAuthHeaders ? {} : getAuthHeaders()),
+    ...options.headers,
+  };
+
+  // Ensure credentials are included for all requests (needed for cookies)
+  const config = {
+    ...options,
+    headers,
+    credentials: "include",
+  };
+  const timeoutMs = resolveTimeoutMs(
+    options.timeoutMs,
+    DEFAULT_REQUEST_TIMEOUT_MS,
+  );
+  const startedAt = nowMs();
+  if (useCache && cacheKey) {
+    latestRequestStartByCacheKey.set(cacheKey, startedAt);
+  }
+
+  debugLog(`[API] ${config.method || "GET"} Request to: ${url}`);
+
+  let timeoutController = null;
+  let timeoutHandle = null;
+  let externalAbortListener = null;
+  let externalSignal = null;
+
+  const requestPromise = (async () => {
+    if (typeof AbortController !== "undefined" && timeoutMs > 0) {
+      timeoutController = new AbortController();
+      externalSignal = config.signal || null;
+
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          timeoutController.abort(externalSignal.reason || "aborted");
+        } else {
+          externalAbortListener = () => {
+            timeoutController.abort(externalSignal.reason || "aborted");
+          };
+          externalSignal.addEventListener("abort", externalAbortListener);
+        }
+      }
+
+      timeoutHandle = setTimeout(() => {
+        timeoutController.abort("timeout");
+      }, timeoutMs);
+
+      config.signal = timeoutController.signal;
+    }
+
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (fetchError) {
+      const durationMs = nowMs() - startedAt;
+      const didTimeout =
+        timeoutController?.signal?.aborted &&
+        String(timeoutController?.signal?.reason || "").toLowerCase() === "timeout";
+      if (didTimeout) {
+        recordApiLatencyMetric({
+          method,
+          endpoint,
+          status: 0,
+          durationMs,
+          ok: false,
+        });
+        const timeoutError = new Error(
+          `Request timeout after ${Math.round(timeoutMs)}ms for ${method} ${endpoint}`,
+        );
+        timeoutError.code = "ETIMEDOUT";
+        timeoutError.status = 0;
+        timeoutError.__metricCaptured = true;
+        throw timeoutError;
+      }
+      if (isAbortedFetchError(fetchError, config.signal)) {
+        debugLog("[API] Fetch aborted:", {
+          url,
+          method: config.method,
+        });
+        throw createNormalizedAbortError(fetchError);
+      }
+
+      const fallbackUrls = getLocalhostPortFallbackUrls(url);
+      for (const fallbackUrl of fallbackUrls) {
+        try {
+          debugLog("[API] Retry request on local fallback port:", {
+            originalUrl: url,
+            fallbackUrl,
+            method: config.method,
+          });
+          response = await fetch(fallbackUrl, config);
+          url = fallbackUrl;
+          break;
+        } catch {
+          // Try next fallback candidate.
+        }
+      }
+
+      if (!response) {
+        const isRetryableGetError =
+          method === "GET" &&
+          options.retryGetNetwork !== false &&
+          options.__retryAttempted !== true;
+        if (isRetryableGetError) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          return fetchWithAuth(endpoint, {
+            ...options,
+            __retryAttempted: true,
+            disableDedupe: true,
+            skipCache: true,
+          });
+        }
+
+        const isOnline =
+          typeof navigator === "undefined" ? true : navigator.onLine;
+        const errorSignature = `${method}:${endpoint}:network`;
+        if (shouldLogApiError(errorSignature)) {
+          console.error("[API] Fetch network error:", {
+            url,
+            method: config.method,
+            error: fetchError.message,
+            stack: fetchError.stack,
+            online: isOnline,
+            type: fetchError.name,
+            fallbackCandidates: fallbackUrls,
+          });
+        }
+
+        let detail = fetchError.message;
+        if (!isOnline) detail = "Device is offline";
+
+        recordApiLatencyMetric({
+          method,
+          endpoint,
+          status: 0,
+          durationMs,
+          ok: false,
+        });
+        const networkError = new Error(
+          `Network Error to ${url}: ${detail}. Check internet connection, CORS, or if server is down.`,
+        );
+        networkError.__metricCaptured = true;
+        throw networkError;
+      }
+    }
+
+    if (response.status === 401 && !skipAuthHeaders) {
+      const newToken = await refreshAccessToken();
+      config.headers["Authorization"] = `Bearer ${newToken}`;
+      try {
+        response = await fetch(url, config);
+      } catch (refreshRetryError) {
+        if (isAbortedFetchError(refreshRetryError, config.signal)) {
+          throw createNormalizedAbortError(refreshRetryError);
+        }
+        throw refreshRetryError;
+      }
+    }
+
+    const result = await handleResponse(response);
+    recordApiLatencyMetric({
+      method,
+      endpoint,
+      status: response?.status || 0,
+      durationMs: nowMs() - startedAt,
+      ok: Boolean(response?.ok),
+    });
+
+    if (useCache) {
+      const latestRequestStartedAt = Number(
+        latestRequestStartByCacheKey.get(cacheKey) || 0,
+      );
+      if (startedAt >= latestRequestStartedAt) {
+        apiResponseCache.set(cacheKey, cloneApiValue(result));
+      }
+    }
+
+    return result;
+  })().catch((requestError) => {
+    if (requestError?.__metricCaptured) {
+      throw requestError;
+    }
+    const hasStatus = Number.isFinite(Number(requestError?.status));
+    if (!hasStatus) {
+      recordApiLatencyMetric({
+        method,
+        endpoint,
+        status: 0,
+        durationMs: nowMs() - startedAt,
+        ok: false,
+      });
+    }
+    throw requestError;
+  }).finally(() => {
+    // cleanup timeout + abort listener
+    if (typeof timeoutHandle !== "undefined" && timeoutHandle !== null) {
+      clearTimeout(timeoutHandle);
+    }
+    if (externalSignal && externalAbortListener) {
+      externalSignal.removeEventListener("abort", externalAbortListener);
+    }
+  });
+
+  if (shouldDedupeInFlight) {
+    apiInFlightRequests.set(dedupeKey, requestPromise);
+  }
+
+  try {
+    return await requestPromise;
+  } finally {
+    if (shouldDedupeInFlight) {
+      apiInFlightRequests.delete(dedupeKey);
+    }
+  }
+};
+
+/**
+ * API service object with HTTP methods
+ */
+export const api = {
+  get: (endpoint, options = {}) =>
+    fetchWithAuth(endpoint, { method: "GET", ...options }),
+
+  post: async (endpoint, data, options = {}) => {
+    const isFormData = data instanceof FormData;
+    const defaultHeaders = isFormData ? {} : { "Content-Type": "application/json" };
+    const body = isFormData ? data : JSON.stringify(data);
+
+    // If FormData, delete Content-Type to let browser handle boundary
+    if (isFormData && defaultHeaders["Content-Type"]) {
+      delete defaultHeaders["Content-Type"];
+    }
+
+    const headers = {
+      ...defaultHeaders,
+      ...(options.headers || {}),
+    };
+
+    if (isFormData && headers["Content-Type"]) {
+      delete headers["Content-Type"];
+    }
+
+    if (isFormData) {
+      let totalSize = 0;
+      // Approximate size
+      for (let [key, value] of data.entries()) {
+        if (value instanceof File) totalSize += value.size;
+        else totalSize += String(value).length;
+      }
+      debugLog(
+        `[API] POST Multipart Size: ~${Math.round(totalSize / 1024)} KB`,
+      );
+    }
+
+    const response = await fetchWithAuth(endpoint, {
+      ...options,
+      method: "POST",
+      body,
+      headers,
+      timeoutMs: resolveTimeoutMs(
+        options.timeoutMs,
+        isFormData ? DEFAULT_UPLOAD_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS,
+      ),
+    });
+    clearApiCache();
+    return response;
+  },
+
+  put: async (endpoint, data, options = {}) => {
+    debugLog("[API] PUT Request:", { endpoint, data });
+    const isFormData = data instanceof FormData;
+    const defaultHeaders = isFormData ? {} : { "Content-Type": "application/json" };
+    const body = isFormData ? data : JSON.stringify(data);
+    debugLog("[API] PUT Body (stringified):", body);
+
+    if (isFormData && defaultHeaders["Content-Type"]) {
+      delete defaultHeaders["Content-Type"];
+    }
+
+    const headers = {
+      ...defaultHeaders,
+      ...(options.headers || {}),
+    };
+
+    if (isFormData && headers["Content-Type"]) {
+      delete headers["Content-Type"];
+    }
+
+    const response = await fetchWithAuth(endpoint, {
+      ...options,
+      method: "PUT",
+      body,
+      headers,
+      timeoutMs: resolveTimeoutMs(
+        options.timeoutMs,
+        isFormData ? DEFAULT_UPLOAD_TIMEOUT_MS : DEFAULT_REQUEST_TIMEOUT_MS,
+      ),
+    });
+    clearApiCache();
+    return response;
+  },
+
+  delete: async (endpoint, options = {}) => {
+    const response = await fetchWithAuth(endpoint, {
+      ...options,
+      method: "DELETE",
+    });
+    clearApiCache();
+    return response;
+  },
+
+  primeCache: primeApiCache,
+  clearCache: clearApiCache,
+};
+
+/**
+ * Password Reset API Functions
+ */
+export const forgotPassword = async (email) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  debugLog("[API] Forgot Password Request:", { email: normalizedEmail });
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: normalizedEmail }),
+    credentials: "include",
+  });
+  return handleResponse(response);
+};
+
+export const verifyResetOTP = async (email, otp) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedOtp = String(otp || "").replace(/\D/g, "").slice(0, 6);
+  debugLog("[API] Verify Reset OTP Request:", {
+    email: normalizedEmail,
+    otp: normalizedOtp,
+  });
+  const response = await fetch(`${API_BASE_URL}/auth/verify-reset-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: normalizedEmail, otp: normalizedOtp }),
+  });
+  return handleResponse(response);
+};
+
+export const resetPassword = async (tempToken, password) => {
+  debugLog("[API] Reset Password Request");
+  const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tempToken, password }),
+  });
+  return handleResponse(response);
+};
+
+// Default export for convenience
+export default api;

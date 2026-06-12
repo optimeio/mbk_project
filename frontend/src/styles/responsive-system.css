@@ -1,0 +1,235 @@
+/* ── Responsive design tokens ───────────────────────────────────────────── */
+:root {
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+
+  --page-gutter: clamp(1rem, 3vw, 2rem);
+  --page-max-width: 1280px;
+  --content-max-width: 72rem;
+
+  --touch-min: 44px;
+  --touch-gap: clamp(0.5rem, 2vw, 1rem);
+
+  --text-body: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  --text-lead: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  --text-title: clamp(1.5rem, 1.25rem + 1.2vw, 2.25rem);
+
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --focus-ring: 0 0 0 3px color-mix(in oklab, var(--ring, #f97316) 42%, transparent);
+}
+
+/* ── App shell: safe areas + fluid width ─────────────────────────────────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-height: 100vh;
+  width: 100%;
+  padding-top: var(--safe-area-top);
+  padding-right: max(var(--safe-area-right), 0px);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: max(var(--safe-area-left), 0px);
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-shell__main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
+
+.app-shell__main--fluid {
+  max-width: none;
+}
+
+.app-shell__main--narrow {
+  max-width: var(--content-max-width);
+}
+
+/* Portal/dashboard: full bleed, no extra gutters */
+.app-shell--portal {
+  min-height: 100dvh;
+  min-height: 100vh;
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+}
+
+/* ── Typography scale ────────────────────────────────────────────────────── */
+.text-fluid-body {
+  font-size: var(--text-body);
+  line-height: 1.55;
+}
+
+.text-fluid-lead {
+  font-size: var(--text-lead);
+  line-height: 1.5;
+}
+
+.text-fluid-title {
+  font-size: var(--text-title);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+/* ── Responsive grids ────────────────────────────────────────────────────── */
+.r-grid {
+  display: grid;
+  gap: var(--touch-gap);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .r-grid--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .r-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .r-grid--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ── Touch-friendly controls (scoped — not all links) ────────────────────── */
+.touch-target,
+.cta-btn,
+button:not(.unstyled):not([data-compact]),
+[role="button"]:not(.unstyled):not([data-compact]),
+input[type="submit"],
+input[type="button"],
+input[type="reset"],
+.ant-btn {
+  min-height: var(--touch-min);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Inline text links stay compact */
+a:not([data-touch-target]):not(.cta-btn):not(.nav-link):not(.mobile-link) {
+  min-height: unset;
+  min-width: unset;
+}
+
+a[data-touch-target],
+.nav-link,
+.mobile-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding-inline: 0.25rem;
+}
+
+/* ── Instant press feedback ──────────────────────────────────────────────── */
+.instant-press,
+.cta-btn,
+button:not(.unstyled):not(:disabled),
+[role="button"]:not(.unstyled):not([aria-disabled="true"]) {
+  transition:
+    transform var(--motion-fast) var(--ease-snap),
+    box-shadow var(--motion-base) var(--ease-snap),
+    background-color var(--motion-base) ease,
+    opacity var(--motion-fast) ease;
+}
+
+.instant-press:active:not(:disabled),
+.cta-btn:active:not(.cta-btn--disabled),
+button:not(.unstyled):not(:disabled):active,
+[role="button"]:not(.unstyled):active {
+  transform: scale(0.97);
+}
+
+/* ── Forms: mobile-friendly inputs ───────────────────────────────────────── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+textarea,
+select {
+  font-size: max(16px, 1rem);
+  min-height: var(--touch-min);
+}
+
+@media (min-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select {
+    font-size: 0.9375rem;
+  }
+}
+
+/* ── Performance: defer off-screen paint ─────────────────────────────────── */
+.perf-defer-section,
+.section-block {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 480px;
+}
+
+/* ── Focus & accessibility ───────────────────────────────────────────────── */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .instant-press:active,
+  .cta-btn:active,
+  button:active {
+    transform: none !important;
+  }
+}
+
+/* ── Tablet / desktop density tweaks ─────────────────────────────────────── */
+@media (min-width: 768px) {
+  :root {
+    --page-gutter: clamp(1.25rem, 2.5vw, 2.5rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --touch-gap: 1rem;
+  }
+}
+
+/* Hide mobile-only / desktop-only helpers */
+.only-mobile {
+  display: block;
+}
+
+.only-desktop {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .only-mobile {
+    display: none;
+  }
+
+  .only-desktop {
+    display: block;
+  }
+
+  .only-desktop-flex {
+    display: flex;
+  }
+}

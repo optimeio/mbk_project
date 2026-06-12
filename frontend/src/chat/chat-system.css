@@ -1,0 +1,198 @@
+
+/* ─── MBK Carrierz Light Theme ──────────────────────────────── */
+:root {
+  --sidebar-width:    300px;
+  --header-height:    60px;
+
+  /* Light backgrounds — white cards like portal */
+  --bg-primary:       #f2f7f4;   /* page bg — very light green tint */
+  --bg-secondary:     #ffffff;   /* card bg */
+  --bg-tertiary:      #eaf3ee;   /* sidebar */
+  --bg-hover:         #dff0e7;   /* hover */
+
+  /* Text */
+  --text-primary:     #122c1e;   /* deep green-black */
+  --text-secondary:   #2d5c3e;   /* dark green */
+  --text-muted:       #5a8c6e;
+  --text-dim:         #8ab89a;
+
+  /* MBK Forest Green */
+  --brand-primary:    #2d7a52;
+  --brand-light:      #38a169;
+  --brand-dark:       #245f3f;
+  --brand-pale:       #eaf3ee;
+  --brand-pale2:      #d4e9db;
+
+  /* Borders */
+  --border-subtle:    rgba(45,122,82,0.14);
+  --border-mid:       rgba(45,122,82,0.22);
+  --border-strong:    rgba(45,122,82,0.35);
+
+  /* Nav stays dark (matches MBK portal) */
+  --nav-bg:           #0f2535;
+
+  --scrollbar-w: 5px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: var(--scrollbar-w); height: var(--scrollbar-w); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(45,122,82,0.22); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(45,122,82,0.38); }
+
+/* ─── Stream Chat Overrides — MBK Light Theme ───────────────── */
+.str-chat { height: 100%; font-family: var(--font-sora, Inter), ui-sans-serif, system-ui; }
+.str-chat__channel-list { background: transparent !important; width: 100% !important; }
+
+.str-chat__channel-preview-messenger {
+  background: transparent !important; border-radius: 10px !important;
+  margin: 2px 8px !important; padding: 10px 12px !important;
+  transition: background 0.15s ease !important; border: 1px solid transparent !important;
+}
+.str-chat__channel-preview-messenger:hover {
+  background: rgba(45,122,82,0.08) !important;
+  border-color: rgba(45,122,82,0.16) !important;
+}
+.str-chat__channel-preview-messenger--active {
+  background: rgba(45,122,82,0.12) !important;
+  border-color: rgba(45,122,82,0.25) !important;
+}
+.str-chat__channel-preview-messenger--name {
+  color: #122c1e !important; font-weight: 500 !important; font-size: 0.875rem !important;
+}
+.str-chat__channel-preview-messenger--last-message {
+  color: #5a8c6e !important; font-size: 0.75rem !important;
+}
+.str-chat__channel-preview-unread-badge {
+  background: linear-gradient(135deg, #2d7a52, #38a169) !important;
+  color: white !important; font-weight: 600 !important;
+  font-size: 0.7rem !important; min-width: 18px !important;
+  height: 18px !important; border-radius: 99px !important;
+}
+.str-chat__list { background: transparent !important; padding: 16px 0 !important; }
+.str-chat__message-simple { padding: 2px 16px !important; }
+.str-chat__message-bubble {
+  border-radius: 18px !important; padding: 10px 14px !important;
+  font-size: 0.875rem !important; line-height: 1.5 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07) !important;
+}
+.str-chat__message--me .str-chat__message-bubble {
+  background: linear-gradient(135deg, #245f3f, #2d7a52) !important;
+  color: white !important; border-bottom-right-radius: 4px !important;
+}
+.str-chat__message--other .str-chat__message-bubble {
+  background: #ffffff !important; color: #122c1e !important;
+  border: 1px solid rgba(45,122,82,0.14) !important;
+  border-bottom-left-radius: 4px !important;
+}
+.str-chat__input-flat {
+  background: #f2f7f4 !important;
+  border-top: 1px solid rgba(45,122,82,0.12) !important; padding: 12px 16px !important;
+}
+.str-chat__textarea textarea {
+  background: #ffffff !important; color: #122c1e !important;
+  border: 1px solid rgba(45,122,82,0.18) !important; border-radius: 12px !important;
+  padding: 10px 14px !important; font-family: var(--font-sora, Inter), ui-sans-serif !important;
+  font-size: 0.875rem !important; resize: none !important; transition: border-color .15s !important;
+}
+.str-chat__textarea textarea:focus {
+  border-color: rgba(45,122,82,0.45) !important; outline: none !important;
+  box-shadow: 0 0 0 3px rgba(45,122,82,0.1) !important;
+}
+.str-chat__textarea textarea::placeholder { color: #8ab89a !important; }
+.str-chat__send-button {
+  background: linear-gradient(135deg, #245f3f, #2d7a52) !important;
+  border-radius: 10px !important; width: 38px !important; height: 38px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  transition: all .15s !important;
+}
+.str-chat__send-button:hover { opacity: 0.9 !important; transform: scale(1.05) !important; }
+.str-chat__send-button svg { color: white !important; }
+.str-chat__header-livestream {
+  background: #ffffff !important; border-bottom: 1px solid rgba(45,122,82,0.12) !important;
+  padding: 0 20px !important; height: 60px !important;
+  display: flex !important; align-items: center !important;
+  box-shadow: 0 1px 4px rgba(45,122,82,0.06) !important;
+}
+.str-chat__header-livestream-left--title {
+  color: #122c1e !important; font-weight: 600 !important; font-size: 0.9375rem !important;
+}
+.str-chat__thread { background: #f2f7f4 !important; border-left: 1px solid rgba(45,122,82,0.12) !important; }
+.str-chat__typing-indicator { padding: 6px 16px !important; font-size: .75rem !important; color: #8ab89a !important; }
+.str-chat__date-separator { margin: 16px 0 !important; }
+.str-chat__date-separator-date {
+  background: #eaf3ee !important; color: #5a8c6e !important; font-size: .7rem !important;
+  padding: 3px 10px !important; border-radius: 99px !important; font-weight: 500 !important;
+  letter-spacing: .05em !important; text-transform: uppercase !important;
+  border: 1px solid rgba(45,122,82,0.14) !important;
+}
+.str-chat__date-separator-line { background: rgba(45,122,82,0.1) !important; }
+.str-chat__avatar { border-radius: 10px !important; }
+.str-chat__avatar-image { border-radius: 10px !important; }
+.str-chat__message-actions-box {
+  background: #ffffff !important; border: 1px solid rgba(45,122,82,0.14) !important;
+  border-radius: 10px !important; box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+}
+.str-chat__message-action-item { color: #2d5c3e !important; }
+.str-chat__message-action-item:hover { background: rgba(45,122,82,0.08) !important; color: #122c1e !important; }
+.str-chat__message-reactions-list { gap: 4px !important; }
+.str-chat__message-reaction {
+  background: #f2f7f4 !important; border: 1px solid rgba(45,122,82,0.14) !important; border-radius: 99px !important; padding: 2px 7px !important;
+}
+.str-chat__message-attachment-card { background: #ffffff !important; border: 1px solid rgba(45,122,82,0.14) !important; border-radius: 12px !important; }
+.str-chat__message-data { color: #8ab89a !important; font-size: .65rem !important; }
+.str-chat__empty-channel { background: transparent !important; color: #8ab89a !important; }
+
+@layer utilities {
+  .text-gradient { background: linear-gradient(135deg,#2d7a52,#38a169); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .bg-glass { background: rgba(255,255,255,0.75); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+  .shadow-glow-brand { box-shadow: 0 0 18px rgba(45,122,82,0.25); }
+  .animate-delay-100 { animation-delay:.1s; }
+  .animate-delay-200 { animation-delay:.2s; }
+
+  /* MBK Chat Modern Utilities (Forest Green) */
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, #2d7a52 0%, #38a169 100%);
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out forwards;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-bounce-dot {
+    animation: bounceDot 1.4s infinite ease-in-out both;
+  }
+
+  @keyframes bounceDot {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1.0); }
+  }
+}
+
+

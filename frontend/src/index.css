@@ -1,0 +1,237 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+@plugin "tailwindcss-animate";
+@import "./components/common/CTAButton.css";
+@import "./styles/responsive-system.css";
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Mobile-first: prevent accidental double-tap zoom */
+  touch-action: manipulation;
+  /* Prevent pull-to-refresh / overscroll bounce on mobile */
+  overscroll-behavior: none;
+  /* Remove iOS tap highlight */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area insets for notched devices (iPhone X+) */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+
+
+/* Touch targets: see responsive-system.css (scoped to buttons/CTAs, not inline links) */
+
+/* Force dropdown options to be visible - fix for rendering bug */
+select option {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  min-height: 1.5rem !important;
+  color: inherit !important;
+  background-color: white !important;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  html,
+  :host {
+    -moz-text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
+@layer base {
+  input:not(.ant-input):not([data-no-shadcn]),
+  textarea:not(.ant-input):not([data-no-shadcn]),
+  select:not(.ant-select-selection-search-input):not([data-no-shadcn]) {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--input);
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease;
+  }
+
+  input:not(.ant-input):not([data-no-shadcn]):focus-visible,
+  textarea:not(.ant-input):not([data-no-shadcn]):focus-visible,
+  select:not(.ant-select-selection-search-input):not([data-no-shadcn]):focus-visible {
+    border-color: color-mix(in oklab, var(--ring) 72%, var(--input));
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 45%, transparent);
+  }
+
+  table:not(.ant-table),
+  table:not(.ant-table) th,
+  table:not(.ant-table) td {
+    border-color: var(--border);
+  }
+
+  /* Performance: Only render sections when near viewport */
+  .section-block {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 500px;
+  }
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  background-color: #f8f3ed;
+  color: #1f2937;
+}
+
+#root {
+  height: 100% !important;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: #1890ff; /* Ant Design Primary Default */
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(24, 144, 255, 0.4);
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  color: #096dd9;
+  text-decoration-color: #096dd9;
+  text-decoration-thickness: 2px;
+}
+
+a:focus-visible {
+  outline: 2px solid #1890ff;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: #f8f3ed;
+  --foreground: #1f2937;
+  --card: #ffffff;
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #6b7280;
+  --secondary-foreground: #ffffff;
+  --muted: #f3f4f6;
+  --muted-foreground: #52525b;
+  --accent: #fb923c;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: #d1d5db;
+  --input: #e5e7eb;
+  --ring: #f97316;
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+body.sidebar-disabled [data-app-sidebar="true"] {
+  display: none !important;
+}

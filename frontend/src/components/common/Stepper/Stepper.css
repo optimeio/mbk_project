@@ -1,0 +1,175 @@
+.outer-container {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+.step-circle-container {
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 800px;
+  background: #ffffff !important;
+  border: 1px solid #eef2f6;
+  border-radius: 1.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+.step-indicator-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: 2rem;
+  padding-bottom: 1.5rem;
+}
+
+.step-content-default {
+  position: relative;
+  overflow: hidden;
+  transition: min-height 0.4s ease;
+}
+
+.step-default {
+  padding: 1rem 2rem;
+}
+
+.footer-container {
+  padding: 1rem 2rem 2rem;
+}
+
+.footer-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.footer-nav.spread {
+  justify-content: space-between;
+}
+
+.footer-nav.end {
+  justify-content: flex-end;
+}
+
+.back-button {
+  transition: all 0.2s;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.2rem;
+  color: #666;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #ddd;
+  font-weight: 600;
+}
+
+.back-button:hover {
+  background-color: #f7f7f9;
+}
+
+.back-button.inactive {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.next-button {
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: #E91E63;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1.8rem;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 4px 10px rgba(233, 30, 99, 0.2);
+}
+
+.next-button:hover {
+  background: #d81b60;
+  transform: translateY(-1px);
+}
+
+.next-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.step-indicator {
+  position: relative;
+  cursor: pointer;
+  outline: none;
+}
+
+.step-indicator-inner {
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.active-dot {
+  height: 0.75rem;
+  width: 0.75rem;
+  border-radius: 9999px;
+  background-color: #fff;
+}
+
+.step-number {
+  font-size: 0.875rem;
+}
+
+.step-connector {
+  position: relative;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+  height: 2px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 1px;
+  background-color: #eee;
+}
+
+.step-connector-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+}
+
+.check-icon {
+  height: 1.25rem;
+  width: 1.25rem;
+  color: #fff;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .step-indicator-row {
+    padding: 1.25rem 1rem;
+  }
+  
+  .step-indicator-inner {
+    height: 1.85rem;
+    width: 1.85rem;
+  }
+  
+  .step-default {
+    padding: 0.75rem 1rem;
+  }
+  
+  .footer-container {
+    padding: 1rem;
+  }
+  
+  .next-button, .back-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+}

@@ -1,0 +1,159 @@
+.chat-app, .wa-root-container {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
+  background-color: #efeae2;
+  overflow: hidden;
+  position: relative;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}
+
+/* Scrollable message area with background */
+.wa-message-area, .chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* CRITICAL for flex scrolling */
+  padding: 10px 16px;
+  background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+  background-repeat: repeat;
+  background-size: 400px;
+  background-attachment: local;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-theme='dark'] .wa-message-area {
+  background-image: none; /* Usually WhatsApp dark mode doesn't show the pattern by default or uses a different one */
+  background-color: #0b141a;
+}
+
+/* WhatsApp message bubbles */
+.wa-bubble {
+  max-width: 85%;
+  padding: 8px 12px 10px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  position: relative;
+  box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+  word-wrap: break-word;
+  margin-bottom: 4px;
+}
+
+.wa-bubble-sent {
+  align-self: flex-end;
+  background-color: #d9fdd3;
+  color: #111b21;
+  border-radius: 12px 12px 0 12px;
+}
+
+[data-theme='dark'] .wa-bubble-sent {
+  background-color: #005c4b;
+  color: #e9edef;
+}
+
+.wa-bubble-recv {
+  align-self: flex-start;
+  background-color: #ffffff;
+  color: #111b21;
+  border-radius: 12px 12px 12px 0;
+}
+
+[data-theme='dark'] .wa-bubble-recv {
+  background-color: #202c33;
+  color: #e9edef;
+}
+
+/* Input area */
+.wa-input-wrapper {
+  padding: 8px 10px;
+  background-color: #f0f2f5;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+[data-theme='dark'] .wa-input-wrapper {
+  background-color: #202c33;
+  border-color: rgba(255,255,255,0.05);
+}
+
+.wa-input-field-container {
+  flex: 1;
+  background: #fff;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  min-height: 48px;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+}
+
+[data-theme='dark'] .wa-input-field-container {
+  background: #2a3942;
+}
+
+.wa-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 16px;
+  line-height: 1.4;
+  padding: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: inherit;
+}
+
+.wa-icon-btn {
+  padding: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wa-action-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background-color: #00a884;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  transition: transform 0.1s active;
+}
+
+.wa-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* 🛠️ GLOBAL NAVIGATION SUPPRESSION */
+body.hide-global-bottom-nav .wa-global-bottom-nav {
+  display: none !important;
+}
+
+/* Transitions and hide desktop on mobile */
+@media (max-width: 768px) {
+  .chat-left-side, .nav-rail, .desktop-only {
+    display: none !important;
+  }
+}

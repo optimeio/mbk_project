@@ -1,0 +1,475 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import authService from '@/services/authService';
+import notify from '@/lib/toast';
+import CTAButton from '@/components/common/CTAButton';
+
+const COURSES = [
+  { value: 'pcb', label: 'PCB' },
+  { value: 'iot', label: 'IoT' },
+  { value: 'employability', label: 'Employability' },
+  { value: 'surface modelling', label: 'Surface Modelling' },
+  { value: 'solid works', label: 'Solid Works' },
+];
+
+export default function SignupPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { registerStudent, registerCompany } = useAuth();
+
+  const [activeTab, setActiveTab] = useState('student');
+
+  useEffect(() => {
+    const type = searchParams.get('type');
+    if (type === 'company') {
+      setActiveTab('company');
+    } else {
+      setActiveTab('student');
+    }
+  }, [searchParams]);
+
+  // Student form state
+  const [studentForm, setStudentForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    college: '',
+    course: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  // Company form state
+  const [companyForm, setCompanyForm] = useState({
+    companyName: '',
+    email: '',
+    address: '',
+    website: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+  });
+
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleStudentChange = (e) => {
+    setStudentForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setError('');
+  };
+
+  const handleCompanyChange = (e) => {
+    setCompanyForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setError('');
+  };
+
+  const validateStudent = () => {
+    if (!studentForm.name.trim()) return 'Please enter your full name.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentForm.email)) return 'Please enter a valid email.';
+    if (!/^[0-9+\-\s()]{7,20}$/.test(studentForm.phone.trim())) return 'Please enter a valid phone number.';
+    if (!studentForm.college.trim()) return 'Please enter your college or institute.';
+    if (!studentForm.course.trim()) return 'Please select a course.';
+    if (studentForm.password.length < 6) return 'Password must be at least 6 characters.';
+    if (studentForm.password !== studentForm.confirmPassword) return 'Passwords do not match.';
+    return '';
+  };
+
+  const validateCompany = () => {
+    if (!companyForm.companyName.trim()) return 'Please enter company name.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyForm.email)) return 'Please enter a valid official email.';
+    if (!companyForm.address.trim()) return 'Please enter company address.';
+    if (companyForm.website.trim() && !/^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/.test(companyForm.website.trim())) {
+      return 'Please enter a valid website URL.';
+    }
+    if (!/^[0-9+\-\s()]{7,20}$/.test(companyForm.phone.trim())) return 'Please enter a valid phone number.';
+    if (companyForm.password.length < 6) return 'Password must be at least 6 characters.';
+    if (companyForm.password !== companyForm.confirmPassword) return 'Passwords do not match.';
+    return '';
+  };
+
+  const handleStudentSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const v = validateStudent();
+    if (v) {
+      setError(v);
+      notify.warning(v);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await registerStudent({
+        fullName: studentForm.name.trim(),
+        email: studentForm.email.trim(),
+        phone: studentForm.phone.trim(),
+        college: studentForm.college.trim(),
+        course: studentForm.course.trim(),
+        password: studentForm.password,
+        confirmPassword: studentForm.confirmPassword,
+      });
+      if (response.success && authService.getToken()) {
+        notify.success('Student Registration Successful');
+        router.push('/student/dashboard');
+      } else {
+        const message = response.message || 'Registration failed.';
+        setError(message);
+        notify.error(message);
+      }
+    } catch (err) {
+      const message = err?.message || 'Registration failed.';
+      setError(message);
+      notify.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompanySubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const v = validateCompany();
+    if (v) {
+      setError(v);
+      notify.warning(v);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await registerCompany({
+        companyName: companyForm.companyName.trim(),
+        adminName: `${companyForm.companyName.trim()} Admin`,
+        email: companyForm.email.trim(),
+        address: companyForm.address.trim(),
+        website: companyForm.website.trim(),
+        phone: companyForm.phone.trim(),
+        password: companyForm.password,
+        confirmPassword: companyForm.confirmPassword,
+      });
+      if (response.success && authService.getToken()) {
+        notify.success('Company Registration Successful');
+        router.push('/company/dashboard');
+      } else {
+        const message = response.message || 'Registration failed.';
+        setError(message);
+        notify.error(message);
+      }
+    } catch (err) {
+      const message = err?.message || 'Registration failed.';
+      setError(message);
+      notify.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50/50 via-amber-50/30 to-slate-50 flex items-center justify-center px-4 py-8 md:py-16">
+      <div className="w-full max-w-6xl bg-white rounded-3xl shadow-xl border border-orange-100 overflow-hidden grid lg:grid-cols-2">
+        
+        {/* Left Column (Brand banner) */}
+        <div className="hidden lg:flex flex-col justify-center bg-gradient-to-br from-orange-500 via-orange-600 to-amber-700 text-white p-12 gap-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-orange-400/15 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="relative z-10">
+            <h1 className="text-5xl font-bold leading-tight">Start Your Career Journey</h1>
+            <p className="mt-6 text-lg opacity-90 leading-relaxed">
+              Join thousands of students and leading business partners connecting through MBK Carrierz. Discover training programs, internships, and placement opportunities.
+            </p>
+          </div>
+          <div className="space-y-4 text-sm font-semibold relative z-10">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white">✓</span>
+              Verified Employers & Corporate Partners
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white">✓</span>
+              Industry Standard Training & Certification
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white">✓</span>
+              Placement Pipelines & Career Mentorship
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column (Form container) */}
+        <div className="p-6 md:p-12 flex flex-col justify-center">
+          
+          {/* Tabs Selector */}
+          <div className="flex border-b border-gray-150 mb-8 gap-4 justify-center md:justify-start">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('student');
+                setError('');
+              }}
+              className={`pb-3 text-lg font-bold border-b-2 transition-all px-2 ${
+                activeTab === 'student'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Student Register
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('company');
+                setError('');
+              }}
+              className={`pb-3 text-lg font-bold border-b-2 transition-all px-2 ${
+                activeTab === 'company'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Company Register
+            </button>
+          </div>
+
+          <div className="text-center md:text-left mb-6">
+            <h2 className="text-3xl font-bold text-gray-900">
+              {activeTab === 'student' ? 'Student Registration' : 'Company Registration'}
+            </h2>
+            <p className="text-gray-500 mt-2 text-sm">
+              {activeTab === 'student'
+                ? 'Create your account to access training and career support'
+                : 'Register your company profile to access our recruitment pipelines'}
+            </p>
+          </div>
+
+          {error && (
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Student Signup Form */}
+          {activeTab === 'student' && (
+            <form className="md:grid md:grid-cols-2 md:gap-4 md:space-y-0 space-y-4" onSubmit={handleStudentSubmit}>
+              <div className="md:col-span-2">
+                <input
+                  name="name"
+                  type="text"
+                  placeholder="Full Name"
+                  value={studentForm.name}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="Email Address"
+                  value={studentForm.email}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <input
+                  name="phone"
+                  type="tel"
+                  placeholder="Phone Number"
+                  value={studentForm.phone}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <input
+                  name="college"
+                  type="text"
+                  placeholder="College / Institute Name"
+                  value={studentForm.college}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <select
+                  name="course"
+                  value={studentForm.course}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                >
+                  <option value="">Select a Course</option>
+                  {COURSES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <input
+                  name="password"
+                  type="password"
+                  placeholder="Password (min 6 chars)"
+                  value={studentForm.password}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <input
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="Confirm Password"
+                  value={studentForm.confirmPassword}
+                  onChange={handleStudentChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <CTAButton
+                  type="submit"
+                  variant="brand"
+                  size="lg"
+                  fullWidth
+                  loading={loading}
+                  loadingText="Signing Up..."
+                  className="rounded-xl"
+                >
+                  Sign Up
+                </CTAButton>
+              </div>
+            </form>
+          )}
+
+          {/* Company Signup Form */}
+          {activeTab === 'company' && (
+            <form className="md:grid md:grid-cols-2 md:gap-4 md:space-y-0 space-y-4" onSubmit={handleCompanySubmit}>
+              <div className="md:col-span-2">
+                <input
+                  name="companyName"
+                  type="text"
+                  placeholder="Company Name"
+                  value={companyForm.companyName}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="Official Mail Address"
+                  value={companyForm.email}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <input
+                  name="phone"
+                  type="tel"
+                  placeholder="Phone Number"
+                  value={companyForm.phone}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <input
+                  name="address"
+                  type="text"
+                  placeholder="Address"
+                  value={companyForm.address}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <input
+                  name="website"
+                  type="url"
+                  placeholder="Website URL (Optional)"
+                  value={companyForm.website}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                />
+              </div>
+
+              <div>
+                <input
+                  name="password"
+                  type="password"
+                  placeholder="Password (min 6 chars)"
+                  value={companyForm.password}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <input
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="Confirm Password"
+                  value={companyForm.confirmPassword}
+                  onChange={handleCompanyChange}
+                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2 pt-2">
+                <CTAButton
+                  type="submit"
+                  variant="brand"
+                  size="lg"
+                  fullWidth
+                  loading={loading}
+                  loadingText="Signing Up..."
+                  className="rounded-xl"
+                >
+                  Sign Up
+                </CTAButton>
+              </div>
+            </form>
+          )}
+
+          <div className="text-center mt-6 text-sm">
+            <span className="text-gray-500">Already have an account?</span>
+            <Link href="/login" className="ml-2 text-orange-600 font-semibold hover:underline">
+              Sign In
+            </Link>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
