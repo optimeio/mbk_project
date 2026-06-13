@@ -22,7 +22,7 @@ import {
     UserCircleIcon,
     CalendarIcon as Calendar,
     MapPinIcon,
-    ChatBubbleLeftRightIcon,
+    MessageSquare as ChatBubbleLeftRightIcon,
     Cog6ToothIcon,
     ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
@@ -72,7 +72,6 @@ const Sidebar = () => {
     const navigation = [
         // Super Admin Links
         { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: ['SuperAdmin'] },
-        { name: 'Chat Box', href: '/chat', icon: ChatBubbleLeftRightIcon, roles: ['SuperAdmin'] },
         { name: 'Companies', href: '/companies', icon: BuildingOfficeIcon, roles: ['SuperAdmin'] },
         { name: 'Trainers', href: '/trainers', icon: UsersIcon, roles: ['SuperAdmin'] },
         { name: 'Verify Documents', href: '/documents', icon: DocumentCheckIcon, roles: ['SuperAdmin'] },
@@ -84,7 +83,6 @@ const Sidebar = () => {
 
         // SPOC Admin Links
         { name: 'Dashboard', href: '/spoc/dashboard', icon: HomeIcon, roles: ['SPOCAdmin', 'CollegeAdmin'] },
-        { name: 'Chat Box', href: '/chat', icon: ChatBubbleLeftRightIcon, roles: ['SPOCAdmin', 'CollegeAdmin'] },
         { name: 'Scheduler', href: '/spoc/schedule', icon: Calendar, roles: ['SPOCAdmin', 'CollegeAdmin'] },
         { name: 'Trainers', href: '/spoc/trainers', icon: UsersIcon, roles: ['SPOCAdmin', 'CollegeAdmin'] },
         { name: 'Check-In Verify', href: '/spoc/attendance', icon: ClipboardDocumentCheckIcon, roles: ['SPOCAdmin', 'CollegeAdmin'] },
@@ -103,7 +101,6 @@ const Sidebar = () => {
 
         // Trainer Links
         { name: 'Dashboard', href: '/trainer/dashboard', icon: HomeIcon, roles: ['Trainer'] },
-        { name: 'Chat Box', href: '/chat', icon: ChatBubbleLeftRightIcon, roles: ['Trainer'] },
         { name: 'Schedule', href: '/trainer/schedule', icon: ClockIcon, roles: ['Trainer'] },
         { name: 'Pay Slips', href: '/trainer/payslips', icon: CurrencyRupeeIcon, roles: ['Trainer'] },
     ];

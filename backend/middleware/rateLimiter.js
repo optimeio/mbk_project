@@ -29,25 +29,30 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
+// In development, relax limits so developers don't hit 429 during testing
+const isDev = process.env.NODE_ENV === 'development';
+
 const RATE_LIMIT_RULES = {
   auth: {
     windowMs: 15 * 60 * 1000,
-    max: 5,
+    // 30 per 15 min in prod (each login can touch up to 3 providers);
+    // 100 in dev so developers never hit this accidentally
+    max: isDev ? 100 : 30,
     patterns: ['/auth/login', '/auth/signup', '/auth/otp', '/auth/verify', '/auth/reset'],
   },
   upload: {
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: isDev ? 100 : 20,
     patterns: ['/upload'],
   },
   dashboard: {
     windowMs: 15 * 60 * 1000,
-    max: 500,
+    max: isDev ? 1000 : 500,
     patterns: ['/dashboard', '/dashboard-data'],
   },
   general: {
     windowMs: 15 * 60 * 1000,
-    max: 300, // Supports 70K users at ~1 req/3s per user
+    max: isDev ? 1000 : 300,
   },
 };
 
@@ -116,12 +121,13 @@ const rateLimiter = async (req, res, next) => {
       const resetEpoch = Math.floor(Date.now() / 1000) + ttl;
 
       if (count > max) {
+        const retryAfter = ttl > 0 ? ttl : 60;
         setRateLimitHeaders(res, { max, remaining: 0, resetEpoch });
-        res.setHeader('Retry-After', ttl > 0 ? ttl : 60);
+        res.setHeader('Retry-After', retryAfter);
         return res.status(429).json({
           success: false,
-          message: 'Too many requests, please try again later.',
-          retryAfterSeconds: ttl > 0 ? ttl : 60,
+          message: `Too many login attempts. Please wait ${Math.ceil(retryAfter / 60)} minute(s) and try again.`,
+          retryAfterSeconds: retryAfter,
         });
       }
 
@@ -152,7 +158,7 @@ const rateLimiter = async (req, res, next) => {
       res.setHeader('Retry-After', remainingSeconds);
       return res.status(429).json({
         success: false,
-        message: 'Too many requests, please try again later.',
+        message: `Too many login attempts. Please wait ${Math.ceil(remainingSeconds / 60)} minute(s) and try again.`,
         retryAfterSeconds: remainingSeconds,
       });
     }

@@ -121,6 +121,8 @@ const TrainerDashboardSchedulesSection = dynamic(
   },
 );
 
+
+
 function TrainerDashboard() {
   const { currentUser } = useAuth();
   const router = useRouter();
@@ -314,6 +316,7 @@ function TrainerDashboard() {
       ) : (
         <NotificationsSectionSkeleton />
       )}
+
       {showSchedulesSection && !dashboardLoading ? (
         <TrainerDashboardSchedulesSection
           recentActivities={dashboardRecentActivities}

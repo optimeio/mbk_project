@@ -6,10 +6,10 @@ import { useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/common/Sidebar';
 import {
     ArrowRightOnRectangleIcon,
-    ChatBubbleLeftRightIcon,
     Cog6ToothIcon,
     UserCircleIcon,
 } from '@heroicons/react/24/outline';
+import { MessageSquare as ChatBubbleLeftRightIcon } from "lucide-react";
 import { useState, useEffect, useRef } from 'react';
 import NotificationBell from '@/components/common/NotificationBell';
 import { api } from '@/services/api';
@@ -24,8 +24,9 @@ const MainLayout = ({ children }) => {
     const router = useRouter();
     const mobileUserMenuRef = useRef(null);
     const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
-    const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
+const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
     const { currentUser, setAuthUser, logout } = useAuth();
+  
     const pathname = usePathname();
     const user = currentUser || {};
     const userRole = normalizeAuthRole(user?.role, user?.email);
@@ -34,6 +35,13 @@ const MainLayout = ({ children }) => {
     const isTrainerComplaintsPage =
         isTrainer && pathname.startsWith('/trainer/complaints');
     const isWorkspacePage = pathname.includes('/workspace') || pathname.startsWith('/chat');
+
+    // Guard: redirect trainers away from chat routes
+    useEffect(() => {
+        if (isTrainer && pathname.startsWith('/chat')) {
+            router.replace('/trainer/dashboard');
+        }
+    }, [isTrainer, pathname, router]);
 
     // Route Guard for Unverified Trainers (Removed to allow dashboard access)
     

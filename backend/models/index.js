@@ -34,6 +34,7 @@ const WebCourse = require('./WebCourse');
 const WebRegistration = require('./WebRegistration');
 const WebMessage = require('./WebMessage');
 const AnalyticsEvent = require('./AnalyticsEvent');
+const StudentActivity = require('./StudentActivity');
 
 module.exports = {
   User,
@@ -71,5 +72,6 @@ module.exports = {
   WebCourse,
   WebRegistration,
   WebMessage,
-  AnalyticsEvent
+  AnalyticsEvent,
+  StudentActivity
 };

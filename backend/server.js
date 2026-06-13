@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-import simpleAuthRouter from './routes/simpleAuth.js';
+import simpleAuthRouter from './routes/simpleAuth.mjs';
 // Mount student authentication routes under /api/student
 app.use('/api/student', simpleAuthRouter);
 // Add other route imports as needed (trainers, companies, etc.)

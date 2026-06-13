@@ -89,7 +89,7 @@ const runtimeBootstrapScript = `(function(){var k='mbk-chunk-reload';function is
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={inter.className} data-scroll-behavior="smooth">
+    <html lang="en" className={inter.className} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="" />
         <link rel="preconnect" href={CDN_URL} crossOrigin="" />

@@ -46,7 +46,7 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
   const [hasHydrated, setHasHydrated] = useState(false);
 
   const user = currentUser || {};
-  const isChatActive = pathname.startsWith("/chat");
+  const isChatActive = pathname.startsWith("/chat") && activeRole !== "Trainer";
 
   useEffect(() => {
     setHasHydrated(true);

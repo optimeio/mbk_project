@@ -1,4 +1,7 @@
-const getWorkspaceRouteForRole = () => "/chat";
+const getWorkspaceRouteForRole = (role) => {
+  if (role && role.toLowerCase().includes('trainer')) return '/trainer/dashboard';
+  return '/chat';
+};
 
 const getDashboardRouteForRole = (role) => {
   if (role === "SuperAdmin") return "/dashboard";

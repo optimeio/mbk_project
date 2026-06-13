@@ -7,10 +7,12 @@
  * POLICY: One email and one mobile number can be used ONLY ONCE across the entire platform.
  */
 
-const User = require("../../models/User");
-const Student = require("../../models/Student");
-const Trainer = require("../../models/Trainer");
-const Company = require("../../models/Company");
+const mongoose = require('mongoose');
+
+const getUser = () => mongoose.models.User || require("../../models/User");
+const getStudent = () => mongoose.models.Student || require("../../models/Student");
+const getTrainer = () => mongoose.models.Trainer || require("../../models/Trainer");
+const getCompany = () => mongoose.models.Company || require("../../models/Company");
 
 /**
  * Normalize email to lowercase and trim whitespace
@@ -82,7 +84,7 @@ const checkEmailExists = async (email, excludeId = null, excludeModel = null) =>
 
   try {
     // Check User collection
-    const userExists = await User.findOne(buildQuery('User')).select('_id role').lean();
+    const userExists = await getUser().findOne(buildQuery('User')).select('_id role').lean();
     if (userExists) {
       return {
         exists: true,
@@ -93,7 +95,7 @@ const checkEmailExists = async (email, excludeId = null, excludeModel = null) =>
     }
 
     // Check Student collection
-    const studentExists = await Student.findOne(buildQuery('Student')).select('_id').lean();
+    const studentExists = await getStudent().findOne(buildQuery('Student')).select('_id').lean();
     if (studentExists) {
       return {
         exists: true,
@@ -104,7 +106,7 @@ const checkEmailExists = async (email, excludeId = null, excludeModel = null) =>
     }
 
     // Check Trainer collection
-    const trainerExists = await Trainer.findOne(buildQuery('Trainer')).select('_id').lean();
+    const trainerExists = await getTrainer().findOne(buildQuery('Trainer')).select('_id').lean();
     if (trainerExists) {
       return {
         exists: true,
@@ -115,7 +117,7 @@ const checkEmailExists = async (email, excludeId = null, excludeModel = null) =>
     }
 
     // Check Company collection
-    const companyExists = await Company.findOne(buildQuery('Company')).select('_id').lean();
+    const companyExists = await getCompany().findOne(buildQuery('Company')).select('_id').lean();
     if (companyExists) {
       return {
         exists: true,
@@ -184,7 +186,7 @@ const checkPhoneExists = async (phone, excludeId = null, excludeModel = null) =>
 
   try {
     // Check User collection (phoneNumber, profile.phone)
-    const userExists = await User.findOne(buildQuery('User')).select('_id role').lean();
+    const userExists = await getUser().findOne(buildQuery('User')).select('_id role').lean();
     if (userExists) {
       return {
         exists: true,
@@ -195,7 +197,7 @@ const checkPhoneExists = async (phone, excludeId = null, excludeModel = null) =>
     }
 
     // Check Student collection (phoneNumber)
-    const studentExists = await Student.findOne(buildQuery('Student')).select('_id').lean();
+    const studentExists = await getStudent().findOne(buildQuery('Student')).select('_id').lean();
     if (studentExists) {
       return {
         exists: true,
@@ -206,7 +208,7 @@ const checkPhoneExists = async (phone, excludeId = null, excludeModel = null) =>
     }
 
     // Check Trainer collection (mobile, phone)
-    const trainerExists = await Trainer.findOne(buildQuery('Trainer')).select('_id').lean();
+    const trainerExists = await getTrainer().findOne(buildQuery('Trainer')).select('_id').lean();
     if (trainerExists) {
       return {
         exists: true,
@@ -217,7 +219,7 @@ const checkPhoneExists = async (phone, excludeId = null, excludeModel = null) =>
     }
 
     // Check Company collection (phone)
-    const companyExists = await Company.findOne(buildQuery('Company')).select('_id').lean();
+    const companyExists = await getCompany().findOne(buildQuery('Company')).select('_id').lean();
     if (companyExists) {
       return {
         exists: true,

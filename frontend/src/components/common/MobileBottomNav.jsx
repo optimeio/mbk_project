@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import {
   Home, Users, Calendar, Clock, MoreHorizontal,
-  CreditCard, Building2, MessageSquareMore, Receipt,
+  CreditCard, Building2, Receipt,
   HandCoins, BarChart3, BadgeCheck,
 } from "lucide-react";
 
@@ -15,7 +15,6 @@ const NAV_MAP = {
   SuperAdmin: [
     { name: "Home", href: "/dashboard", icon: Home },
     { name: "Trainers", href: "/dashboard/trainers", icon: Users },
-    { name: "Chat", href: "/chat", icon: MessageSquareMore },
     { name: "Salary", href: "/dashboard/salary", icon: HandCoins },
     { name: "More", href: "/dashboard/accounts", icon: MoreHorizontal },
   ],
@@ -23,14 +22,12 @@ const NAV_MAP = {
     { name: "Home", href: "/spoc/dashboard", icon: Home },
     { name: "Schedule", href: "/spoc/schedule", icon: Calendar },
     { name: "Check-In", href: "/spoc/attendance", icon: BadgeCheck },
-    { name: "Chat", href: "/chat", icon: MessageSquareMore },
     { name: "More", href: "/spoc/trainers", icon: MoreHorizontal },
   ],
   CollegeAdmin: [
     { name: "Home", href: "/spoc/dashboard", icon: Home },
     { name: "Schedule", href: "/spoc/schedule", icon: Calendar },
     { name: "Check-In", href: "/spoc/attendance", icon: BadgeCheck },
-    { name: "Chat", href: "/chat", icon: MessageSquareMore },
     { name: "More", href: "/spoc/trainers", icon: MoreHorizontal },
   ],
   Accountant: [
@@ -44,19 +41,16 @@ const NAV_MAP = {
     { name: "Home", href: "/trainer/dashboard", icon: Home },
     { name: "Schedule", href: "/trainer/schedule", icon: Calendar },
     { name: "Payslips", href: "/trainer/payslips", icon: Receipt },
-    { name: "Chat", href: "/chat", icon: MessageSquareMore },
   ],
   Student: [
     { name: "Home", href: "/student/dashboard", icon: Home },
     { name: "Courses", href: "/student/courses", icon: Calendar },
-    { name: "Chat", href: "/chat", icon: MessageSquareMore },
     { name: "More", href: "/student/profile", icon: MoreHorizontal },
   ],
   Company: [
     { name: "Home", href: "/company/dashboard", icon: Home },
     { name: "Trainers", href: "/company/hiring", icon: Users },
     { name: "Sessions", href: "/company/sessions", icon: Calendar },
-    { name: "Chat", href: "/chat", icon: MessageSquareMore },
     { name: "More", href: "/company/profile", icon: MoreHorizontal },
   ],
 };

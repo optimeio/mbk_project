@@ -11,20 +11,6 @@ export const PROTECTED_ROUTES = [
   { prefix: '/student', roles: ['student'] },
   { prefix: '/company', roles: ['company', 'companyadmin'] },
   { prefix: '/accountant', roles: ['accountant', 'accountnt', 'superadmin'] },
-  {
-    prefix: '/chat',
-    roles: [
-      'superadmin',
-      'spocadmin',
-      'collegeadmin',
-      'trainer',
-      'accountant',
-      'accountnt',
-      'student',
-      'company',
-      'companyadmin',
-    ],
-  },
 ];
 
 export const PUBLIC_PREFIXES = [

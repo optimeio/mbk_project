@@ -365,4 +365,6 @@ const startServer = async (port = Number(process.env.PORT || process.env.BACKEND
   }
 };
 
+// Start Express Server
 startServer();
+

@@ -22,6 +22,7 @@ const publicRoutes = require("./publicRoutes.js");
 const cityRoutes = require("./cityRoutes.js");
 const webRoutes = require("./webRoutes.js");
 const studentRoutes = require("./studentRoutes.js");
+const studentActivityRoutes = require("./studentActivityRoutes.js");
 const companyPortalRoutes = require("./companyPortalRoutes.js");
 const companyInviteRoutes = require("./companyInviteRoutes.js");
 const departmentRoutes = require("./departmentRoutes.js");
@@ -29,21 +30,17 @@ const driveRoutes = require("../modules/drive/drive.routes.js");
 const trainingPlatformRoutes = require("./trainingPlatformRoutes.js");
 const captchaRoute = require("./captchaRoute.js");
 const internalMetricsRoutes = require("./internalMetricsRoutes.js");
-import chatRoutes from "./chatRoutes.mjs";
-import messageRoutes from "./messageRoutes.mjs";
-import mediaRoutes from "./mediaRoutes.mjs";
-import uploadRoutes from "./uploadRoutes.mjs";
 const complaintRoutes = require("./complaintRoutes.js");
 const complaintsV1Routes = require("../modules/complaints/complaints.routes.js");
 const notificationRoutes = require("./notificationRoutes.js");
 const adminTrainerRoutes = require("./adminTrainerRoutes.js");
 const trainerDirectoryV1Routes = require("../modules/trainers/trainers.routes.js");
 const attendanceV1Routes = require("../modules/attendance/attendance.routes.js");
-import simpleAuth from "./simpleAuth.js";
+import simpleAuth from "./simpleAuth.mjs";
 router.use("/simple-auth", simpleAuth);
 // Removed duplicate root mounting of simpleAuth
 const { v1ResponseEnvelope } = require("../middleware/v1ResponseEnvelope.js");
-import streamWebhookRoute from "./streamWebhookRoute.mjs";
+
 
 
 // Middleware
@@ -58,10 +55,7 @@ router.use("/v1/finance/salaries", v1ResponseEnvelope, salaryRoutes);
 router.use("/v1/finance", v1ResponseEnvelope, financialRoutes);
 router.use("/v1/complaints", v1ResponseEnvelope, complaintsV1Routes);
 router.use("/v1/notifications", v1ResponseEnvelope, notificationRoutes);
-router.use("/v1/chat/messages", v1ResponseEnvelope, messageRoutes);
-router.use("/v1/chat/media", authenticate, v1ResponseEnvelope, mediaRoutes);
-router.use("/v1/chat/upload", authenticate, v1ResponseEnvelope, uploadRoutes);
-router.use("/v1/chat", authenticate, v1ResponseEnvelope, chatRoutes);
+
 
 router.use("/auth", authRoutes);
 router.use("/captcha", captchaRoute);
@@ -80,6 +74,7 @@ router.post(
   attendanceRoutes.uploadSingleGeoImageHandler,
 );
 router.use("/attendance", attendanceRoutes);
+router.use("/student-activities", studentActivityRoutes);
 router.use("/trainer-attendance", trainerAttendanceRoutes);
 router.use("/trainer-documents", trainerDocumentRoutes);
 router.use("/financials", financialRoutes);
@@ -96,10 +91,6 @@ router.use("/drive-hierarchy", driveRoutes);
 router.use("/training-platform", trainingPlatformRoutes);
 router.use("/internal/metrics", internalMetricsRoutes);
 router.use("/admin/trainers", adminTrainerRoutes);
-router.use("/chat", authenticate, chatRoutes);
-router.use("/message", messageRoutes);
-router.use("/media", authenticate, mediaRoutes);
-router.use("/upload", authenticate, uploadRoutes);
-router.use("/webhooks", streamWebhookRoute);
+
 
 export default router;

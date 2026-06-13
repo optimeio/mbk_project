@@ -1,42 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useCallback } from "react";
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 
 function SidebarNav({
-  chatTab,
-  isChatActive,
   navLinks,
   pathname,
-  setChatTab,
 }) {
-  const handleChatTabClick = useCallback(
-    (tab) => {
-      if (!tab) {
-        return;
-      }
-      localStorage.setItem("mbk_last_nav", tab);
-      setChatTab(tab);
-      window.dispatchEvent(
-        new CustomEvent("mbk_chat_nav_change", { detail: tab }),
-      );
-    },
-    [setChatTab],
-  );
-
   return (
     <nav className="flex-1 overflow-y-auto py-4">
       {navLinks.map((item) => {
         const Icon = item.icon;
-        const isActive = isChatActive
-          ? item.tab === chatTab
-          : pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+        const isActive =
+          pathname === item.href ||
+          (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
         return (
           <div
-            key={item.tab ? `${item.href}-${item.tab}` : item.href}
+            key={item.href}
             className="px-3 pb-1.5"
           >
             <Button
@@ -52,11 +34,6 @@ function SidebarNav({
               <Link
                 href={item.href}
                 prefetch={false}
-                onClick={() => {
-                  if (isChatActive && item.tab) {
-                    handleChatTabClick(item.tab);
-                  }
-                }}
                 className="no-underline hover:no-underline"
                 style={{ textDecoration: "none", color: "inherit" }}
               >

@@ -4,12 +4,9 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Bars3Icon,
-  ChatBubbleLeftRightIcon,
-  ChevronLeftIcon,
-  UserCircleIcon,
-} from "@heroicons/react/24/outline";
+import { Bars3Icon, ChevronLeftIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { MessageSquare as ChatBubbleLeftRightIcon } from "lucide-react";
+
 
 import useDebouncedNavigate from "@/hooks/useDebouncedNavigate";
 import { useAuth } from "@/context/AuthContext";
@@ -44,16 +41,12 @@ const humanizePathSegment = (segment = "") =>
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const resolveCurrentSection = (pathname, activeRole, isChatActive) => {
+const resolveCurrentSection = (pathname, activeRole) => {
   if (!pathname || pathname === "/") {
     return "Overview";
   }
 
-  if (isChatActive) {
-    return "Conversations";
-  }
-
-  const navLinks = [...resolveNavLinks({ activeRole, isChatActive })].sort(
+  const navLinks = [...resolveNavLinks({ activeRole })].sort(
     (left, right) => String(right.href || "").length - String(left.href || "").length,
   );
 
@@ -92,17 +85,14 @@ function PortalTopbarInner({ onMenuClick = () => {} }) {
     [pathname, safeUser.role],
   );
 
-  const isChatActive = pathname.startsWith("/chat");
-  const showMobileBackButton = isChatActive;
   const portalTitle = useMemo(
-    () => resolvePortalTitle(activeRole, isChatActive),
-    [activeRole, isChatActive],
+    () => resolvePortalTitle(activeRole),
+    [activeRole],
   );
   const sectionTitle = useMemo(
-    () => resolveCurrentSection(pathname, activeRole, isChatActive),
-    [activeRole, isChatActive, pathname],
+    () => resolveCurrentSection(pathname, activeRole),
+    [activeRole, pathname],
   );
-  const isCompactChatTopbar = isChatActive;
   const isTrainerPortal = pathname.startsWith("/trainer");
 
   const profileQueryEnabled =
@@ -156,25 +146,13 @@ function PortalTopbarInner({ onMenuClick = () => {} }) {
   }, []);
 
   const handleBackClick = useCallback(() => {
-    if (isChatActive && typeof window !== "undefined") {
-      const chatBackEvent = new CustomEvent("mbk:chat-topbar-back", {
-        cancelable: true,
-      });
-      const chatBackHandled = !window.dispatchEvent(chatBackEvent);
-      if (chatBackHandled) {
-        return;
-      }
-      debouncedNavigate(fallbackRoute);
-      return;
-    }
-
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
       return;
     }
 
     debouncedNavigate(fallbackRoute);
-  }, [debouncedNavigate, fallbackRoute, isChatActive, router]);
+  }, [debouncedNavigate, fallbackRoute, router]);
 
   const closeAccountMenu = useCallback(() => {
     setIsAccountMenuOpen(false);
@@ -183,32 +161,18 @@ function PortalTopbarInner({ onMenuClick = () => {} }) {
   return (
     <header className="relative z-40 shrink-0 overflow-hidden border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
       <div
-        className={`flex min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 ${
-          isCompactChatTopbar ? "h-16 justify-end" : "h-[4.5rem] justify-between sm:h-20"
-        }`}
+        className="flex min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 h-[4.5rem] justify-between sm:h-20"
       >
-        {!isCompactChatTopbar ? (
-          <div className="min-w-0">
+        <div className="min-w-0">
             <div className="flex items-center gap-2">
-              {showMobileBackButton ? (
-                <button
-                  type="button"
-                  onClick={handleBackClick}
-                  aria-label="Go back"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-100 md:hidden"
-                >
-                  <ChevronLeftIcon className="h-4 w-4" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onMenuClick}
-                  aria-label="Open navigation menu"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-100 md:hidden"
-                >
-                  <Bars3Icon className="h-5 w-5" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={onMenuClick}
+                aria-label="Open navigation menu"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-100 md:hidden"
+              >
+                <Bars3Icon className="h-5 w-5" />
+              </button>
 
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                 <span className="inline-flex h-2 w-2 rounded-full bg-[#1d5f87]" />
@@ -219,11 +183,9 @@ function PortalTopbarInner({ onMenuClick = () => {} }) {
               {sectionTitle}
             </h1>
           </div>
-        ) : null}
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2.5">
-          {!isCompactChatTopbar ? (
-            <div className="hidden min-w-0 max-w-[34vw] text-right md:block lg:max-w-xs">
+          <div className="hidden min-w-0 max-w-[34vw] text-right md:block lg:max-w-xs">
               {isIdentityLoading ? (
                 <>
                   <IdentityTextSkeleton className="ml-auto h-4 w-28" />
@@ -239,20 +201,16 @@ function PortalTopbarInner({ onMenuClick = () => {} }) {
                   </p>
                 </>
               )}
-            </div>
-          ) : null}
+          </div>
 
-          {!isCompactChatTopbar ? (
-            <NotificationBell
-              iconClassName="h-5 w-5 text-slate-600"
-              badgeClassName="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white"
-            />
-          ) : null}
+          <NotificationBell
+            iconClassName="h-5 w-5 text-slate-600"
+            badgeClassName="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white"
+          />
 
           {isTrainerPortal ? (
             <PortalBrandMark
               href="/trainer/dashboard"
-              compact={isCompactChatTopbar}
             />
           ) : null}
 

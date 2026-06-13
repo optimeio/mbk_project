@@ -11,10 +11,6 @@ const {
 // const admin = require('../config/firebaseAdmin'); // Removed Firebase
 const { authenticate } = require('../middleware/auth');
 const { REQUIRED_TRAINER_DOCUMENTS } = require('../utils/trainerDocumentWorkflow');
-const {
-    autoCreateTrainerAdminChannels,
-    cleanupDeletedUserChatArtifacts,
-} = require('../services/streamChatService');
 const { validateUniqueness } = require('../services/auth/globalUniquenessService');
 
 // Verify Password (for sensitive actions like delete)
@@ -246,17 +242,7 @@ router.post('/', authenticate, async (req, res) => {
             }
         });
 
-        // 🔥 Auto-create Chat Channel if a Trainer is created by an Admin
-        if (role === 'Trainer') {
-            try {
-                const adminUser = await User.findById(req.user.id);
-                if (adminUser) {
-                    await autoCreateTrainerAdminChannels(user, [adminUser]);
-                }
-            } catch (chatErr) {
-                console.error('Failed to auto-create Stream Chat channel on Trainer creation:', chatErr);
-            }
-        }
+
     } catch (error) {
         console.error('Error creating user:', error);
         
@@ -324,17 +310,7 @@ router.put('/:id/approve', authenticate, async (req, res) => {
             console.error('Failed to notify trainer of approval:', notifyError);
         }
 
-        // 🔥 Auto-create Chat Channels with SuperAdmins on Approval
-        if (user.role === 'Trainer') {
-            try {
-                const superAdmins = await User.find({ role: 'SuperAdmin', isActive: true });
-                if (superAdmins.length > 0) {
-                    await autoCreateTrainerAdminChannels(user, superAdmins);
-                }
-            } catch (chatErr) {
-                console.error('Failed to auto-create Stream Chat channels on Trainer approval:', chatErr);
-            }
-        }
+
     } catch (error) {
         console.error('Error approving user:', error);
         res.status(500).json({ message: 'Server error' });
@@ -529,11 +505,7 @@ router.delete('/:id', authenticate, async (req, res) => {
             });
         }
 
-        try {
-            await cleanupDeletedUserChatArtifacts(user);
-        } catch (chatCleanupError) {
-            console.warn('User chat cleanup failed during delete:', chatCleanupError.message);
-        }
+
 
         // Cascading deletion
         if (user.role === 'Trainer') {

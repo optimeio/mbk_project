@@ -3,14 +3,16 @@ import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
 import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import Building2 from "lucide-react/dist/esm/icons/building-2";
 import CalendarClock from "lucide-react/dist/esm/icons/calendar-clock";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list";
 import Clock3 from "lucide-react/dist/esm/icons/clock-3";
 import CreditCard from "lucide-react/dist/esm/icons/credit-card";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap";
 import HandCoins from "lucide-react/dist/esm/icons/hand-coins";
 import Home from "lucide-react/dist/esm/icons/home";
+import Image from "lucide-react/dist/esm/icons/image";
 import MapPin from "lucide-react/dist/esm/icons/map-pin";
-import Megaphone from "lucide-react/dist/esm/icons/megaphone";
+
 import MessageSquareMore from "lucide-react/dist/esm/icons/message-square-more";
 import Receipt from "lucide-react/dist/esm/icons/receipt";
 import Settings from "lucide-react/dist/esm/icons/settings";
@@ -18,6 +20,7 @@ import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import UserCheck from "lucide-react/dist/esm/icons/user-check";
 import UserCog from "lucide-react/dist/esm/icons/user-cog";
 import Users from "lucide-react/dist/esm/icons/users";
+
 
 export const roleLinks = {
   SuperAdmin: [
@@ -61,11 +64,15 @@ export const roleLinks = {
   ],
 
   Trainer: [
-    { label: "Dashboard",         href: "/trainer/dashboard",            icon: Home },
-    { label: "Schedule",          href: "/trainer/schedule",             icon: CalendarClock },
-    { label: "Profile",           href: "/trainer/profile",              icon: UserCog },
-    { label: "Pay Slips",         href: "/trainer/payslips",             icon: Receipt },
-    { label: "Complaints",        href: "/trainer/complaints",           icon: MessageSquareMore },
+    { label: "Dashboard",                  href: "/trainer/dashboard",             icon: Home },
+
+    { label: "Attendance Upload",          href: "/trainer/attendance",            icon: ClipboardList },
+    { label: "Student Activities",         href: "/trainer/student-activities",    icon: Image },
+    { label: "Student Attendance Records", href: "/trainer/student-attendance",    icon: FileText },
+    { label: "Schedule",                   href: "/trainer/schedule",              icon: CalendarClock },
+    { label: "Profile",                    href: "/trainer/profile",               icon: UserCog },
+    { label: "Pay Slips",                  href: "/trainer/payslips",              icon: Receipt },
+    { label: "Complaints",                 href: "/trainer/complaints",            icon: MessageSquareMore },
   ],
 
   Accountant: [
@@ -96,37 +103,6 @@ export const roleLinks = {
   ],
 };
 
-export const chatLinksByRole = {
-  SuperAdmin: [
-    { label: "Broadcasts", href: "/chat", icon: Megaphone, tab: "broadcasts" },
-    { label: "Groups",     href: "/chat", icon: Users,     tab: "groups" },
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-  ],
-  SPOCAdmin: [
-    { label: "Groups",     href: "/chat", icon: Users,     tab: "groups" },
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-    { label: "Broadcasts", href: "/chat", icon: Megaphone, tab: "broadcasts" },
-  ],
-  CollegeAdmin: [
-    { label: "Groups",     href: "/chat", icon: Users,     tab: "groups" },
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-    { label: "Broadcasts", href: "/chat", icon: Megaphone, tab: "broadcasts" },
-  ],
-  Trainer: [
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-    { label: "Groups",     href: "/chat", icon: Users,     tab: "groups" },
-    { label: "Broadcasts", href: "/chat", icon: Megaphone, tab: "broadcasts" },
-  ],
-  Accountant: [
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-  ],
-  Student: [
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-  ],
-  Company: [
-    { label: "Chats",      href: "/chat", icon: MessageSquareMore, tab: "chats" },
-  ],
-};
 
 export const homeLinksByRole = {
   SuperAdmin:   "/dashboard",
@@ -163,8 +139,7 @@ export const resolveSidebarRole = (role = "", pathname = "") => {
   return "SuperAdmin";
 };
 
-export const resolvePortalTitle = (activeRole, isChatActive) => {
-  if (isChatActive) return "Chat Portal";
+export const resolvePortalTitle = (activeRole) => {
   if (activeRole === "SPOCAdmin") return "SPOC Portal";
   if (activeRole === "CollegeAdmin") return "College Portal";
   if (activeRole === "Trainer") return "Trainer Portal";
@@ -174,10 +149,8 @@ export const resolvePortalTitle = (activeRole, isChatActive) => {
   return "Admin Portal";
 };
 
-export const resolveNavLinks = ({ activeRole, isChatActive }) =>
-  isChatActive
-    ? chatLinksByRole[activeRole] || chatLinksByRole.SuperAdmin
-    : roleLinks[activeRole] || roleLinks.SuperAdmin;
+export const resolveNavLinks = ({ activeRole }) =>
+  roleLinks[activeRole] || roleLinks.SuperAdmin;
 
 export const sidebarRailIcons = {
   complaints: FileText,

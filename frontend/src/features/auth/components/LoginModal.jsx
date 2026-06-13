@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   XMarkIcon,
   UserIcon,
@@ -60,6 +60,26 @@ const LoginModal = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isFlipped, setIsFlipped] = useState(false);
+  const [cooldownSecs, setCooldownSecs] = useState(0); // rate-limit countdown
+  const cooldownRef = useRef(null);
+
+  // Start a visible countdown when rate-limited
+  const startCooldown = (seconds) => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    setCooldownSecs(seconds);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSecs((prev) => {
+        if (prev <= 1) { clearInterval(cooldownRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const formatCooldown = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+  };
 
 
 
@@ -168,21 +188,27 @@ const LoginModal = ({ isOpen, onClose }) => {
       if (!isExpectedAuthState) {
         console.error("Login Error:", err);
       }
-      const message = err.status === 429
-        ? err.message ||
-          "Too many login attempts. Please wait a few minutes and try again."
-        : err.pendingApproval
+      if (err.status === 429) {
+        const waitSecs = err.retryAfterSeconds || 60;
+        startCooldown(waitSecs);
+        const mins = Math.ceil(waitSecs / 60);
+        const msg = err.message || `Too many attempts. Please wait ${mins} minute(s) and try again.`;
+        setError(msg);
+        notify.error(msg);
+      } else {
+        const message = err.pendingApproval
           ? err.message || "Your account is pending admin approval."
           : err.requiresEmailVerification
             ? err.message || "Please verify your email before signing in."
             : err.roleMismatch
               ? err.message ||
-                "This email is not registered for the selected account type. Super Admin accounts can sign in on the Company tab or at /company/auth."
+                "This email is not registered for the selected account type."
               : err.accountDeactivated
                 ? err.message || "Your account has been deactivated."
                 : err.message || "Invalid email or password.";
-      setError(message);
-      notify.error(message);
+        setError(message);
+        notify.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -321,6 +347,11 @@ const LoginModal = ({ isOpen, onClose }) => {
                 {error && (
                   <div className="login-alert login-alert-error" role="alert">
                     {error}
+                    {cooldownSecs > 0 && (
+                      <div style={{ marginTop: '6px', fontSize: '0.85em', fontWeight: 700 }}>
+                        ⏳ Try again in {formatCooldown(cooldownSecs)}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -453,11 +484,11 @@ const LoginModal = ({ isOpen, onClose }) => {
                     size="lg"
                     fullWidth
                     loading={loading}
-                    disabled={loading || !canSubmitLogin}
+                    disabled={loading || !canSubmitLogin || cooldownSecs > 0}
                     loadingText="Logging in..."
                     className="login-btn"
                   >
-                    Login
+                    {cooldownSecs > 0 ? `Wait ${formatCooldown(cooldownSecs)}` : 'Login'}
                   </CTAButton>
                 </form>
 

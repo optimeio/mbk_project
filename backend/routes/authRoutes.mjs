@@ -8,8 +8,8 @@ import {
   getCurrentUser,
   verifyEmail,
   googleLogin,
-} from '../controllers/authController.js';
-import { authenticate } from '../middleware/authMiddleware.js';
+} from '../controllers/authController.mjs';
+import { authenticate } from '../middleware/authMiddleware.mjs';
 
 const require = createRequire(import.meta.url);
 const authRegistrationRoutes = require('./authRegistrationRoutes.js');

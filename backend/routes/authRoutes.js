@@ -6,8 +6,8 @@ import {
   refreshTokenController,
   getCurrentUser,
   verifyEmail,
-} from '../controllers/authController.js';
-import { authenticate } from '../middleware/authMiddleware.js';
+} from '../controllers/authController.mjs';
+import { authenticate } from '../middleware/authMiddleware.mjs';
 
 const router = express.Router();
 

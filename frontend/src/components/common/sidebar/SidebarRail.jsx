@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { memo } from "react";
-import { FileText, Home, LogOut, MessageSquareMore } from "lucide-react";
+import { FileText, Home, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PortalBrandMark from "@/components/common/PortalBrandMark";
 
@@ -18,7 +18,7 @@ function SidebarRail({
   complaintsHref,
   handleLogout,
   homeHref,
-  isChatActive,
+
   isComplaintsActive,
   isHomeActive,
 }) {
@@ -62,19 +62,6 @@ function SidebarRail({
           </Link>
         </Button>
       ) : null}
-
-      <Button
-        asChild
-        size="icon"
-        variant="ghost"
-        className={railLinkClass(isChatActive)}
-        aria-label="Open chat"
-        title="Open chat"
-      >
-        <Link href="/chat" prefetch>
-          <MessageSquareMore className="h-4 w-4" />
-        </Link>
-      </Button>
 
       <div className="flex-1" />
 

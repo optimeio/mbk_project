@@ -9,6 +9,10 @@
     "start": "concurrently \"npm run start --prefix frontend\" \"npm run start --prefix backend\""
   },
   "dependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "node": "^26.3.0"
   }
 }

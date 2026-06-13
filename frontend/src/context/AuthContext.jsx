@@ -338,12 +338,14 @@ export const AuthProvider = ({ children }) => {
     };
 
     const buildAuthError = (data, payload, fallbackMessage = 'Invalid credentials') => {
-      const err = new Error(data.message || payload.message || fallbackMessage);
-      err.pendingApproval = payload.pendingApproval || data.pendingApproval;
+      const safeData = data || {};
+      const safePayload = payload || {};
+      const err = new Error(safeData.message || safePayload.message || fallbackMessage);
+      err.pendingApproval = safePayload.pendingApproval || safeData.pendingApproval;
       err.requiresEmailVerification =
-        payload.requiresEmailVerification || data.requiresEmailVerification;
-      err.accountDeactivated = payload.accountDeactivated || data.accountDeactivated;
-      err.roleMismatch = payload.roleMismatch || data.roleMismatch;
+        safePayload.requiresEmailVerification || safeData.requiresEmailVerification;
+      err.accountDeactivated = safePayload.accountDeactivated || safeData.accountDeactivated;
+      err.roleMismatch = safePayload.roleMismatch || safeData.roleMismatch;
       return err;
     };
 

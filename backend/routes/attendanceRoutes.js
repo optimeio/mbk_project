@@ -21,8 +21,11 @@ const {
     Student,
     Notification,
     Department,
-    ScheduleDocument
+    ScheduleDocument,
+    CheckIn,
+    CheckOut
 } = require('../models');
+const { auth: authenticate } = require('../middleware/auth');
 const { sendTrainingCompletionEmail } = require('../utils/emailService');
 const { getGeoTagData } = require('../utils/exif');
 const { extractOcrStampData } = require('../utils/ocr');
@@ -4270,6 +4273,283 @@ router.post('/submit', uploadAttendance, async (req, res) => {
             message: 'Failed to process legacy submit adapter',
             error: error.message,
         });
+    }
+});
+
+// GET /attendance/daily-status
+router.get('/daily-status', authenticate, async (req, res) => {
+    try {
+        let trainerId = req.query.trainerId;
+        if (!trainerId) {
+            const trainer = await Trainer.findOne({ userId: req.user.id });
+            if (!trainer) {
+                return res.status(404).json({ success: false, message: 'Trainer profile not found' });
+            }
+            trainerId = trainer._id;
+        }
+
+        const todayKey = toZonedDateKey(new Date()); // YYYY-MM-DD
+        const startOfDay = new Date(`${todayKey}T00:00:00.000+05:30`);
+        const endOfDay = new Date(`${todayKey}T23:59:59.999+05:30`);
+
+        const checkInRecord = await CheckIn.findOne({
+            trainerId,
+            checkInTime: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        const checkOutRecord = await CheckOut.findOne({
+            trainerId,
+            checkOutTime: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        return res.json({
+            success: true,
+            status: {
+                checkedIn: !!checkInRecord,
+                checkedOut: !!checkOutRecord,
+                checkInTime: checkInRecord ? checkInRecord.checkInTime : null,
+                checkOutTime: checkOutRecord ? checkOutRecord.checkOutTime : null
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching daily status:', error);
+        return res.status(500).json({ success: false, message: 'Error fetching daily status', error: error.message });
+    }
+});
+
+// POST /attendance/daily-check-in
+router.post('/daily-check-in', authenticate, async (req, res) => {
+    try {
+        let { trainerId, latitude, longitude, address, scheduleId } = req.body;
+        if (!trainerId) {
+            const trainer = await Trainer.findOne({ userId: req.user.id });
+            if (!trainer) {
+                return res.status(404).json({ success: false, message: 'Trainer profile not found' });
+            }
+            trainerId = trainer._id;
+        }
+
+        const todayKey = toZonedDateKey(new Date()); // YYYY-MM-DD
+        const startOfDay = new Date(`${todayKey}T00:00:00.000+05:30`);
+        const endOfDay = new Date(`${todayKey}T23:59:59.999+05:30`);
+
+        // Rule 2: Prevent multiple check-ins per day
+        const existingCheckIn = await CheckIn.findOne({
+            trainerId,
+            checkInTime: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        if (existingCheckIn) {
+            return res.status(400).json({ success: false, message: 'Already checked in today' });
+        }
+
+        // Auto store timestamp
+        const newCheckIn = await CheckIn.create({
+            trainerId,
+            scheduleId: scheduleId || null,
+            checkInTime: new Date(),
+            location: {
+                latitude: latitude || null,
+                longitude: longitude || null,
+                address: address || ''
+            }
+        });
+
+        return res.json({ success: true, message: 'Successfully checked in', data: newCheckIn });
+    } catch (error) {
+        console.error('Error in daily check-in:', error);
+        return res.status(500).json({ success: false, message: 'Error in daily check-in', error: error.message });
+    }
+});
+
+// POST /attendance/daily-check-out
+router.post('/daily-check-out', authenticate, async (req, res) => {
+    try {
+        let { trainerId, latitude, longitude, address, scheduleId } = req.body;
+        if (!trainerId) {
+            const trainer = await Trainer.findOne({ userId: req.user.id });
+            if (!trainer) {
+                return res.status(404).json({ success: false, message: 'Trainer profile not found' });
+            }
+            trainerId = trainer._id;
+        }
+
+        const todayKey = toZonedDateKey(new Date()); // YYYY-MM-DD
+        const startOfDay = new Date(`${todayKey}T00:00:00.000+05:30`);
+        const endOfDay = new Date(`${todayKey}T23:59:59.999+05:30`);
+
+        // Rule 1: Check-in required before check-out
+        const existingCheckIn = await CheckIn.findOne({
+            trainerId,
+            checkInTime: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        if (!existingCheckIn) {
+            return res.status(400).json({ success: false, message: 'Check-in required before check-out' });
+        }
+
+        // Prevent multiple check-outs per day
+        const existingCheckOut = await CheckOut.findOne({
+            trainerId,
+            checkOutTime: { $gte: startOfDay, $lte: endOfDay }
+        });
+
+        if (existingCheckOut) {
+            return res.status(400).json({ success: false, message: 'Already checked out today' });
+        }
+
+        // Auto store timestamp
+        const newCheckOut = await CheckOut.create({
+            trainerId,
+            scheduleId: scheduleId || null,
+            checkOutTime: new Date(),
+            location: {
+                latitude: latitude || null,
+                longitude: longitude || null,
+                address: address || ''
+            }
+        });
+
+        return res.json({ success: true, message: 'Successfully checked out', data: newCheckOut });
+    } catch (error) {
+        console.error('Error in daily check-out:', error);
+        return res.status(500).json({ success: false, message: 'Error in daily check-out', error: error.message });
+    }
+});
+
+// POST /attendance/student-activities
+router.post('/student-activities', authenticate, uploadAttendance, async (req, res) => {
+    try {
+        let { trainerId, scheduleId } = req.body;
+        if (!trainerId) {
+            const trainer = await Trainer.findOne({ userId: req.user.id });
+            if (!trainer) {
+                return res.status(404).json({ success: false, message: 'Trainer profile not found' });
+            }
+            trainerId = trainer._id;
+        }
+
+        if (!scheduleId) {
+            return res.status(400).json({ success: false, message: 'Schedule ID is required' });
+        }
+
+        let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
+        if (!attendance) {
+            const schedule = await Schedule.findById(scheduleId);
+            if (!schedule) {
+                return res.status(404).json({ success: false, message: 'Schedule not found' });
+            }
+            attendance = new Attendance({
+                trainerId,
+                scheduleId,
+                collegeId: schedule.collegeId,
+                courseId: schedule.courseId,
+                dayNumber: schedule.dayNumber,
+                date: new Date(),
+                status: 'Pending',
+                verificationStatus: 'pending'
+            });
+        }
+
+        let newPhotos = [];
+        if (req.files && req.files.activityPhotos) {
+            newPhotos = req.files.activityPhotos.map(file => file.path);
+        }
+
+        if (newPhotos.length === 0) {
+            return res.status(400).json({ success: false, message: 'No student activity images uploaded' });
+        }
+
+        attendance.activityPhotos = [
+            ...(attendance.activityPhotos || []),
+            ...newPhotos
+        ];
+
+        await attendance.save();
+
+        return res.json({
+            success: true,
+            message: 'Student activity images uploaded successfully',
+            activityPhotos: attendance.activityPhotos
+        });
+    } catch (error) {
+        console.error('Error uploading student activities:', error);
+        return res.status(500).json({ success: false, message: 'Failed to upload student activities', error: error.message });
+    }
+});
+
+// POST /attendance/student-records
+router.post('/student-records', authenticate, uploadAttendance, async (req, res) => {
+    try {
+        let { trainerId, scheduleId, remarks } = req.body;
+        if (!trainerId) {
+            const trainer = await Trainer.findOne({ userId: req.user.id });
+            if (!trainer) {
+                return res.status(404).json({ success: false, message: 'Trainer profile not found' });
+            }
+            trainerId = trainer._id;
+        }
+
+        if (!scheduleId) {
+            return res.status(400).json({ success: false, message: 'Schedule ID is required' });
+        }
+
+        let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
+        if (!attendance) {
+            const schedule = await Schedule.findById(scheduleId);
+            if (!schedule) {
+                return res.status(404).json({ success: false, message: 'Schedule not found' });
+            }
+            attendance = new Attendance({
+                trainerId,
+                scheduleId,
+                collegeId: schedule.collegeId,
+                courseId: schedule.courseId,
+                dayNumber: schedule.dayNumber,
+                date: new Date(),
+                status: 'Pending',
+                verificationStatus: 'pending'
+            });
+        }
+
+        // Validate pdf if provided
+        if (req.files && req.files.attendancePdf) {
+            const pdfFile = req.files.attendancePdf[0];
+            const ext = path.extname(pdfFile.originalname).toLowerCase();
+            if (ext !== '.pdf') {
+                return res.status(400).json({ success: false, message: 'Attendance Record PDF must be a .pdf file' });
+            }
+            attendance.attendancePdfUrl = pdfFile.path;
+        }
+
+        // Validate photo if provided
+        if (req.files && req.files.studentsPhoto) {
+            const photoFile = req.files.studentsPhoto[0];
+            const ext = path.extname(photoFile.originalname).toLowerCase();
+            if (!['.jpg', '.jpeg', '.png'].includes(ext)) {
+                return res.status(400).json({ success: false, message: 'Manual Attendance Form must be an image file (jpg, jpeg, png)' });
+            }
+            attendance.studentsPhotoUrl = photoFile.path;
+        }
+
+        if (remarks !== undefined) {
+            attendance.remarks = remarks;
+        }
+
+        await attendance.save();
+
+        return res.json({
+            success: true,
+            message: 'Student attendance records uploaded successfully',
+            data: {
+                attendancePdfUrl: attendance.attendancePdfUrl,
+                studentsPhotoUrl: attendance.studentsPhotoUrl,
+                remarks: attendance.remarks
+            }
+        });
+    } catch (error) {
+        console.error('Error uploading student records:', error);
+        return res.status(500).json({ success: false, message: 'Failed to upload student records', error: error.message });
     }
 });
 

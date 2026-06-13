@@ -6,22 +6,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { safeRouterPush } from '@/utils/safeRouterNavigation';
-import {
-    AcademicCapIcon,
-    ArrowRightIcon,
-    ArrowTopRightOnSquareIcon,
-    Bars3Icon,
-    BriefcaseIcon,
-    BuildingOffice2Icon,
-    CameraIcon,
-    ChatBubbleLeftRightIcon,
-    GlobeAltIcon,
-    MapPinIcon,
-    PhoneIcon,
-    PlayCircleIcon,
-    UserGroupIcon,
-    XMarkIcon
-} from '@heroicons/react/24/outline';
+import { AcademicCapIcon, ArrowRightIcon, ArrowTopRightOnSquareIcon, Bars3Icon, BriefcaseIcon, BuildingOffice2Icon, CameraIcon, GlobeAltIcon, MapPinIcon, PhoneIcon, PlayCircleIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { MessageSquare as ChatBubbleLeftRightIcon } from 'lucide-react';
 import HeroSection from '@/features/auth/pages/HeroSection';
 import CTAButton from '@/components/common/CTAButton';
 import '@/features/auth/pages/LandingPage.css';

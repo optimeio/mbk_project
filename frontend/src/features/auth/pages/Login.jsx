@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import mbkLogo from "@/assets/mbk_tech_cyan.png";
 
 import { useAuth } from "@/context/AuthContext";
@@ -35,6 +35,8 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cooldownSecs, setCooldownSecs] = useState(0); // rate-limit countdown
+  const cooldownRef = useRef(null);
   const [queryLoginType, setQueryLoginType] = useState("");
   const [queryRedirect, setQueryRedirect] = useState("");
   const { login, setAuthUser, currentUser, isAuthenticated, loading: authLoading } = useAuth();
@@ -333,6 +335,27 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
     e.currentTarget.style.transform = "translateY(0)";
   };
 
+  // Start a visible countdown when rate-limited
+  const startCooldown = (seconds) => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    setCooldownSecs(seconds);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSecs((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const formatCooldown = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+  };
+
   const canSubmitLogin = hasLoginCredentials({ email, password });
 
   const handleSubmit = async (e) => {
@@ -371,17 +394,26 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
       if (isExpectedAuthState) {
         console.debug("[AUTH] login blocked:", err.message);
       } else {
-        console.error("Login Error:", err);
+        console.warn("Login Error:", err);
       }
-      const message = err.pendingApproval
-        ? err.message || "Your account is pending admin approval."
-        : err.requiresEmailVerification
-          ? err.message || "Please verify your email before signing in."
-          : err.roleMismatch
-            ? err.message || "This email is not registered for the selected account type."
-          : err.message || "Invalid email or password";
-      setError(message);
-      notify.error(message);
+      if (err.status === 429) {
+        const waitSecs = err.retryAfterSeconds || 60;
+        startCooldown(waitSecs);
+        const mins = Math.ceil(waitSecs / 60);
+        const msg = err.message || `Too many attempts. Please wait ${mins} minute(s) and try again.`;
+        setError(msg);
+        notify.error(msg);
+      } else {
+        const message = err.pendingApproval
+          ? err.message || "Your account is pending admin approval."
+          : err.requiresEmailVerification
+            ? err.message || "Please verify your email before signing in."
+            : err.roleMismatch
+              ? err.message || "This email is not registered for the selected account type."
+            : err.message || "Invalid email or password";
+        setError(message);
+        notify.error(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -473,6 +505,11 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
         {error && (
           <div className="bg-red-500/20 border border-red-500 text-red-100 p-3 rounded mb-4 text-center">
             {error}
+            {cooldownSecs > 0 && (
+              <div style={{ marginTop: '6px', fontSize: '0.9em', fontWeight: 600, color: '#fca5a5' }}>
+                ⏳ Try again in {formatCooldown(cooldownSecs)}
+              </div>
+            )}
           </div>
         )}
 
@@ -598,10 +635,10 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                 size="lg"
                 fullWidth
                 loading={loading}
-                disabled={loading || !canSubmitLogin}
+                disabled={loading || !canSubmitLogin || cooldownSecs > 0}
                 loadingText="Signing in..."
               >
-                LOGIN
+                {cooldownSecs > 0 ? `Wait ${formatCooldown(cooldownSecs)}` : 'LOGIN'}
               </CTAButton>
             </div>
 
