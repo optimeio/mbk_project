@@ -40,6 +40,8 @@ export const notify = {
   loading: (message = DEFAULT_LOADING_LABEL, options = {}) =>
     toast.loading(message, options),
   dismiss: (id) => toast.dismiss(id),
+  promise: (promise, messages, options = {}) =>
+    toast.promise(promise, messages, options),
   /** Show a success toast, wait briefly so it is visible, then run navigation. */
   successAndNavigate: async (message, navigateFn, delayMs = 900) => {
     toast.success(message, { style: TOAST_STYLES.success });

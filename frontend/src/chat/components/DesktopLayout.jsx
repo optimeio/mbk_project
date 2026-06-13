@@ -26,7 +26,8 @@ export default function DesktopLayout({
   isDark,
   toggleDarkMode,
   tabItems = [],
-  workflowHint = ''
+  workflowHint = '',
+  channelListVersion = 0,
 }) {
   const openBroadcastChannel = () => {
     setModal('broadcast');
@@ -36,6 +37,7 @@ export default function DesktopLayout({
     <div style={{ display:'flex',height:'100%',width:'100%',flex:1,overflow:'hidden',background: isDark ? '#0a0a0a' : '#f2f7f4' }}>
       <aside style={{ width: 320, flexShrink: 0, height: '100%', borderRight: isDark ? '1px solid #222' : '1px solid rgba(45,122,82,0.12)', zIndex: 10, background: isDark ? '#0f0f0f' : '#fff', overflow: 'hidden' }}>
         <Sidebar
+          key={`chat-sidebar-${channelListVersion}`}
           activeNav={activeNav}
           setActiveNav={setActiveNav}
           tabItems={tabItems}

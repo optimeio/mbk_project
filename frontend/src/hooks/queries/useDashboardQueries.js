@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { normalizeScheduleAssociations } from "@/modules/schedules";
-import { api } from "@/services/api";
+import { api, readApiCache } from "@/services/api";
 import scheduleService from "@/services/scheduleService";
 import { QUERY_GC_TIMES, QUERY_STALE_TIMES } from "@/shared/config/queryPolicies";
 
@@ -16,6 +16,12 @@ export const useSuperAdminDashboardQuery = ({ enabled = true } = {}) =>
     staleTime: QUERY_STALE_TIMES.DASHBOARD_STATS,
     gcTime: QUERY_GC_TIMES.STANDARD,
     refetchOnWindowFocus: false,
+    // Paint instantly from the bundle-primed cache; fresh data replaces it.
+    placeholderData: () => {
+      const cached = readApiCache("/dashboard/super-admin");
+      if (!cached) return undefined;
+      return cached?.data || cached;
+    },
     queryFn: async () => {
       const response = await api.get("/dashboard/super-admin", {
         skipCache: true,
@@ -31,6 +37,25 @@ export const useSpocDashboardQuery = ({ enabled = true } = {}) =>
     staleTime: QUERY_STALE_TIMES.LIVE_VIEW,
     gcTime: QUERY_GC_TIMES.STANDARD,
     refetchOnWindowFocus: false,
+    // Paint instantly from the bundle-primed cache; fresh data replaces it.
+    placeholderData: () => {
+      const liveDashboard = readApiCache("/schedules/live-dashboard");
+      const cachedAssociations = readApiCache("/schedules/associations/all");
+      if (!liveDashboard && !cachedAssociations) return undefined;
+      const associations = cachedAssociations
+        ? {
+          ...(typeof cachedAssociations === "object" ? cachedAssociations : {}),
+          data: normalizeScheduleAssociations(cachedAssociations),
+        }
+        : undefined;
+      return {
+        fetchedAt: 0,
+        resourceMap: {
+          "/schedules/live-dashboard": liveDashboard,
+          "/schedules/associations/all": associations,
+        },
+      };
+    },
     queryFn: async () => {
       const [liveDashboard, associationsResponse] = await Promise.all([
         scheduleService.getLiveDashboard({ skipCache: true }),

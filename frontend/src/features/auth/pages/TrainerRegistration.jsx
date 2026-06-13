@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from 'next/navigation';
+import { safeRouterReplace } from '@/utils/safeRouterNavigation';
 
 import SignatureCanvas from "react-signature-canvas";
 import {
@@ -43,6 +44,7 @@ import {
 import SelfieCapture from "@/components/SelfieCapture";
 import DocumentUploadLoadingState from "@/components/common/DocumentUploadLoadingState";
 import notify from "@/lib/toast";
+import { PASSWORD_MIN_LENGTH, PASSWORD_MIN_LENGTH_MESSAGE } from "@/utils/authValidation";
 
 const TRAINER_SIGNUP_SESSION_KEY = "trainer_signup_session";
 
@@ -273,6 +275,7 @@ const Step1 = ({ onComplete, onExistingStatusChange }) => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -297,12 +300,8 @@ const Step1 = ({ onComplete, onExistingStatusChange }) => {
 
 
 
-    const strongPasswordRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!strongPasswordRegex.test(password)) {
-      setError(
-        "Password must be 8+ characters with uppercase, lowercase, digit, and special character.",
-      );
+    if (String(password).length < PASSWORD_MIN_LENGTH) {
+      setError(PASSWORD_MIN_LENGTH_MESSAGE);
       return;
     }
     if (password !== confirmPassword) {
@@ -448,15 +447,21 @@ const Step1 = ({ onComplete, onExistingStatusChange }) => {
                   setPassword(e.target.value);
                   if (error) setError("");
                 }}
-                placeholder="8+ chars with upper, lower, digit & special"
+                placeholder="Password (min 8 characters)"
                 required
                 minLength={8}
               />
               <button
                 type="button"
                 className="tr-pw-toggle"
-                onClick={() => setShowPassword((prev) => !prev)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShowPassword((prev) => !prev);
+                }}
+                onMouseDown={(event) => event.preventDefault()}
                 aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -464,18 +469,34 @@ const Step1 = ({ onComplete, onExistingStatusChange }) => {
           </div>
           <div className="tr-field">
             <label htmlFor="reg-confirm-password">Confirm Password*</label>
-            <input
-              id="reg-confirm-password"
-              type={showPassword ? "text" : "password"}
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (error) setError("");
-              }}
-              placeholder="Re-enter password"
-              required
-              minLength={8}
-            />
+            <div className="tr-pw-wrap">
+              <input
+                id="reg-confirm-password"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError("");
+                }}
+                placeholder="Re-enter password"
+                required
+                minLength={8}
+              />
+              <button
+                type="button"
+                className="tr-pw-toggle"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShowConfirmPassword((prev) => !prev);
+                }}
+                onMouseDown={(event) => event.preventDefault()}
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                aria-pressed={showConfirmPassword}
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
           <button type="submit" disabled={loading} className="tr-btn-primary">
             {loading ? (
@@ -1925,7 +1946,7 @@ const navigateIntoSignupStep = (router, step, regData = {}) => {
     showResumePrompt: false,
   });
 
-  router.replace(getTrainerSignupStepPath(safeStep));
+  safeRouterReplace(router, getTrainerSignupStepPath(safeStep));
 };
 
 const getTrainerSignupRouteStep = (stepSlug = "") => {
@@ -2250,7 +2271,7 @@ const TrainerRegistration = () => {
     const targetPath = getTrainerSignupStepPath(visibleStep);
 
     if (currentPath !== targetPath) {
-      router.replace(targetPath);
+      safeRouterReplace(router, targetPath);
     }
   }, [existingStatus, isRestoringSession, router, step, stepSlug]);
 
@@ -3118,17 +3139,26 @@ const TrainerRegistration = () => {
         .tr-pw-wrap {
           position: relative;
         }
+        .tr-pw-wrap input {
+          width: 100%;
+          padding-right: 44px;
+        }
         .tr-pw-toggle {
           position: absolute;
-          right: 12px;
+          right: 8px;
           top: 50%;
           transform: translateY(-50%);
           background: none;
           border: none;
           cursor: pointer;
           color: #6b7280;
-          padding: 0;
-          display: flex;
+          padding: 6px;
+          min-width: 36px;
+          min-height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2;
         }
         .tr-pw-toggle:hover { color: var(--primary-orange); }
 

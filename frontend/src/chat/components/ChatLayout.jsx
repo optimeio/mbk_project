@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { safeRouterReplace } from '@/utils/safeRouterNavigation';
 import { Chat } from 'stream-chat-react';
 import 'stream-chat-react/dist/css/index.css';
 import DeferredChatStyles from './DeferredChatStyles';
@@ -112,6 +113,14 @@ export default function ChatLayout({ currentUser: propUser }) {
   const router = useRouter();
   const { client, loading, error, bootstrap, users, isDark, toggleDarkMode } = useStreamChat(propUser);
   const [activeChannel, setActiveChannelState] = useState(null);
+  const activeChannelRef = useRef(null);
+  const sessionRestoredRef = useRef(false);
+  const laneSyncInFlightRef = useRef(false);
+
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
+
   const setActiveChannel = useCallback((nextChannel) => {
     setActiveChannelState((previousChannel) => {
       const resolvedChannel =
@@ -126,15 +135,18 @@ export default function ChatLayout({ currentUser: propUser }) {
   }, []);
   const [modal,setModal] = useState(null);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
+  const [channelListVersion, setChannelListVersion] = useState(0);
 
   // 🌍 NAV & RESPONSIVE STATE
-  const [activeNav, setActiveNav] = useState(() => {
-    if (typeof window === 'undefined') return 'chats';
-    return localStorage.getItem('mbk_last_nav') || 'chats';
-  });
+  const [activeNav, setActiveNav] = useState('chats');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
-  const isMobileRef = useRef(isMobile);
+  const [isMobile, setIsMobile] = useState(false);
+  const isMobileRef = useRef(false);
+
+  useEffect(() => {
+    setActiveNav(localStorage.getItem('mbk_last_nav') || 'chats');
+    setIsMobile(window.innerWidth < 768);
+  }, []);
 
   useEffect(() => {
     isMobileRef.current = isMobile;
@@ -191,16 +203,16 @@ export default function ChatLayout({ currentUser: propUser }) {
 
   // Keep navigation workflow role-aware to avoid cross-role tab mismatches.
   useEffect(() => {
-    if (!currentUser) return;
+    if (!roleToken) return;
 
-    const roleKey = String(currentUser.role || '');
+    const roleKey = String(roleToken);
     const prevRoleKey = localStorage.getItem('mbk_last_nav_role');
     if (prevRoleKey !== roleKey) {
       setActiveNav(roleTabWorkflow.defaultNav);
       localStorage.setItem('mbk_last_nav', roleTabWorkflow.defaultNav);
     }
     localStorage.setItem('mbk_last_nav_role', roleKey);
-  }, [currentUser, roleTabWorkflow.defaultNav]);
+  }, [roleToken, roleTabWorkflow.defaultNav]);
 
   // 📱 RESPONSIVE DETECTION
   useEffect(() => {
@@ -208,6 +220,17 @@ export default function ChatLayout({ currentUser: propUser }) {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    const handleChannelChanged = () => {
+      setShowInfoPanel(false);
+      setActiveChannel(null);
+      setChannelListVersion((version) => version + 1);
+    };
+
+    window.addEventListener('mbk:chat-channel-changed', handleChannelChanged);
+    return () => window.removeEventListener('mbk:chat-channel-changed', handleChannelChanged);
+  }, [setActiveChannel]);
 
   // 📱 KEYBOARD-SAFE MOBILE LAYOUT: Adjust height dynamically using Visual Viewport API
   useEffect(() => {
@@ -231,31 +254,52 @@ export default function ChatLayout({ currentUser: propUser }) {
   const handleLogout = useCallback(()=>{ 
     localStorage.removeItem('mbk_last_channel_id');
     localStorage.removeItem('mbk_last_nav');
-    router.replace('/');
+    safeRouterReplace(router, '/');
   },[router]);
 
-  // 🧩 SESSION RECOVERY
+  // 🧩 SESSION RECOVERY (runs once per mount)
   useEffect(() => {
-    if (!client || !bootstrap || activeChannel || !currentUserId) return;
+    if (!client || !bootstrap || activeChannelRef.current || !currentUserId || sessionRestoredRef.current) {
+      return;
+    }
     if (typeof window !== 'undefined' && isMobile && sessionStorage.getItem('mbk_chat_force_list') === '1') {
       return;
     }
+
+    sessionRestoredRef.current = true;
+    let alive = true;
+
     const restoreSession = async () => {
-        const lastId = localStorage.getItem('mbk_last_channel_id');
-        const lastType = localStorage.getItem('mbk_last_channel_type') || 'messaging';
-        try {
-            if (lastId) {
-                // Use { cid: ... } instead of { id: ... } to avoid restricted field errors
-                const verified = await client.queryChannels({ cid: `${lastType}:${lastId}`, members: { $in: [currentUserId] } }, [], { limit: 1 });
-                if (verified.length > 0) setActiveChannel(verified[0]);
-            } else if (!isMobile) {
-                const channels = await client.queryChannels({ type: 'messaging', members: { $in: [currentUserId] } }, CHANNEL_SORT, { limit: 1 });
-                if (channels.length > 0) setActiveChannel(channels[0]);
-            }
-        } catch (err) { console.warn('Session restoration failed:', err?.message); }
+      const lastId = localStorage.getItem('mbk_last_channel_id');
+      const lastType = localStorage.getItem('mbk_last_channel_type') || 'messaging';
+      try {
+        if (lastId) {
+          const verified = await client.queryChannels(
+            { cid: `${lastType}:${lastId}`, members: { $in: [currentUserId] } },
+            [],
+            { limit: 1 },
+          );
+          if (!alive || verified.length === 0) return;
+          setActiveChannel(verified[0]);
+        } else if (!isMobile) {
+          const channels = await client.queryChannels(
+            { type: 'messaging', members: { $in: [currentUserId] } },
+            CHANNEL_SORT,
+            { limit: 1 },
+          );
+          if (!alive || channels.length === 0) return;
+          setActiveChannel(channels[0]);
+        }
+      } catch (err) {
+        console.warn('Session restoration failed:', err?.message);
+      }
     };
-    restoreSession();
-  }, [client, bootstrap, currentUserId, isMobile, activeChannel, setActiveChannel]);
+
+    void restoreSession();
+    return () => {
+      alive = false;
+    };
+  }, [client, bootstrap, currentUserId, isMobile, setActiveChannel]);
 
   // Keep active conversation aligned with selected lane (Chats / Groups / Broadcasts).
   useEffect(() => {
@@ -264,14 +308,19 @@ export default function ChatLayout({ currentUser: propUser }) {
       return;
     }
 
+    const announcementChannelId = bootstrap?.announcementChannelId || null;
+    if (
+      activeChannelRef.current
+      && matchesLane(activeChannelRef.current, activeNav, announcementChannelId)
+    ) {
+      return;
+    }
+
     let alive = true;
+    laneSyncInFlightRef.current = true;
+
     const syncLaneChannel = async () => {
       try {
-        const announcementChannelId = bootstrap?.announcementChannelId || null;
-        if (activeChannel && matchesLane(activeChannel, activeNav, announcementChannelId)) {
-          return;
-        }
-
         const channels = await client.queryChannels(
           { members: { $in: [currentUserId] } },
           CHANNEL_SORT,
@@ -283,17 +332,31 @@ export default function ChatLayout({ currentUser: propUser }) {
           matchesLane(channel, activeNav, announcementChannelId),
         );
 
-        setActiveChannel(laneChannels[0] || null);
+        const nextChannel = laneChannels[0] || null;
+        const currentChannel = activeChannelRef.current;
+        if (
+          currentChannel?.cid === nextChannel?.cid
+          || (!currentChannel && !nextChannel)
+        ) {
+          return;
+        }
+
+        setActiveChannel(nextChannel);
       } catch (error) {
         console.warn('Lane sync failed:', error?.message || error);
+      } finally {
+        if (alive) {
+          laneSyncInFlightRef.current = false;
+        }
       }
     };
 
-    syncLaneChannel();
+    void syncLaneChannel();
     return () => {
       alive = false;
+      laneSyncInFlightRef.current = false;
     };
-  }, [client, currentUserId, activeNav, bootstrap?.announcementChannelId, activeChannel, CHANNEL_SORT, setActiveChannel]);
+  }, [client, currentUserId, activeNav, bootstrap?.announcementChannelId, setActiveChannel]);
 
   if (loading) return <ChatSkeleton />;
   if (error)   return <ErrorScreen error={error}/>;
@@ -314,6 +377,7 @@ export default function ChatLayout({ currentUser: propUser }) {
     bootstrap, isSidebarCollapsed, setIsSidebarCollapsed,
     tabItems: roleTabWorkflow.tabs,
     workflowHint: roleTabWorkflow.helperText,
+    channelListVersion,
   };
 
 

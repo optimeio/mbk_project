@@ -115,8 +115,8 @@ const CheckOutModal = ({
   }, [getLiveLocation]);
 
   return (
-    <div className="fixed inset-0 bg-white/40 sm:bg-white/60 backdrop-blur-sm flex items-center justify-center z-100">
-      <div className="w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-xl bg-white p-4 sm:p-6 overflow-y-auto">
+    <div className="dashboard-modal-overlay fixed inset-0 z-[100] flex items-center justify-center bg-white/40 p-4 backdrop-blur-sm sm:bg-white/60">
+      <div className="dashboard-modal-panel h-full w-full overflow-y-auto bg-white p-4 sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-xl sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-bold text-gray-900">

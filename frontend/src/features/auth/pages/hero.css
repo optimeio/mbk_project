@@ -1,10 +1,12 @@
 .rb-hero-shell {
     position: relative;
     isolation: isolate;
-    inline-size: 100vw;
-    margin-inline: calc(50% - 50vw);
+    inline-size: 100%;
+    max-inline-size: 100%;
+    margin-inline: 0;
     min-block-size: 300px;
     overflow: hidden;
+    contain: layout paint;
     padding: clamp(12px, 2vw, 20px);
     display: grid;
     place-items: center;
@@ -29,11 +31,20 @@
     position: absolute;
     inset: 0;
     z-index: 0;
+    overflow: hidden;
+    max-inline-size: 100%;
 }
 
 .rb-hero-canvas .orb-container {
     inline-size: 100%;
     block-size: 100%;
+    max-inline-size: 100%;
+    overflow: hidden;
+}
+
+.rb-hero-canvas canvas {
+    display: block;
+    max-inline-size: 100%;
 }
 
 .rb-hero-orb-fallback {
@@ -58,7 +69,8 @@
 
 .rb-hero-content h1 {
     margin: 0;
-    max-inline-size: 17ch;
+    max-inline-size: 100%;
+    inline-size: 100%;
     color: #fff8f0;
     font-family: 'Poppins', 'Trebuchet MS', sans-serif;
     font-size: clamp(1.75rem, 4.8vw, 3.2rem);
@@ -129,12 +141,14 @@
 
     .rb-hero-content {
         gap: 8px;
-        inline-size: min(100%, 92vw);
+        inline-size: 100%;
+        max-inline-size: 100%;
+        padding-inline: 4px;
     }
 
     .rb-hero-content h1 {
-        max-inline-size: 14ch;
-        font-size: clamp(1.45rem, 8vw, 2rem);
+        max-inline-size: 100%;
+        font-size: clamp(1.35rem, 7.2vw, 2rem);
     }
 
     .rb-hero-cta-row {
@@ -157,8 +171,8 @@
     }
 
     .rb-hero-content h1 {
-        font-size: clamp(1.3rem, 7.5vw, 1.75rem);
-        max-inline-size: 16ch;
+        font-size: clamp(1.2rem, 6.8vw, 1.75rem);
+        max-inline-size: 100%;
     }
 
     .rb-hero-canvas {

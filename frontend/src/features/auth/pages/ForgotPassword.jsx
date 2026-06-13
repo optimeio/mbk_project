@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { EnvelopeIcon, KeyIcon, LockClosedIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { api } from '@/services/api';
+import { forgotPassword, verifyResetOTP, resetPassword } from '@/services/api';
 import CTAButton from '@/components/common/CTAButton';
 
 const ForgotPassword = () => {
@@ -22,14 +22,13 @@ const ForgotPassword = () => {
 
     const handleSendOTP = async (e) => {
         e.preventDefault();
+        if (loading) return;
         setLoading(true);
         setError('');
         setMessage('');
 
         try {
-            const response = await api.post('/auth/forgot-password', {
-                email,
-            });
+            const response = await forgotPassword(email);
             if (response.success) {
                 setMessage(response.message);
                 setStep(2);
@@ -37,7 +36,16 @@ const ForgotPassword = () => {
                 setError(response.message);
             }
         } catch (err) {
-            setError('Failed to send OTP. Please try again.');
+            if (err?.status === 429) {
+                const retryAfter = err?.response?.retryAfterSeconds;
+                setError(
+                    retryAfter
+                        ? `Too many requests. Try again in ${retryAfter} seconds.`
+                        : 'Too many requests. Please wait a few minutes and try again.',
+                );
+            } else {
+                setError(err?.message || 'Failed to send OTP. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -45,12 +53,13 @@ const ForgotPassword = () => {
 
     const handleVerifyOTP = async (e) => {
         e.preventDefault();
+        if (loading) return;
         setLoading(true);
         setError('');
         setMessage('');
 
         try {
-            const response = await api.post('/auth/verify-reset-otp', { email, otp });
+            const response = await verifyResetOTP(email, otp);
             if (response.success) {
                 setTempToken(response.tempToken);
                 setMessage('OTP Verified. Please set your new password.');
@@ -59,7 +68,16 @@ const ForgotPassword = () => {
                 setError(response.message);
             }
         } catch (err) {
-            setError('Invalid OTP. Please try again.');
+            if (err?.status === 429) {
+                const retryAfter = err?.response?.retryAfterSeconds;
+                setError(
+                    retryAfter
+                        ? `Too many OTP attempts. Try again in ${retryAfter} seconds.`
+                        : 'Too many OTP attempts. Please wait a few minutes and try again.',
+                );
+            } else {
+                setError(err?.message || 'Invalid OTP. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -75,15 +93,16 @@ const ForgotPassword = () => {
             return;
         }
 
-        if (password.length < 6) {
-            setError('Password must be at least 6 characters long');
+        if (password.length < 8) {
+            setError('Password must be at least 8 characters long');
             return;
         }
 
+        if (loading) return;
         setLoading(true);
 
         try {
-            const response = await api.post('/auth/reset-password', { tempToken, password });
+            const response = await resetPassword(tempToken, password);
             if (response.success) {
                 setMessage('Password reset successfully! Redirecting to login...');
                 setTimeout(() => {
@@ -93,7 +112,16 @@ const ForgotPassword = () => {
                 setError(response.message);
             }
         } catch (err) {
-            setError('Failed to reset password. Please try again.');
+            if (err?.status === 429) {
+                const retryAfter = err?.response?.retryAfterSeconds;
+                setError(
+                    retryAfter
+                        ? `Too many reset attempts. Try again in ${retryAfter} seconds.`
+                        : 'Too many reset attempts. Please wait 15 minutes and try again.',
+                );
+            } else {
+                setError(err?.message || 'Failed to reset password. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -238,7 +266,7 @@ const ForgotPassword = () => {
                                         onChange={(e) => setPassword(e.target.value)}
                                         className="appearance-none rounded-md relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                         placeholder="New Password"
-                                        minLength={6}
+                                        minLength={8}
                                     />
                                 </div>
                             </div>
@@ -257,7 +285,7 @@ const ForgotPassword = () => {
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         className="appearance-none rounded-md relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                         placeholder="Confirm Password"
-                                        minLength={6}
+                                        minLength={8}
                                     />
                                 </div>
                             </div>

@@ -105,6 +105,17 @@ const RoleBadge = ({ role }) => {
   );
 };
 
+const notifyChatChannelChanged = (action, channelId) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("mbk:chat-channel-changed", {
+      detail: { action, channelId },
+    }),
+  );
+};
+
 export default function InfoPanel({ channel, groupCandidates = [], onClose }) {
   const { currentUser, users, isDark } = useChat();
 
@@ -250,7 +261,7 @@ export default function InfoPanel({ channel, groupCandidates = [], onClose }) {
       if (data.success) {
         alert('You left the channel');
         onClose();
-        window.location.reload(); // Refresh to clean the sidebar/active chat
+        notifyChatChannelChanged('leave', channel.id);
       } else {
         alert(data.message || 'Error leaving channel');
       }
@@ -268,7 +279,7 @@ export default function InfoPanel({ channel, groupCandidates = [], onClose }) {
       if (data.success) {
         alert(`${channelLabel.charAt(0).toUpperCase() + channelLabel.slice(1)} deleted for all users`);
         onClose();
-        window.location.reload();
+        notifyChatChannelChanged('delete', channel.id);
       } else {
         alert(data.message || `Error deleting ${channelLabel}`);
       }
@@ -334,7 +345,8 @@ export default function InfoPanel({ channel, groupCandidates = [], onClose }) {
             onClick={() => {
               if (window.confirm('Clear all messages from your view? (This won\'t delete them for others)')) {
                 localStorage.setItem(`mbk_cleared_${channel.id}`, Date.now().toString());
-                window.location.reload();
+                notifyChatChannelChanged('clear-view', channel.id);
+                onClose();
               }
             }}
             style={{ width: '100%', padding: '12px', borderRadius: 12, border: `1px solid ${T.border}`, background: 'rgba(45,122,82,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all .25s' }}

@@ -152,8 +152,8 @@ export default function EditTrainerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75 px-4">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl">
+    <div className="dashboard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-gray-500/75 p-4">
+      <div className="dashboard-modal-panel relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">

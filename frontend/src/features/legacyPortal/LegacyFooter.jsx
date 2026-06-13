@@ -32,7 +32,7 @@ function LegacyFooter() {
 
           <div className="footer-links" id="contact-info">
             <h4>Contact Us</h4>
-            <a href="https://maps.google.com/?q=MBK+Technology+Salem" target="_blank" rel="noopener noreferrer" className="footer-contact-item" style={{ textDecoration: 'none', color: 'inherit' }}><Icon name="map-pin" style={{ width: '16px', height: '16px' }} /><span>259-B, III Floor, OM Shiva Towers, Near DNC Mall, Fairlands, Salem - 636004</span></a>
+            <a href="https://maps.google.com/?q=MBK+Technology+Salem" target="_blank" rel="noopener noreferrer" className="footer-contact-item" style={{ textDecoration: 'none', color: 'inherit' }}><Icon name="map-pin" style={{ width: '16px', height: '16px' }} /><span>IInd Floor, OM Shiva Towers, 259-B, Advaitha Ashram Rd, Fairlands, Salem, Tamil Nadu - 636004, India</span></a>
             <a href="tel:+918807653965" className="footer-contact-item" style={{ textDecoration: 'none', color: 'inherit' }}><Icon name="phone" style={{ width: '16px', height: '16px' }} /><span>+91 88076 53965</span></a>
             <a href="mailto:mbktechnologies8@gmail.com" className="footer-contact-item" style={{ textDecoration: 'none', color: 'inherit' }}><Icon name="mail" style={{ width: '16px', height: '16px' }} /><span>mbktechnologies8@gmail.com</span></a>
 

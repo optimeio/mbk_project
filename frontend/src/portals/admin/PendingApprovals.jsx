@@ -6,8 +6,15 @@ import { getPendingUsers, approveUser, rejectUser, approveAllUsers } from '@/ser
 import { CheckCircleIcon, XCircleIcon, CheckBadgeIcon } from '@heroicons/react/24/outline'; // Importing icons are unused in original but keeping for safety or future use
 import useMutationWithToast from '@/hooks/useMutationWithToast';
 import getErrorMessage from '@/lib/getErrorMessage';
+import { useAuth } from '@/context/AuthContext';
+import {
+    canApproveAdmission,
+    canRejectAdmission,
+} from '@/utils/admissionPermissions';
+import { ADMIN_PENDING_USERS_KEY } from '@/shared/config/adminQueryKeys';
+import { QUERY_STALE_TIMES, withQueryPolicy } from '@/shared/config/queryPolicies';
 
-const PENDING_USERS_QUERY_KEY = ['admin', 'pending-users'];
+const PENDING_USERS_QUERY_KEY = ADMIN_PENDING_USERS_KEY;
 
 const fetchPendingUsers = async () => {
     const response = await getPendingUsers();
@@ -20,7 +27,10 @@ const fetchPendingUsers = async () => {
 
 const PendingApprovals = () => {
     const queryClient = useQueryClient();
+    const { currentUser } = useAuth();
     const [activeActionId, setActiveActionId] = useState('');
+    const canApprove = canApproveAdmission(currentUser);
+    const canReject = canRejectAdmission(currentUser);
     const {
         data: users = [],
         isPending: loading,
@@ -29,6 +39,10 @@ const PendingApprovals = () => {
     } = useQuery({
         queryKey: PENDING_USERS_QUERY_KEY,
         queryFn: fetchPendingUsers,
+        ...withQueryPolicy({
+            staleTime: QUERY_STALE_TIMES.HIGH_CHURN_LIST,
+            refetchOnWindowFocus: false,
+        }),
     });
 
     const removePendingUserFromCache = (id) => {
@@ -119,17 +133,19 @@ const PendingApprovals = () => {
                     </p>
                 </div>
                 <div className="mt-4 sm:mt-0">
-                    <button
-                        onClick={handleApproveAll}
-                        disabled={users.length === 0 || loading || activeActionId === 'approve-all'}
-                        className={`inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-bold rounded-xl shadow-lg transition-all ${users.length === 0
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 hover:-translate-y-0.5 active:scale-95 shadow-blue-100'
-                            }`}
-                    >
-                        <CheckBadgeIcon className="h-5 w-5 mr-2" />
-                        Approve All ({users.length})
-                    </button>
+                    {canApprove && (
+                        <button
+                            onClick={handleApproveAll}
+                            disabled={users.length === 0 || loading || activeActionId === 'approve-all'}
+                            className={`inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-bold rounded-xl shadow-lg transition-all ${users.length === 0
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700 hover:-translate-y-0.5 active:scale-95 shadow-blue-100'
+                                }`}
+                        >
+                            <CheckBadgeIcon className="h-5 w-5 mr-2" />
+                            Approve All ({users.length})
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -204,20 +220,24 @@ const PendingApprovals = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                                             <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleApprove(user._id)}
-                                                    disabled={activeActionId === `approve:${user._id}`}
-                                                    className="inline-flex items-center px-4 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors shadow-sm shadow-green-100"
-                                                >
-                                                    {activeActionId === `approve:${user._id}` ? 'Approving...' : 'Approve'}
-                                                </button>
-                                                <button
-                                                    onClick={() => handleReject(user._id)}
-                                                    disabled={activeActionId === `reject:${user._id}`}
-                                                    className="inline-flex items-center px-4 py-1.5 bg-white text-red-600 border border-red-100 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors"
-                                                >
-                                                    {activeActionId === `reject:${user._id}` ? 'Rejecting...' : 'Reject'}
-                                                </button>
+                                                {canApprove && (
+                                                    <button
+                                                        onClick={() => handleApprove(user._id)}
+                                                        disabled={activeActionId === `approve:${user._id}`}
+                                                        className="inline-flex items-center px-4 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition-colors shadow-sm shadow-green-100"
+                                                    >
+                                                        {activeActionId === `approve:${user._id}` ? 'Approving...' : 'Approve'}
+                                                    </button>
+                                                )}
+                                                {canReject && (
+                                                    <button
+                                                        onClick={() => handleReject(user._id)}
+                                                        disabled={activeActionId === `reject:${user._id}`}
+                                                        className="inline-flex items-center px-4 py-1.5 bg-white text-red-600 border border-red-100 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors"
+                                                    >
+                                                        {activeActionId === `reject:${user._id}` ? 'Rejecting...' : 'Reject'}
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

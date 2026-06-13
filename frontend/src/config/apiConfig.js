@@ -40,7 +40,7 @@ let discoveredOrigin = null;
 
 const probeHealth = async (origin) => {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 2000);
+  const timer = setTimeout(() => controller.abort(), 800);
   try {
     const response = await fetch(`${origin}/health`, { signal: controller.signal });
     if (!response.ok) return false;
@@ -61,20 +61,20 @@ export const discoverApiOrigin = async () => {
   if (discoveredOrigin) return discoveredOrigin;
   if (process.env.NODE_ENV === 'production') return getApiOrigin();
 
-  const configured = getApiOrigin();
-  const portsToTry = new Set();
-
-  try {
-    const configuredPort = new URL(configured).port;
-    if (configuredPort) portsToTry.add(Number(configuredPort));
-  } catch {
-    // ignore malformed configured origin
+  const hasExplicitOrigin = Boolean(rawApiUrl);
+  if (!hasExplicitOrigin) {
+    return getApiOrigin();
   }
 
-  LOCAL_API_PORT_FALLBACKS.forEach((port) => portsToTry.add(port));
+  const configured = getApiOrigin();
+  if (await probeHealth(configured)) {
+    discoveredOrigin = configured;
+    return discoveredOrigin;
+  }
 
-  for (const port of portsToTry) {
+  for (const port of LOCAL_API_PORT_FALLBACKS) {
     const candidate = `http://localhost:${port}`;
+    if (candidate === configured) continue;
     if (await probeHealth(candidate)) {
       discoveredOrigin = candidate;
       if (typeof window !== 'undefined') {

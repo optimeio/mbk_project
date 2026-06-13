@@ -121,8 +121,8 @@ const IDCardModal = ({ isOpen, onClose, user = {} }) => {
           <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm" />
         </TransitionChild>
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+        <div className="dashboard-modal-scrollport fixed inset-0 overflow-y-auto">
+          <div className="dashboard-modal-center flex min-h-full items-center justify-center p-4 sm:p-6">
             <TransitionChild
               as={Fragment}
               enter="ease-out duration-200"
@@ -132,7 +132,7 @@ const IDCardModal = ({ isOpen, onClose, user = {} }) => {
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <DialogPanel className="w-full max-w-[470px]">
+              <DialogPanel className="dashboard-modal-panel w-full max-w-[470px]">
                 <div className="flex justify-end pb-3">
                   <button
                     type="button"

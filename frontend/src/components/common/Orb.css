@@ -3,4 +3,11 @@
     z-index: 0;
     inline-size: 100%;
     block-size: 100%;
+    max-inline-size: 100%;
+    overflow: hidden;
+}
+
+.orb-container canvas {
+    display: block;
+    max-inline-size: 100%;
 }

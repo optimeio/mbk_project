@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { Avatar, Button, Card, Col, Row, Space, Tag, Typography, Upload } from "antd";
 import {
   CameraOutlined,
@@ -9,9 +9,9 @@ import {
   LockOutlined,
   MailOutlined,
   SafetyCertificateOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
 import { canGenerateTrainerIdCard } from "@/utils/trainerIdCard";
+import { getPortalUserInitial } from "@/utils/portalUserDisplay";
 
 const { Title, Text } = Typography;
 
@@ -29,6 +29,12 @@ const ProfileIdentityHeaderCard = memo(function ProfileIdentityHeaderCard({
 }) {
   const isProfileLocked = LOCKED_STATUSES.has(workflowStatus);
   const canShowIdCard = canGenerateTrainerIdCard(profile);
+  const profileInitial = getPortalUserInitial(profile || {});
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [profileImageSrc]);
 
   return (
     <Card
@@ -46,13 +52,21 @@ const ProfileIdentityHeaderCard = memo(function ProfileIdentityHeaderCard({
             <div className="group relative cursor-pointer">
               <Avatar
                 size={120}
-                src={profileImageSrc}
-                onError={onProfileImageError}
-                icon={<UserOutlined />}
+                src={!imageFailed ? profileImageSrc : undefined}
+                onError={() => {
+                  setImageFailed(true);
+                  onProfileImageError?.();
+                }}
                 className={`border-4 border-indigo-50 transition-opacity ${
                   isProfileLocked ? "opacity-90" : "group-hover:opacity-80"
                 }`}
-              />
+              >
+                {!profileImageSrc || imageFailed ? (
+                  <span className="flex h-full w-full items-center justify-center text-4xl font-semibold uppercase leading-none text-[#1d5f87]">
+                    {profileInitial}
+                  </span>
+                ) : null}
+              </Avatar>
               {!isProfileLocked ? (
                 <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
                   <CameraOutlined className="text-2xl text-white" />

@@ -117,6 +117,48 @@
     margin-bottom: 32px;
 }
 
+.login-company-admin-hint {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.login-account-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    background: #f3f4f6;
+    padding: 4px;
+    border-radius: 10px;
+}
+
+.login-account-tab {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 10px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.login-account-tab:hover {
+    color: #374151;
+}
+
+.login-account-tab.active {
+    background: #ffffff;
+    color: #ea580c;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 .login-form {
     width: 100%;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   useInfiniteQuery,
@@ -26,7 +26,11 @@ import {
   fetchTrainersPage,
   getTrainer,
 } from "@/services/trainerService";
-import { toggleUserStatus } from "@/services/userService";
+import { approveUser, toggleUserStatus } from "@/services/userService";
+import {
+  canApproveAdmission,
+  canRejectAdmission,
+} from "@/utils/admissionPermissions";
 import { api } from "@/services/api";
 import { getDocumentImagePreviewCandidates } from "@/utils/imageUtils";
 import { AUTH_ROLES, normalizeAuthRole } from "@/utils/authRoles";
@@ -39,6 +43,11 @@ import useDebouncedValue from "@/hooks/useDebouncedValue";
 import notify from "@/lib/toast";
 import getErrorMessage from "@/lib/getErrorMessage";
 import RenderProfiler from "@/shared/perf/RenderProfiler";
+import {
+  ADMIN_PENDING_USERS_KEY,
+  ADMIN_TRAINERS_KEY,
+} from "@/shared/config/adminQueryKeys";
+import { safeRouterPrefetch } from "@/utils/safeRouterNavigation";
 
 const TrainerProfileModal = dynamic(() => import("@/components/modals/TrainerProfileModal"), {
   loading: () => null,
@@ -84,8 +93,8 @@ const VIEW_META = {
 
 const TRAINERS_PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 300;
-const TRAINERS_QUERY_KEY = ["admin", "trainer-hub", "trainers"];
-const PENDING_USERS_QUERY_KEY = ["admin", "trainer-hub", "pending-users"];
+const TRAINERS_QUERY_KEY = ADMIN_TRAINERS_KEY;
+const PENDING_USERS_QUERY_KEY = ADMIN_PENDING_USERS_KEY;
 
 const runWhenIdle = (task) =>
   new Promise((resolve, reject) => {
@@ -292,6 +301,10 @@ const buildQueueSearchIndex = (row = {}) => {
 };
 
 const unwrapPendingUsersCollection = (response) => {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
   if (Array.isArray(response?.users)) {
     return response.users;
   }
@@ -313,8 +326,11 @@ const TrainerList = () => {
     [currentUser?.email, currentUser?.role],
   );
   const isSuperAdminView = normalizedRole === AUTH_ROLES.SUPER_ADMIN;
+  const canApproveTrainerAdmission = canApproveAdmission(currentUser);
+  const canRejectTrainerAdmission = canRejectAdmission(currentUser);
 
   const [viewMode, setViewMode] = useState("approved");
+  const [, startViewTransition] = useTransition();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTrainer, setSelectedTrainer] = useState(null);
   const [imageLoadError, setImageLoadError] = useState({});
@@ -374,16 +390,45 @@ const TrainerList = () => {
     trainersQuery.data?.pages?.[0]?.total || trainers.length || 0,
   );
 
-  const refreshQueues = useCallback(async () => {
-    try {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: TRAINERS_QUERY_KEY }),
-        queryClient.invalidateQueries({ queryKey: PENDING_USERS_QUERY_KEY }),
-      ]);
-    } catch (error) {
-      console.error("Failed to refresh trainer queues", error);
-    }
-  }, [queryClient]);
+  const removePendingUserFromCache = useCallback(
+    (userId) => {
+      queryClient.setQueryData(PENDING_USERS_QUERY_KEY, (current) => {
+        const users = unwrapPendingUsersCollection(current).filter(
+          (user) => String(user._id || user.id) !== String(userId),
+        );
+
+        if (Array.isArray(current)) {
+          return users;
+        }
+
+        if (current && typeof current === "object") {
+          return { ...current, users };
+        }
+
+        return users;
+      });
+    },
+    [queryClient],
+  );
+
+  const refreshQueues = useCallback(
+    async ({ includePending = true } = {}) => {
+      try {
+        const tasks = [
+          queryClient.invalidateQueries({ queryKey: TRAINERS_QUERY_KEY }),
+        ];
+        if (includePending) {
+          tasks.push(
+            queryClient.invalidateQueries({ queryKey: PENDING_USERS_QUERY_KEY }),
+          );
+        }
+        await Promise.all(tasks);
+      } catch (error) {
+        console.error("Failed to refresh trainer queues", error);
+      }
+    },
+    [queryClient],
+  );
 
   const loadMoreTrainers = useCallback(() => {
     if (!trainersQuery.hasNextPage || trainersQuery.isFetchingNextPage) {
@@ -400,8 +445,8 @@ const TrainerList = () => {
     if (!isSuperAdminView) {
       return;
     }
-    router.prefetch("/dashboard/documents");
-    router.prefetch("/dashboard/trainers");
+    safeRouterPrefetch(router, "/dashboard/documents");
+    safeRouterPrefetch(router, "/dashboard/trainers");
   }, [isSuperAdminView, router]);
 
   useEffect(() => {
@@ -616,6 +661,24 @@ const TrainerList = () => {
     }
   };
 
+  const handleApproveUser = async (userId) => {
+    if (!window.confirm("Approve this trainer registration request?")) {
+      return;
+    }
+
+    try {
+      const response = await approveUser(userId);
+      if (response.success) {
+        removePendingUserFromCache(userId);
+        notify.success("Trainer registration approved");
+        void refreshQueues({ includePending: false });
+      }
+    } catch (error) {
+      console.error("Error approving trainer signup:", error);
+      notify.error(getErrorMessage(error, "Failed to approve trainer signup"));
+    }
+  };
+
   const handleRejectUser = async (userId) => {
     if (!window.confirm("Reject this trainer registration request?")) {
       return;
@@ -624,8 +687,9 @@ const TrainerList = () => {
     try {
       const response = await api.put(`/users/${userId}/reject`);
       if (response.success) {
+        removePendingUserFromCache(userId);
         notify.success("Trainer registration rejected");
-        await refreshQueues();
+        void refreshQueues({ includePending: false });
       }
     } catch (error) {
       console.error("Error rejecting trainer signup:", error);
@@ -781,7 +845,7 @@ const TrainerList = () => {
     }
   }, [displayData, viewMode]);
 
-  const renderPrimaryAction = (row) => {
+  const renderPrimaryAction = useCallback((row) => {
     const isLoading = actionLoadingKey.includes(row.id);
 
     if (row.sourceType === "pendingUser") {
@@ -796,13 +860,24 @@ const TrainerList = () => {
             <PaperAirplaneIcon className="mr-1.5 h-4 w-4" />
             {isLoading ? "Sending..." : "Approach"}
           </button>
-          <button
-            type="button"
-            onClick={() => handleRejectUser(row.rawUserId)}
-            className="inline-flex items-center rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-rose-600 transition hover:bg-rose-50"
-          >
-            Reject
-          </button>
+          {canApproveTrainerAdmission && (
+            <button
+              type="button"
+              onClick={() => handleApproveUser(row.rawUserId)}
+              className="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-white transition hover:bg-emerald-700"
+            >
+              Approve
+            </button>
+          )}
+          {canRejectTrainerAdmission && (
+            <button
+              type="button"
+              onClick={() => handleRejectUser(row.rawUserId)}
+              className="inline-flex items-center rounded-xl border border-rose-200 px-3 py-2 text-[11px] font-black uppercase tracking-widest text-rose-600 transition hover:bg-rose-50"
+            >
+              Reject
+            </button>
+          )}
         </>
       );
     }
@@ -839,9 +914,17 @@ const TrainerList = () => {
     }
 
     return null;
-  };
+  }, [
+    actionLoadingKey,
+    canApproveTrainerAdmission,
+    canRejectTrainerAdmission,
+    handleApproveUser,
+    handleApproachTrainer,
+    handleOpenVerificationQueue,
+    handleRejectUser,
+  ]);
 
-  const renderManagementButtons = (row) => {
+  const renderManagementButtons = useCallback((row) => {
     if (row.sourceType !== "trainer") {
       return null;
     }
@@ -884,7 +967,12 @@ const TrainerList = () => {
         )}
       </>
     );
-  };
+  }, [
+    viewMode,
+    handleDeleteClick,
+    handleToggleAccountStatus,
+    handleTrainerClick,
+  ]);
 
   const getAccountStatusMeta = useCallback((row) => {
     if (row.sourceType !== "trainer") {
@@ -1046,7 +1134,7 @@ const TrainerList = () => {
               <button
                 key={key}
                 type="button"
-                onClick={() => setViewMode(key)}
+                onClick={() => startViewTransition(() => setViewMode(key))}
                 className={`border-b-2 px-1 pb-4 font-calibri text-sm font-bold transition-all ${
                   isActive
                     ? meta.activeClass

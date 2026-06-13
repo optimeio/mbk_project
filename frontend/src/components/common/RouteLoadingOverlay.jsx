@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import GlobalLoadingScreen from "@/components/common/GlobalLoadingScreen";
 
-// Minimum visible duration for the loading overlay (ms)
-const MIN_VISIBLE_MS = 300;
+// Keep the overlay visible only long enough to avoid a flash, not to block clicks.
+const MIN_VISIBLE_MS = 0;
 // Maximum fallback timeout to ensure overlay does not stay forever (ms)
 const MAX_TIMEOUT_MS = 8000;
 

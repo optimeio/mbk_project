@@ -9,11 +9,13 @@ import {
   EyeSlashIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from 'next/navigation';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { safeRouterReplace } from "@/utils/safeRouterNavigation";
 import Image from 'next/image';
 import Link from 'next/link';
 
 import { useAuth } from "@/context/AuthContext";
-import authService from "@/services/authService";
+import authService, { studentAuthService, companyAuthService } from "@/services/authService";
 import {
   forgotPassword,
   verifyResetOTP,
@@ -25,10 +27,19 @@ import { getDashboardRouteByRole } from "@/utils/authRoles";
 import { prefetchPortalRoutes } from "@/utils/portalPrefetch";
 import { warmPortalDataBundle } from "@/utils/portalDataPrefetch";
 import notify from "@/lib/toast";
+import { validateLoginForm, PASSWORD_MIN_LENGTH, hasLoginCredentials } from "@/utils/authValidation";
+
+const ACCOUNT_TYPES = [
+  { id: "trainer", label: "Trainer" },
+  { id: "student", label: "Student" },
+  { id: "company", label: "Company" },
+];
 
 const LoginModal = ({ isOpen, onClose }) => {
   const router = useRouter();
+  const { isRouterReady } = useSafeRouter();
   const { login, currentUser, isAuthenticated, loading: authLoading } = useAuth();
+  const [accountType, setAccountType] = useState("trainer");
 
   const navigateAfterLogin = async (route, role, email) => {
     prefetchPortalRoutes(router, role, email);
@@ -37,7 +48,7 @@ const LoginModal = ({ isOpen, onClose }) => {
     } catch (error) {
       console.warn("Portal data warmup failed before navigation:", error);
     }
-    router.replace(route);
+    safeRouterReplace(router, route);
   };
 
   // Login State
@@ -91,14 +102,14 @@ const LoginModal = ({ isOpen, onClose }) => {
   };
 
   useEffect(() => {
-    if (!isOpen || authLoading || !currentUser || !isAuthenticated) return;
-    if (!authService.getToken()) return;
+    if (!isRouterReady || !isOpen || authLoading || !currentUser || !isAuthenticated) return;
+    if (!authService.getValidToken()) return;
     void navigateAfterLogin(
       getDashboardRouteByRole(currentUser.role, currentUser.email),
       currentUser.role,
       currentUser.email,
     );
-  }, [isOpen, authLoading, currentUser, isAuthenticated, router]);
+  }, [isRouterReady, isOpen, authLoading, currentUser, isAuthenticated, router]);
 
   if (!isOpen) return null;
 
@@ -121,13 +132,25 @@ const LoginModal = ({ isOpen, onClose }) => {
     setResetSuccess("");
   };
 
+  const canSubmitLogin = hasLoginCredentials(formData);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateLoginForm(formData);
+    if (validationError) {
+      setError(validationError);
+      notify.error(validationError);
+      return;
+    }
+
     setError("");
     setLoading(true);
     try {
       const loginEmail = formData.email.trim().toLowerCase();
-      const userData = await login(loginEmail, formData.password);
+      const userData = await login(loginEmail, formData.password, {
+        expectedRole: accountType,
+        preferAdminFirst: accountType === "company",
+      });
       await notify.successAndNavigate("Login successful", async () => {
         onClose();
         await navigateAfterLogin(
@@ -137,11 +160,54 @@ const LoginModal = ({ isOpen, onClose }) => {
         );
       });
     } catch (err) {
-      console.error("Login Error:", err);
-      setError(err.message || "Invalid email or password.");
+      const isExpectedAuthState =
+        err.pendingApproval ||
+        err.requiresEmailVerification ||
+        err.roleMismatch ||
+        err.accountDeactivated;
+      if (!isExpectedAuthState) {
+        console.error("Login Error:", err);
+      }
+      const message = err.status === 429
+        ? err.message ||
+          "Too many login attempts. Please wait a few minutes and try again."
+        : err.pendingApproval
+          ? err.message || "Your account is pending admin approval."
+          : err.requiresEmailVerification
+            ? err.message || "Please verify your email before signing in."
+            : err.roleMismatch
+              ? err.message ||
+                "This email is not registered for the selected account type. Super Admin accounts can sign in on the Company tab or at /company/auth."
+              : err.accountDeactivated
+                ? err.message || "Your account has been deactivated."
+                : err.message || "Invalid email or password.";
+      setError(message);
+      notify.error(message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getPasswordResetHandlers = () => {
+    if (accountType === "student") {
+      return {
+        sendOtp: (email) => studentAuthService.forgotPassword(email),
+        verifyOtp: (email, otp) => studentAuthService.verifyResetOtp(email, otp),
+        reset: (token, password) => studentAuthService.resetPassword(token, password),
+      };
+    }
+    if (accountType === "company") {
+      return {
+        sendOtp: (email) => companyAuthService.forgotPassword(email),
+        verifyOtp: (email, otp) => companyAuthService.verifyResetOtp(email, otp),
+        reset: (token, password) => companyAuthService.resetPassword(token, password),
+      };
+    }
+    return {
+      sendOtp: (email) => forgotPassword(email),
+      verifyOtp: (email, otp) => verifyResetOTP(email, otp),
+      reset: (token, password) => resetPassword(token, password),
+    };
   };
 
   const handleSendOTP = async (e) => {
@@ -151,9 +217,11 @@ const LoginModal = ({ isOpen, onClose }) => {
 
     try {
       const normalizedEmail = String(resetEmail || "").trim().toLowerCase();
-      const response = await forgotPassword(
-        normalizedEmail,
-      );
+      const { sendOtp } = getPasswordResetHandlers();
+      const response = await sendOtp(normalizedEmail);
+      if (response.success === false) {
+        throw new Error(response.message || "Failed to send OTP");
+      }
       setResetSuccess(response.message || "OTP sent to your email!");
       setResetStep(2);
     } catch (err) {
@@ -171,7 +239,11 @@ const LoginModal = ({ isOpen, onClose }) => {
     try {
       const normalizedEmail = String(resetEmail || "").trim().toLowerCase();
       const normalizedOtp = String(resetOTP || "").replace(/\D/g, "").slice(0, 6);
-      const response = await verifyResetOTP(normalizedEmail, normalizedOtp);
+      const { verifyOtp } = getPasswordResetHandlers();
+      const response = await verifyOtp(normalizedEmail, normalizedOtp);
+      if (response.success === false) {
+        throw new Error(response.message || "Invalid or expired OTP");
+      }
       setTempToken(response.tempToken);
       setResetSuccess("OTP verified! Set your new password.");
       setResetStep(3);
@@ -186,8 +258,8 @@ const LoginModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     setResetError("");
 
-    if (newPassword.length < 6) {
-      setResetError("Password must be at least 6 characters");
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      setResetError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
       return;
     }
 
@@ -199,7 +271,11 @@ const LoginModal = ({ isOpen, onClose }) => {
     setResetLoading(true);
 
     try {
-      const response = await resetPassword(tempToken, newPassword);
+      const { reset } = getPasswordResetHandlers();
+      const response = await reset(tempToken, newPassword);
+      if (response.success === false) {
+        throw new Error(response.message || "Failed to reset password");
+      }
       setResetSuccess(response.message || "Password reset successfully!");
 
       setTimeout(() => {
@@ -234,7 +310,7 @@ const LoginModal = ({ isOpen, onClose }) => {
             sizes="120px"
           />
           <h2 className="login-welcome-title">Login to MBK CarrierZ</h2>
-          <p className="login-welcome-subtitle">Student • Trainer </p>
+          <p className="login-welcome-subtitle">Student • Trainer • Company • Super Admin</p>
         </div>
 
         <div className="login-right-panel">
@@ -248,7 +324,31 @@ const LoginModal = ({ isOpen, onClose }) => {
                   </div>
                 )}
 
-                <form className="login-form" onSubmit={handleSubmit}>
+                {accountType === "company" && (
+                  <p className="login-company-admin-hint">
+                    Corporate partners and MBK Super Admin accounts both sign in on the Company tab.
+                  </p>
+                )}
+
+                <div className="login-account-tabs" role="tablist" aria-label="Account type">
+                  {ACCOUNT_TYPES.map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={accountType === type.id}
+                      className={`login-account-tab${accountType === type.id ? " active" : ""}`}
+                      onClick={() => {
+                        setAccountType(type.id);
+                        setError("");
+                      }}
+                    >
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+
+                <form className="login-form" onSubmit={handleSubmit} noValidate>
                   <div className="login-input-group">
                     <label htmlFor="email" className="login-input-label">
                         Email Address
@@ -265,6 +365,7 @@ const LoginModal = ({ isOpen, onClose }) => {
                           value={formData.email}
                         onChange={handleChange}
                         required
+                        disabled={loading}
                       />
                     </div>
                   </div>
@@ -288,23 +389,36 @@ const LoginModal = ({ isOpen, onClose }) => {
                         value={formData.password}
                         onChange={handleChange}
                         required
+                        disabled={loading}
                         style={{ paddingRight: "40px" }}
                       />
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setShowPassword((prev) => !prev);
+                        }}
+                        onMouseDown={(event) => event.preventDefault()}
+                        disabled={loading}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-pressed={showPassword}
                         style={{
                           position: "absolute",
-                          right: "12px",
+                          right: "8px",
                           top: "50%",
                           transform: "translateY(-50%)",
                           background: "none",
                           border: "none",
-                          cursor: "pointer",
-                          padding: "4px",
+                          cursor: loading ? "not-allowed" : "pointer",
+                          padding: "6px",
                           display: "flex",
                           alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: "36px",
+                          minHeight: "36px",
                           color: "#666",
+                          touchAction: "manipulation",
                         }}
                       >
                         {showPassword ? (
@@ -339,6 +453,7 @@ const LoginModal = ({ isOpen, onClose }) => {
                     size="lg"
                     fullWidth
                     loading={loading}
+                    disabled={loading || !canSubmitLogin}
                     loadingText="Logging in..."
                     className="login-btn"
                   >
@@ -374,7 +489,7 @@ const LoginModal = ({ isOpen, onClose }) => {
                 </h3>
                 <p className="login-back-subtitle">
                   {resetStep === 1 &&
-                    "Enter your email to receive a reset code"}
+                    `Enter your ${accountType} account email to receive a reset code`}
                   {resetStep === 2 &&
                     "Enter the 6-digit code sent to your email"}
                   {resetStep === 3 && "Create a new password for your account"}
@@ -500,20 +615,33 @@ const LoginModal = ({ isOpen, onClose }) => {
                           value={newPassword}
                           onChange={handlePasswordChange}
                           required
+                          minLength={PASSWORD_MIN_LENGTH}
                           style={{ paddingRight: "40px" }}
                         />
                         <button
                           type="button"
-                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setShowNewPassword((prev) => !prev);
+                          }}
+                          onMouseDown={(event) => event.preventDefault()}
+                          aria-label={showNewPassword ? "Hide password" : "Show password"}
+                          aria-pressed={showNewPassword}
                           style={{
                             position: "absolute",
-                            right: "10px",
+                            right: "8px",
                             top: "50%",
                             transform: "translateY(-50%)",
                             background: "none",
                             border: "none",
                             cursor: "pointer",
                             color: "#6b7280",
+                            minWidth: "36px",
+                            minHeight: "36px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
                           {showNewPassword ? (
@@ -597,22 +725,33 @@ const LoginModal = ({ isOpen, onClose }) => {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           required
+                          minLength={PASSWORD_MIN_LENGTH}
                           style={{ paddingRight: "40px" }}
                         />
                         <button
                           type="button"
-                          onClick={() =>
-                            setShowConfirmPassword(!showConfirmPassword)
-                          }
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setShowConfirmPassword((prev) => !prev);
+                          }}
+                          onMouseDown={(event) => event.preventDefault()}
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          aria-pressed={showConfirmPassword}
                           style={{
                             position: "absolute",
-                            right: "10px",
+                            right: "8px",
                             top: "50%",
                             transform: "translateY(-50%)",
                             background: "none",
                             border: "none",
                             cursor: "pointer",
                             color: "#6b7280",
+                            minWidth: "36px",
+                            minHeight: "36px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
                           {showConfirmPassword ? (

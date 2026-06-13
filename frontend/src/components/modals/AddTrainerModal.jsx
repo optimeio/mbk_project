@@ -134,8 +134,8 @@ const AddTrainerModal = ({ isOpen, onClose, onTrainerAdded }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md relative">
+    <div className="dashboard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-gray-500/75 p-4">
+      <div className="dashboard-modal-panel relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"

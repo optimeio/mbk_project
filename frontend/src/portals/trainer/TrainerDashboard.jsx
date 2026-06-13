@@ -13,9 +13,17 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
-import { getDocumentImagePreviewCandidates } from "@/utils/imageUtils";
+import {
+  collectPortalUserAvatarSources,
+  getPortalUserDisplayName,
+  getPortalUserInitial,
+} from "@/utils/portalUserDisplay";
 import { canGenerateTrainerIdCard } from "@/utils/trainerIdCard";
-import OptimizedImage from "@/components/common/OptimizedImage";
+import PortalUserAvatar, {
+  PORTAL_AVATAR_CONTAINER_CLASS,
+  PORTAL_AVATAR_HERO_FALLBACK_CLASS,
+  PORTAL_AVATAR_HERO_SIZE_CLASS,
+} from "@/components/common/PortalUserAvatar";
 
 import useTrainerDashboardData from "./dashboard/useTrainerDashboardData";
 
@@ -42,8 +50,8 @@ const scheduleDeferredMount = (callback, delayMs = 0) => {
   return () => window.clearTimeout(handle);
 };
 
-const DASHBOARD_SCHEDULE_SECTION_DEFER_MS = 250;
-const DASHBOARD_NOTIFICATIONS_SECTION_DEFER_MS = 700;
+const DASHBOARD_SCHEDULE_SECTION_DEFER_MS = 0;
+const DASHBOARD_NOTIFICATIONS_SECTION_DEFER_MS = 120;
 const EMPTY_STATS = {
   upcoming: 0,
   completed: 0,
@@ -120,7 +128,6 @@ function TrainerDashboard() {
   const [showIDCard, setShowIDCard] = useState(false);
   const [showNotificationsSection, setShowNotificationsSection] = useState(false);
   const [showSchedulesSection, setShowSchedulesSection] = useState(false);
-  const [trainerImageIndex, setTrainerImageIndex] = useState(0);
   const {
     error,
     loading,
@@ -132,7 +139,8 @@ function TrainerDashboard() {
 
   const trainer = profileData || currentUser || {};
   const hydratedTrainer = hasMounted ? trainer : null;
-  const trainerName = hydratedTrainer?.name || hydratedTrainer?.firstName || "Trainer";
+  const trainerName = getPortalUserDisplayName(hydratedTrainer || {});
+  const trainerInitial = getPortalUserInitial(hydratedTrainer || currentUser || {});
   const trainerSpecialization =
     hydratedTrainer?.specialization || "Professional Trainer";
   const canViewIdCard = hasMounted && canGenerateTrainerIdCard(hydratedTrainer || {});
@@ -142,42 +150,14 @@ function TrainerDashboard() {
   const dashboardUpcomingSchedules = hasMounted ? upcomingSchedules : [];
   const dashboardStats = hasMounted ? stats : EMPTY_STATS;
 
-  const trainerImageSources = useMemo(() => {
-    const sources = [
-      trainer?.documentProgress?.selfiePhoto,
-      trainer?.documents?.selfiePhoto,
-      trainer?.photo,
-      trainer?.profilePicture,
-      trainer?.documentProgress?.passportPhoto,
-      trainer?.documents?.passportPhoto,
-      trainer?.userId?.profilePicture,
-      currentUser?.profilePicture,
-    ];
-
-    return Array.from(
-      new Set(sources.flatMap((source) => getDocumentImagePreviewCandidates(source))),
-    );
-  }, [
-    currentUser?.profilePicture,
-    trainer?.documentProgress?.passportPhoto,
-    trainer?.documentProgress?.selfiePhoto,
-    trainer?.documents?.passportPhoto,
-    trainer?.documents?.selfiePhoto,
-    trainer?.photo,
-    trainer?.profilePicture,
-    trainer?.userId?.profilePicture,
-  ]);
-
-  const trainerImage = trainerImageSources[trainerImageIndex] || "";
-  const shouldShowTrainerImage = hasMounted && Boolean(trainerImage);
+  const trainerImageSources = useMemo(
+    () => collectPortalUserAvatarSources(currentUser ?? null, hydratedTrainer || trainer),
+    [currentUser, hydratedTrainer, trainer],
+  );
 
   useEffect(() => {
     setHasMounted(true);
   }, []);
-
-  useEffect(() => {
-    setTrainerImageIndex(0);
-  }, [trainerImageSources]);
 
   useEffect(() => {
     const cancelSchedulesMount = scheduleDeferredMount(() => {
@@ -192,16 +172,6 @@ function TrainerDashboard() {
       cancelNotificationsMount();
     };
   }, []);
-
-  const handleTrainerImageError = useCallback(() => {
-    setTrainerImageIndex((currentIndex) => {
-      if (currentIndex < trainerImageSources.length - 1) {
-        return currentIndex + 1;
-      }
-
-      return trainerImageSources.length;
-    });
-  }, [trainerImageSources.length]);
 
   const handleOpenSchedule = useCallback(() => {
     router.push("/trainer/schedule");
@@ -265,22 +235,15 @@ function TrainerDashboard() {
       <section className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm sm:rounded-[28px] sm:px-8 sm:py-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3 sm:gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm sm:h-16 sm:w-16">
-              {shouldShowTrainerImage ? (
-                <OptimizedImage
-                  src={trainerImage}
-                  alt={trainerName}
-                  width={64}
-                  height={64}
-                  className="h-full w-full object-cover"
-                  onError={handleTrainerImageError}
-                />
-              ) : (
-                <span className="text-xl font-bold text-slate-700 sm:text-2xl">
-                  {String(trainerName).charAt(0)}
-                </span>
-              )}
-            </div>
+            <PortalUserAvatar
+              user={currentUser}
+              profile={hydratedTrainer || trainer}
+              sources={hasMounted ? trainerImageSources : []}
+              initial={trainerInitial}
+              alt={trainerName}
+              className={`${PORTAL_AVATAR_CONTAINER_CLASS} ${PORTAL_AVATAR_HERO_SIZE_CLASS}`}
+              fallbackClassName={PORTAL_AVATAR_HERO_FALLBACK_CLASS}
+            />
 
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-500">Welcome back</p>

@@ -37,8 +37,8 @@ const NdaManagementModal = ({ isOpen, onClose }) => {
                     <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-[2px]" />
                 </Transition.Child>
 
-                <div className="fixed inset-0 overflow-y-auto">
-                    <div className="flex min-h-full items-center justify-center p-4">
+                <div className="dashboard-modal-scrollport fixed inset-0 overflow-y-auto">
+                    <div className="dashboard-modal-center flex min-h-full items-center justify-center p-4 sm:p-6">
                         <Transition.Child
                             as={Fragment}
                             enter="ease-out duration-300"
@@ -48,7 +48,7 @@ const NdaManagementModal = ({ isOpen, onClose }) => {
                             leaveFrom="opacity-100 translate-y-0 sm:scale-100"
                             leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                         >
-                            <Dialog.Panel className="relative w-full max-w-7xl overflow-hidden rounded-3xl bg-slate-50 shadow-2xl ring-1 ring-black/5">
+                            <Dialog.Panel className="dashboard-modal-panel dashboard-modal-panel--wide relative w-full max-w-7xl rounded-3xl bg-slate-50 shadow-2xl ring-1 ring-black/5">
                                 <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
                                     <div>
                                         <Dialog.Title className="font-calibri text-lg font-bold uppercase tracking-wider text-slate-900">

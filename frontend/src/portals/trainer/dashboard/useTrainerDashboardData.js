@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { usePortalData } from "@/context/PortalDataContext";
+import authService from "@/services/authService";
 import { getTrainerProfile } from "@/services/trainerService";
 
 import {
@@ -136,9 +137,10 @@ export default function useTrainerDashboardData(currentUser) {
     () => buildTrainerDashboardSnapshotKey(resolvedCurrentUserId),
     [resolvedCurrentUserId],
   );
+  const hasValidSession = Boolean(currentUser) && Boolean(authService.getValidToken());
   const cachedDashboardSnapshot = useMemo(
-    () => readTrainerDashboardSnapshot(dashboardSnapshotStorageKey),
-    [dashboardSnapshotStorageKey],
+    () => (hasValidSession ? readTrainerDashboardSnapshot(dashboardSnapshotStorageKey) : null),
+    [dashboardSnapshotStorageKey, hasValidSession],
   );
 
   const portalDashboard =
@@ -162,7 +164,7 @@ export default function useTrainerDashboardData(currentUser) {
       resolvedCurrentUserId,
     ],
     queryFn: () => fetchTrainerDashboardData(currentUser),
-    enabled: Boolean(currentUser) && !portalDashboard,
+    enabled: hasValidSession && !portalDashboard,
     initialData: cachedDashboardSnapshot || undefined,
     staleTime: 90_000,
     gcTime: 5 * 60_000,

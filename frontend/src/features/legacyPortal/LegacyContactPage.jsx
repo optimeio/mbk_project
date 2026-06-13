@@ -263,7 +263,7 @@ function LegacyContactPage({ id, hideHero }) {
                             <div className="contact-icon"><Icon name="map-pin" style={{ width: '20px', height: '20px' }} /></div>
                             <div>
                                 <h4>Address</h4>
-                                <p style={{ color: 'var(--text-muted)' }}>259-B, III Floor, OM Shiva Towers<br />Near DNC Mall, Fairlands<br />Salem, Tamil Nadu – 636004</p>
+                                <p style={{ color: 'var(--text-muted)' }}>IInd Floor, OM Shiva Towers, 259-B, Advaitha Ashram Rd, Fairlands, Salem, Tamil Nadu - 636004, India</p>
                             </div>
                         </a>
                         <a href="tel:+918807653965" className="contact-item" style={{ textDecoration: 'none', color: 'inherit' }}>

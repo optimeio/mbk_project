@@ -1,11 +1,19 @@
 "use client";
 
-import Image from "next/image";
-import { useState } from "react";
+import Link from "next/link";
+import { memo } from "react";
 import { FileText, Home, LogOut, MessageSquareMore } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PortalBrandMark from "@/components/common/PortalBrandMark";
 
-export default function SidebarRail({
+const railLinkClass = (isActive) =>
+  `mt-3 flex h-8 w-8 items-center justify-center rounded-md transition ${
+    isActive
+      ? "bg-[#0f3f5c] text-[#7fd8ff]"
+      : "text-[#cbe6f5] hover:bg-white/10 hover:text-white"
+  }`;
+
+function SidebarRail({
   compact = false,
   complaintsHref,
   handleLogout,
@@ -13,84 +21,59 @@ export default function SidebarRail({
   isChatActive,
   isComplaintsActive,
   isHomeActive,
-  onNavigate,
 }) {
-  const [showLogoFallback, setShowLogoFallback] = useState(false);
-
   return (
     <div
       className={`flex w-12 flex-col items-center bg-[#1a567b] py-3 ${
         compact ? "" : "border-r border-[#2b6d93]"
       }`}
     >
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        onClick={() => onNavigate(homeHref)}
-        className="h-8 w-8 rounded-md bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/15 hover:text-white"
-        aria-label="Dashboard"
-        title="Dashboard"
-      >
-        {showLogoFallback ? (
-          <span className="flex h-6 w-6 items-center justify-center rounded-sm bg-white/12 text-[9px] font-black tracking-[0.18em] text-white">
-            MBK
-          </span>
-        ) : (
-          <Image
-            src="/logos/mbkz-64.png"
-            alt="MBK Carrierz"
-            width={24}
-            height={24}
-            className="h-6 w-6 rounded-sm object-contain"
-            onError={() => setShowLogoFallback(true)}
-            priority
-          />
-        )}
-      </Button>
+      <PortalBrandMark
+        href={homeHref}
+        compact
+        className="h-8 w-8 rounded-md border-white/20 bg-white p-0.5 shadow-none ring-1 ring-white/20 hover:border-white/30 hover:bg-white"
+        imageClassName="h-full w-full rounded-sm object-contain object-center"
+      />
 
       <Button
-        type="button"
+        asChild
         size="icon"
         variant="ghost"
-        onClick={() => onNavigate(homeHref)}
-        className={`mt-4 h-8 w-8 rounded-md transition ${
-          isHomeActive ? "bg-[#0f3f5c] text-[#7fd8ff]" : "text-[#cbe6f5] hover:bg-white/10 hover:text-white"
-        }`}
+        className={railLinkClass(isHomeActive).replace("mt-3", "mt-4")}
         aria-label="Home"
         title="Home"
       >
-        <Home className="h-4 w-4" />
+        <Link href={homeHref} prefetch>
+          <Home className="h-4 w-4" />
+        </Link>
       </Button>
 
       {complaintsHref ? (
         <Button
-          type="button"
+          asChild
           size="icon"
           variant="ghost"
-          onClick={() => onNavigate(complaintsHref)}
-          className={`mt-3 h-8 w-8 rounded-md transition ${
-            isComplaintsActive ? "bg-[#0f3f5c] text-[#7fd8ff]" : "text-[#cbe6f5] hover:bg-white/10 hover:text-white"
-          }`}
+          className={railLinkClass(isComplaintsActive)}
           aria-label="Complaints"
           title="Complaints"
         >
-          <FileText className="h-4 w-4" />
+          <Link href={complaintsHref} prefetch>
+            <FileText className="h-4 w-4" />
+          </Link>
         </Button>
       ) : null}
 
       <Button
-        type="button"
+        asChild
         size="icon"
         variant="ghost"
-        onClick={() => onNavigate("/chat")}
-        className={`mt-3 h-8 w-8 rounded-md transition ${
-          isChatActive ? "bg-[#0f3f5c] text-[#7fd8ff]" : "text-[#cbe6f5] hover:bg-white/10 hover:text-white"
-        }`}
+        className={railLinkClass(isChatActive)}
         aria-label="Open chat"
         title="Open chat"
       >
-        <MessageSquareMore className="h-4 w-4" />
+        <Link href="/chat" prefetch>
+          <MessageSquareMore className="h-4 w-4" />
+        </Link>
       </Button>
 
       <div className="flex-1" />
@@ -111,3 +94,5 @@ export default function SidebarRail({
     </div>
   );
 }
+
+export default memo(SidebarRail);

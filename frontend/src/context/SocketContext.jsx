@@ -123,7 +123,11 @@ export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
   const pathname = usePathname() || '';
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
   const { currentUser } = useAuth();
+  const socketUserId = resolveUserId(currentUser);
+  const socketAccessToken = resolveAccessToken(currentUser);
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState({}); // userId -> { role, online: true }
   const socketRef = useRef(null);
@@ -175,7 +179,8 @@ export const SocketProvider = ({ children }) => {
     targetSocket.emit('join_chat', normalizedPayload);
   }, []);
 
-  const socketConnectDelayMs = pathname.startsWith('/chat') ? 150 : 2000;
+  const getSocketConnectDelayMs = () =>
+    pathnameRef.current.startsWith('/chat') ? 150 : 2000;
 
   useEffect(() => {
     const handleJoinRoomsEvent = (event) => {
@@ -199,7 +204,7 @@ export const SocketProvider = ({ children }) => {
   }, [joinRooms]);
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!socketUserId) {
       if (socketRef.current) {
         socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
@@ -212,9 +217,8 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    const userId = resolveUserId(currentUser);
-    if (!userId) return;
-    const accessToken = resolveAccessToken(currentUser);
+    const userId = socketUserId;
+    const accessToken = socketAccessToken;
 
     // Prefer an explicit socket URL.
     // Otherwise prefer the backend origin directly, with same-origin only as a final fallback.
@@ -243,7 +247,7 @@ export const SocketProvider = ({ children }) => {
         if (!isDisposed && activeSocket && !activeSocket.connected && !activeSocket.active) {
           activeSocket.connect();
         }
-      }, socketConnectDelayMs);
+      }, getSocketConnectDelayMs());
     };
 
     const bootstrapSocket = async () => {
@@ -367,7 +371,7 @@ export const SocketProvider = ({ children }) => {
       cancelSocketBootstrap();
       cancelSocketBootstrap = deferSocketConnect(() => {
         void bootstrapSocket();
-      }, socketConnectDelayMs);
+      }, getSocketConnectDelayMs());
     };
 
     const handlePageHide = () => {
@@ -406,7 +410,7 @@ export const SocketProvider = ({ children }) => {
       socketRef.current = null;
       setSocket(null);
     };
-  }, [currentUser, flushPendingRooms, pathname, socketConnectDelayMs]);
+  }, [flushPendingRooms, socketAccessToken, socketUserId]);
 
   const getJoinedRooms = useCallback(() => Array.from(joinedRoomsRef.current), []);
   const isOnline = useCallback((id) => onlineUsers[id]?.online || false, [onlineUsers]);

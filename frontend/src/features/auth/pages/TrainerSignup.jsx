@@ -5,8 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { signupTrainer } from "@/services/authService";
-import { useAuth } from "@/context/AuthContext";
 import CTAButton from "@/components/common/CTAButton";
+import PasswordInputWithToggle from "@/components/common/PasswordInputWithToggle";
+import notify from "@/lib/toast";
+import {
+  sanitizePhoneInput,
+  validateTrainerSignup,
+  PASSWORD_MIN_LENGTH,
+} from "@/utils/authValidation";
 
 const TrainerSignup = () => {
   const router = useRouter();
@@ -19,17 +25,27 @@ const TrainerSignup = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-
-  const { setAuthUser } = useAuth(); // Get auth context
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    const nextValue = name === "phoneNumber" ? sanitizePhoneInput(value) : value;
+    setFormData({ ...formData, [name]: nextValue });
+    setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+
+    const validationError = validateTrainerSignup(formData);
+    if (validationError) {
+      setError(validationError);
+      notify.warning(validationError);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       // Auto-append domain if missing (Login ID support)
@@ -40,19 +56,16 @@ const TrainerSignup = () => {
 
       const response = await signupTrainer(submissionData);
 
-      if (response.success && response.accessToken) {
-        // Auto-Login Logic
-        localStorage.setItem("accessToken", response.accessToken);
-        if (response.user) {
-          localStorage.setItem("user", JSON.stringify(response.user));
-          setAuthUser(response.user);
-        }
-
-        // Direct specific redirection (No "Pending" check needed anymore)
-        router.push("/trainer/dashboard");
-      } else {
-        // Fallback if no token (shouldn't happen with new backend)
+      if (response.success) {
         setSuccess(true);
+        notify.success(
+          response.message ||
+            "Registration submitted. Sign in after admin approval.",
+        );
+        router.replace("/login?type=trainer&reason=registration_complete");
+      } else {
+        setError(response.message || "Registration failed");
+        notify.warning(response.message || "Registration failed");
       }
     } catch (err) {
       setError(err.message || "Registration failed");
@@ -108,7 +121,7 @@ const TrainerSignup = () => {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl relative text-sm font-medium">
               {error}
@@ -125,9 +138,13 @@ const TrainerSignup = () => {
                 type="text"
                 required
                 className="appearance-none rounded-xl relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-950 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm transition-all"
-                placeholder="Full Name"
+                placeholder="Full Name *"
                 value={formData.name}
                 onChange={handleChange}
+                minLength={2}
+                maxLength={100}
+                autoComplete="name"
+                disabled={loading}
               />
             </div>
             <div>
@@ -140,9 +157,11 @@ const TrainerSignup = () => {
                 type="text"
                 required
                 className="appearance-none rounded-xl relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-950 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm transition-all"
-                placeholder="Email address or Login ID"
+                placeholder="Email address or Login ID *"
                 value={formData.email}
                 onChange={handleChange}
+                autoComplete="username"
+                disabled={loading}
               />
             </div>
             <div>
@@ -155,24 +174,34 @@ const TrainerSignup = () => {
                 type="tel"
                 required
                 className="appearance-none rounded-xl relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-950 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm transition-all"
-                placeholder="Phone Number"
+                placeholder="Phone Number (10 digits) *"
                 value={formData.phoneNumber}
                 onChange={handleChange}
+                inputMode="numeric"
+                pattern="[6-9][0-9]{9}"
+                maxLength={10}
+                autoComplete="tel"
+                disabled={loading}
               />
             </div>
             <div>
               <label htmlFor="password" className="sr-only">
                 Password
               </label>
-              <input
+              <PasswordInputWithToggle
                 id="password"
                 name="password"
-                type="password"
                 required
-                className="appearance-none rounded-xl relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-400 text-gray-950 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm transition-all"
-                placeholder="Password"
+                className="appearance-none rounded-xl relative block w-full pl-4 pr-11 py-3 border border-gray-300 placeholder-gray-400 text-gray-950 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm transition-all"
+                placeholder={`Password (min ${PASSWORD_MIN_LENGTH} chars) *`}
                 value={formData.password}
                 onChange={handleChange}
+                minLength={PASSWORD_MIN_LENGTH}
+                autoComplete="new-password"
+                disabled={loading}
+                minLength={PASSWORD_MIN_LENGTH}
+                showPassword={showPassword}
+                onToggleVisibility={() => setShowPassword(!showPassword)}
               />
             </div>
           </div>

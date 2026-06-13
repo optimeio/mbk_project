@@ -35,6 +35,7 @@ const GeoVerificationCard = memo(function GeoVerificationCard({
     accessToken,
     onSelectImage,
     onDownload,
+    onActionComplete,
 }) {
     const trainerName = submission.trainerId?.userId?.name || submission.trainerId?.name || "Unknown Trainer";
     const courseName =
@@ -89,9 +90,7 @@ const GeoVerificationCard = memo(function GeoVerificationCard({
                 spocId: user?.id || user?._id
             });
             toast.success("Geo-tag approved manually");
-            // In a real app, we'd trigger a refetch or update parent state
-            // For now, we rely on the manual reload or future signal
-            window.location.reload(); 
+            onActionComplete?.();
         } catch (error) {
             console.error("Manual approval failed:", error);
             toast.error(error?.response?.data?.message || "Failed to approve geo-tag manually");
@@ -115,7 +114,7 @@ const GeoVerificationCard = memo(function GeoVerificationCard({
                 reason
             });
             toast.success("Geo-tag rejected manually");
-            window.location.reload();
+            onActionComplete?.();
         } catch (error) {
             console.error("Manual rejection failed:", error);
             toast.error(error?.response?.data?.message || "Failed to reject geo-tag manually");

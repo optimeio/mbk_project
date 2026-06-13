@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 
 import PortalViewport from "@/components/common/PortalViewport";
+import ProtectedRoute from "@/components/common/ProtectedRoute";
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname() || "";
@@ -10,11 +11,13 @@ export default function DashboardLayout({ children }) {
   const isDocumentsPage = pathname.startsWith("/dashboard/documents");
 
   return (
-    <PortalViewport
-      compact={isComplaintsPage}
-      contentInnerClassName={isDocumentsPage ? "p-0 md:p-0" : ""}
-    >
-      {children}
-    </PortalViewport>
+    <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+      <PortalViewport
+        compact={isComplaintsPage}
+        contentInnerClassName={isDocumentsPage ? "p-0 md:p-0" : ""}
+      >
+        {children}
+      </PortalViewport>
+    </ProtectedRoute>
   );
 }

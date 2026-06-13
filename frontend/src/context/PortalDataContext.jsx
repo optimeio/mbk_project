@@ -5,7 +5,11 @@ import { usePathname } from "next/navigation";
 import { useShallow } from "zustand/react/shallow";
 
 import { useAuth } from "@/context/AuthContext";
-import { clearPortalDataBundle, warmPortalDataBundle } from "@/utils/portalDataPrefetch";
+import {
+  clearPortalDataBundle,
+  getWarmPortalDataBundle,
+  warmPortalDataBundle,
+} from "@/utils/portalDataPrefetch";
 import {
   resetPortalDataStore,
   selectPortalDataApi,
@@ -21,7 +25,9 @@ export const PortalDataProvider = ({ children }) => {
   const shouldWarmPortalBundle =
     pathname === "/dashboard"
     || pathname === "/spoc/dashboard"
-    || pathname === "/trainer/dashboard";
+    || pathname === "/trainer/dashboard"
+    || pathname === "/student/dashboard"
+    || pathname === "/company/dashboard";
 
   useEffect(() => {
     const handlePortalDataReady = (event) => {
@@ -51,9 +57,16 @@ export const PortalDataProvider = ({ children }) => {
       return undefined;
     }
 
+    const cachedBundle = getWarmPortalDataBundle();
+    if (cachedBundle) {
+      setPortalData(cachedBundle);
+      setLoading(false);
+      setError("");
+      return undefined;
+    }
+
     let cancelled = false;
     let timeoutId = null;
-    let idleId = null;
 
     setLoading(true);
     setError("");
@@ -78,19 +91,16 @@ export const PortalDataProvider = ({ children }) => {
         });
     };
 
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleId = window.requestIdleCallback(preloadBundle, { timeout: 1200 });
-    } else if (typeof window !== "undefined") {
-      timeoutId = window.setTimeout(preloadBundle, 200);
+    // Fetch immediately: the bundle is the critical data for the dashboard,
+    // and the request is network-bound so it doesn't block rendering.
+    if (typeof window !== "undefined") {
+      timeoutId = window.setTimeout(preloadBundle, 0);
     }
 
     return () => {
       cancelled = true;
       if (timeoutId !== null) {
         window.clearTimeout(timeoutId);
-      }
-      if (idleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleId);
       }
     };
   }, [

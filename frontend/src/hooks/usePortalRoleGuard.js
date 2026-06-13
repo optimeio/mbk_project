@@ -4,25 +4,27 @@
 
 import { useEffect } from "react";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/context/AuthContext";
 
 import authService from "@/services/authService";
 
+import { getUnauthenticatedLoginPath } from "@/utils/authRedirects";
 import { getDashboardRouteByRole } from "@/utils/authRoles";
+import { useSafeRouter } from "@/hooks/useSafeRouter";
 
 
 
 export function usePortalRoleGuard(expectedRole) {
 
-  const router = useRouter();
+  const { safeReplace, isRouterReady } = useSafeRouter();
 
   const pathname = usePathname();
 
   const { isAuthenticated, userRole, loading, currentUser } = useAuth();
 
-  const hasToken = Boolean(authService.getToken());
+  const hasToken = Boolean(authService.getValidToken());
 
   const normalizedExpected = String(expectedRole || "").toLowerCase();
 
@@ -36,48 +38,27 @@ export function usePortalRoleGuard(expectedRole) {
 
   useEffect(() => {
 
-    if (loading) return;
-
-
+    if (!isRouterReady || loading) return;
 
     if (!hasToken || !isAuthenticated) {
-
-      router.replace(
-
-        `/login?redirect=${encodeURIComponent(pathname)}&reason=unauthenticated`,
-
-      );
-
+      safeReplace(getUnauthenticatedLoginPath(pathname, "unauthenticated"));
       return;
-
     }
 
-
-
     if (!roleMatches) {
-
-      router.replace(getDashboardRouteByRole(userRole, currentUser?.email));
-
+      safeReplace(getDashboardRouteByRole(userRole, currentUser?.email));
     }
 
   }, [
-
     currentUser?.email,
-
     hasToken,
-
     isAuthenticated,
-
+    isRouterReady,
     loading,
-
     pathname,
-
     roleMatches,
-
-    router,
-
+    safeReplace,
     userRole,
-
   ]);
 
 

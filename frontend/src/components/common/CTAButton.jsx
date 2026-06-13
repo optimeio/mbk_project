@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useTransition, useCallback, useRef, forwardRef } from 'react';
+import { useCallback, useRef, useState, forwardRef } from 'react';
 import './CTAButton.css';
 
 const EXTERNAL_HREF_PATTERN = /^(https?:|mailto:|tel:|\/\/)/i;
@@ -62,7 +62,7 @@ const CTAButton = forwardRef(function CTAButton({
   size = 'md',
   disabled = false,
   loading = false,
-  debounceMs = 100,
+  debounceMs = 0,
   iconLeft,
   iconRight,
   fullWidth = false,
@@ -74,11 +74,22 @@ const CTAButton = forwardRef(function CTAButton({
   'aria-label': ariaLabel,
   ...props
 }, ref) {
-  const [isPending, startTransition] = useTransition();
+  const [asyncLoading, setAsyncLoading] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const lastClickRef = useRef(0);
 
-  const isLoading = loading || isPending;
+  const isLoading = loading || asyncLoading;
   const isDisabled = disabled || isLoading;
+
+  const releasePress = useCallback(() => {
+    setIsPressed(false);
+  }, []);
+
+  const handlePointerDown = useCallback(() => {
+    if (!isDisabled) {
+      setIsPressed(true);
+    }
+  }, [isDisabled]);
 
   const handleClick = useCallback(
     (event) => {
@@ -90,12 +101,14 @@ const CTAButton = forwardRef(function CTAButton({
 
       const result = onClick(event);
       if (result && typeof result.then === 'function') {
-        startTransition(() => {
-          result.catch(() => {});
+        setAsyncLoading(true);
+        result.finally(() => {
+          setAsyncLoading(false);
+          setIsPressed(false);
         });
       }
     },
-    [onClick, debounceMs, isDisabled, startTransition],
+    [onClick, debounceMs, isDisabled],
   );
 
   const classes = [
@@ -106,6 +119,7 @@ const CTAButton = forwardRef(function CTAButton({
     href ? 'cta-btn--link' : '',
     isDisabled ? 'cta-btn--disabled' : '',
     isLoading ? 'cta-btn--loading' : '',
+    isPressed ? 'cta-btn--pressed' : '',
     className,
   ].filter(Boolean).join(' ');
 
@@ -162,6 +176,10 @@ const CTAButton = forwardRef(function CTAButton({
       ref={ref}
       type={type}
       onClick={handleClick}
+      onPointerDown={handlePointerDown}
+      onPointerUp={releasePress}
+      onPointerLeave={releasePress}
+      onPointerCancel={releasePress}
       disabled={isDisabled}
       aria-busy={isLoading}
       aria-disabled={isDisabled}

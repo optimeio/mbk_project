@@ -47,6 +47,8 @@ export const useChat = () => {
     let mounted = true;
     let prewarmTimer = null;
     let fullBootstrapTimer = null;
+    let handlePresenceChange = null;
+    let connectedChatClient = null;
     const init = async () => {
       // 🚀 PREMIUM: Try to load from local cache for instant UI
       const cached = localStorage.getItem('mbk_chat_bootstrap');
@@ -107,6 +109,7 @@ export const useChat = () => {
 
         streamApiKeyRef.current = resolvedStreamApiKey;
         const chatClient = StreamChat.getInstance(resolvedStreamApiKey);
+        connectedChatClient = chatClient;
 
         // Map user object for Stream compatibility
         const streamUser = {
@@ -160,7 +163,7 @@ export const useChat = () => {
         }, 0);
 
         // 🟢 REAL-TIME PRESENCE
-        const handlePresenceChange = (event) => {
+        handlePresenceChange = (event) => {
           if (event.user) {
             setUsers(prev => ({ ...prev, [event.user.id]: event.user }));
           }
@@ -247,14 +250,9 @@ export const useChat = () => {
       // Because StreamChat is a singleton, disconnecting on unmount breaks
       // React 18 Strict Mode and re-navigation. Connection stays alive.
       
-      const cleanupApiKey =
-        streamApiKeyRef.current ||
-        process.env.NEXT_PUBLIC_STREAM_API_KEY ||
-        process.env.NEXT_PUBLIC_STREAM_CHAT_API_KEY;
-      const chatClient = cleanupApiKey ? StreamChat.getInstance(cleanupApiKey) : null;
-      if (chatClient) {
-        chatClient.off('user.presence.changed');
-        chatClient.off('user.updated');
+      if (connectedChatClient && handlePresenceChange) {
+        connectedChatClient.off('user.presence.changed', handlePresenceChange);
+        connectedChatClient.off('user.updated', handlePresenceChange);
       }
     };
   }, [joinRooms]);

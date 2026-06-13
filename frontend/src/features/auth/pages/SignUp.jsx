@@ -3,10 +3,18 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { safeRouterPush } from '@/utils/safeRouterNavigation';
 import { useAuth } from '@/context/AuthContext';
 import authService from '@/services/authService';
 import notify from '@/lib/toast';
 import CTAButton from '@/components/common/CTAButton';
+import PasswordInputWithToggle from '@/components/common/PasswordInputWithToggle';
+import {
+  sanitizePhoneInput,
+  validateStudentSignup,
+  validateCompanySignup,
+  PASSWORD_MIN_LENGTH,
+} from '@/utils/authValidation';
 
 const COURSES = [
   { value: 'pcb', label: 'PCB' },
@@ -55,46 +63,29 @@ export default function SignupPage() {
   });
 
   const [error, setError] = useState('');
+  const [errorHint, setErrorHint] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleStudentChange = (e) => {
-    setStudentForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    const nextValue = name === 'phone' ? sanitizePhoneInput(value) : value;
+    setStudentForm((prev) => ({ ...prev, [name]: nextValue }));
     setError('');
   };
 
   const handleCompanyChange = (e) => {
-    setCompanyForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    const nextValue = name === 'phone' ? sanitizePhoneInput(value) : value;
+    setCompanyForm((prev) => ({ ...prev, [name]: nextValue }));
     setError('');
-  };
-
-  const validateStudent = () => {
-    if (!studentForm.name.trim()) return 'Please enter your full name.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentForm.email)) return 'Please enter a valid email.';
-    if (!/^[0-9+\-\s()]{7,20}$/.test(studentForm.phone.trim())) return 'Please enter a valid phone number.';
-    if (!studentForm.college.trim()) return 'Please enter your college or institute.';
-    if (!studentForm.course.trim()) return 'Please select a course.';
-    if (studentForm.password.length < 6) return 'Password must be at least 6 characters.';
-    if (studentForm.password !== studentForm.confirmPassword) return 'Passwords do not match.';
-    return '';
-  };
-
-  const validateCompany = () => {
-    if (!companyForm.companyName.trim()) return 'Please enter company name.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyForm.email)) return 'Please enter a valid official email.';
-    if (!companyForm.address.trim()) return 'Please enter company address.';
-    if (companyForm.website.trim() && !/^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/.test(companyForm.website.trim())) {
-      return 'Please enter a valid website URL.';
-    }
-    if (!/^[0-9+\-\s()]{7,20}$/.test(companyForm.phone.trim())) return 'Please enter a valid phone number.';
-    if (companyForm.password.length < 6) return 'Password must be at least 6 characters.';
-    if (companyForm.password !== companyForm.confirmPassword) return 'Passwords do not match.';
-    return '';
   };
 
   const handleStudentSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const v = validateStudent();
+    const v = validateStudentSignup(studentForm);
     if (v) {
       setError(v);
       notify.warning(v);
@@ -112,9 +103,9 @@ export default function SignupPage() {
         password: studentForm.password,
         confirmPassword: studentForm.confirmPassword,
       });
-      if (response.success && authService.getToken()) {
+      if (response.success && authService.getValidToken()) {
         notify.success('Student Registration Successful');
-        router.push('/student/dashboard');
+        safeRouterPush(router, '/student/dashboard');
       } else {
         const message = response.message || 'Registration failed.';
         setError(message);
@@ -132,7 +123,7 @@ export default function SignupPage() {
   const handleCompanySubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const v = validateCompany();
+    const v = validateCompanySignup(companyForm);
     if (v) {
       setError(v);
       notify.warning(v);
@@ -151,15 +142,25 @@ export default function SignupPage() {
         password: companyForm.password,
         confirmPassword: companyForm.confirmPassword,
       });
-      if (response.success && authService.getToken()) {
+      if (response.success && authService.getValidToken()) {
         notify.success('Company Registration Successful');
-        router.push('/company/dashboard');
+        safeRouterPush(router, '/company/dashboard');
       } else {
-        const message = response.message || 'Registration failed.';
-        setError(message);
-        notify.error(message);
+        setErrorHint('');
+        if (response.status === 409) {
+          const message =
+            'This email is already registered. Your company account may have been created by an admin.';
+          setError(message);
+          setErrorHint('company-exists');
+          notify.error(message);
+        } else {
+          const message = response.message || 'Registration failed.';
+          setError(message);
+          notify.error(message);
+        }
       }
     } catch (err) {
+      setErrorHint('');
       const message = err?.message || 'Registration failed.';
       setError(message);
       notify.error(message);
@@ -209,6 +210,8 @@ export default function SignupPage() {
               onClick={() => {
                 setActiveTab('student');
                 setError('');
+                setShowPassword(false);
+                setShowConfirmPassword(false);
               }}
               className={`pb-3 text-lg font-bold border-b-2 transition-all px-2 ${
                 activeTab === 'student'
@@ -223,6 +226,8 @@ export default function SignupPage() {
               onClick={() => {
                 setActiveTab('company');
                 setError('');
+                setShowPassword(false);
+                setShowConfirmPassword(false);
               }}
               className={`pb-3 text-lg font-bold border-b-2 transition-all px-2 ${
                 activeTab === 'company'
@@ -248,21 +253,34 @@ export default function SignupPage() {
           {error && (
             <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 font-medium">
               {error}
+              {errorHint === 'company-exists' && (
+                <p className="mt-2 font-normal text-red-600">
+                  Go to{' '}
+                  <Link href="/company/auth" className="font-semibold underline">
+                    Company Sign In
+                  </Link>{' '}
+                  and use <strong>Forgot Password</strong> to set your password, or open the onboarding link from your invite email.
+                </p>
+              )}
             </div>
           )}
 
           {/* Student Signup Form */}
           {activeTab === 'student' && (
-            <form className="md:grid md:grid-cols-2 md:gap-4 md:space-y-0 space-y-4" onSubmit={handleStudentSubmit}>
+            <form className="md:grid md:grid-cols-2 md:gap-4 md:space-y-0 space-y-4" onSubmit={handleStudentSubmit} noValidate>
               <div className="md:col-span-2">
                 <input
                   name="name"
                   type="text"
-                  placeholder="Full Name"
+                  placeholder="Full Name *"
                   value={studentForm.name}
                   onChange={handleStudentChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="name"
+                  disabled={loading}
                 />
               </div>
 
@@ -270,11 +288,13 @@ export default function SignupPage() {
                 <input
                   name="email"
                   type="email"
-                  placeholder="Email Address"
+                  placeholder="Email Address *"
                   value={studentForm.email}
                   onChange={handleStudentChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  autoComplete="email"
+                  disabled={loading}
                 />
               </div>
 
@@ -282,11 +302,16 @@ export default function SignupPage() {
                 <input
                   name="phone"
                   type="tel"
-                  placeholder="Phone Number"
+                  placeholder="Phone Number (10 digits) *"
                   value={studentForm.phone}
                   onChange={handleStudentChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  inputMode="numeric"
+                  pattern="[6-9][0-9]{9}"
+                  maxLength={10}
+                  autoComplete="tel"
+                  disabled={loading}
                 />
               </div>
 
@@ -294,11 +319,14 @@ export default function SignupPage() {
                 <input
                   name="college"
                   type="text"
-                  placeholder="College / Institute Name"
+                  placeholder="College / Institute Name *"
                   value={studentForm.college}
                   onChange={handleStudentChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={2}
+                  maxLength={200}
+                  disabled={loading}
                 />
               </div>
 
@@ -309,6 +337,7 @@ export default function SignupPage() {
                   onChange={handleStudentChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  disabled={loading}
                 >
                   <option value="">Select a Course</option>
                   {COURSES.map((c) => (
@@ -320,26 +349,34 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <input
+                <PasswordInputWithToggle
                   name="password"
-                  type="password"
-                  placeholder="Password (min 6 chars)"
+                  placeholder={`Password (min ${PASSWORD_MIN_LENGTH} chars) *`}
                   value={studentForm.password}
                   onChange={handleStudentChange}
-                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  className="w-full h-12 pl-4 pr-11 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
+                  disabled={loading}
+                  showPassword={showPassword}
+                  onToggleVisibility={() => setShowPassword(!showPassword)}
                 />
               </div>
 
               <div>
-                <input
+                <PasswordInputWithToggle
                   name="confirmPassword"
-                  type="password"
-                  placeholder="Confirm Password"
+                  placeholder="Confirm Password *"
                   value={studentForm.confirmPassword}
                   onChange={handleStudentChange}
-                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  className="w-full h-12 pl-4 pr-11 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
+                  disabled={loading}
+                  showPassword={showConfirmPassword}
+                  onToggleVisibility={() => setShowConfirmPassword(!showConfirmPassword)}
                 />
               </div>
 
@@ -361,16 +398,19 @@ export default function SignupPage() {
 
           {/* Company Signup Form */}
           {activeTab === 'company' && (
-            <form className="md:grid md:grid-cols-2 md:gap-4 md:space-y-0 space-y-4" onSubmit={handleCompanySubmit}>
+            <form className="md:grid md:grid-cols-2 md:gap-4 md:space-y-0 space-y-4" onSubmit={handleCompanySubmit} noValidate>
               <div className="md:col-span-2">
                 <input
                   name="companyName"
                   type="text"
-                  placeholder="Company Name"
+                  placeholder="Company Name *"
                   value={companyForm.companyName}
                   onChange={handleCompanyChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={2}
+                  maxLength={200}
+                  disabled={loading}
                 />
               </div>
 
@@ -378,11 +418,13 @@ export default function SignupPage() {
                 <input
                   name="email"
                   type="email"
-                  placeholder="Official Mail Address"
+                  placeholder="Official Mail Address *"
                   value={companyForm.email}
                   onChange={handleCompanyChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  autoComplete="email"
+                  disabled={loading}
                 />
               </div>
 
@@ -390,11 +432,16 @@ export default function SignupPage() {
                 <input
                   name="phone"
                   type="tel"
-                  placeholder="Phone Number"
+                  placeholder="Phone Number (10 digits) *"
                   value={companyForm.phone}
                   onChange={handleCompanyChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  inputMode="numeric"
+                  pattern="[6-9][0-9]{9}"
+                  maxLength={10}
+                  autoComplete="tel"
+                  disabled={loading}
                 />
               </div>
 
@@ -402,11 +449,14 @@ export default function SignupPage() {
                 <input
                   name="address"
                   type="text"
-                  placeholder="Address"
+                  placeholder="Address *"
                   value={companyForm.address}
                   onChange={handleCompanyChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={5}
+                  maxLength={300}
+                  disabled={loading}
                 />
               </div>
 
@@ -414,34 +464,43 @@ export default function SignupPage() {
                 <input
                   name="website"
                   type="url"
-                  placeholder="Website URL (Optional)"
+                  placeholder="Website URL (optional)"
                   value={companyForm.website}
                   onChange={handleCompanyChange}
                   className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  disabled={loading}
                 />
               </div>
 
               <div>
-                <input
+                <PasswordInputWithToggle
                   name="password"
-                  type="password"
-                  placeholder="Password (min 6 chars)"
+                  placeholder={`Password (min ${PASSWORD_MIN_LENGTH} chars) *`}
                   value={companyForm.password}
                   onChange={handleCompanyChange}
-                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  className="w-full h-12 pl-4 pr-11 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
+                  disabled={loading}
+                  showPassword={showPassword}
+                  onToggleVisibility={() => setShowPassword(!showPassword)}
                 />
               </div>
 
               <div>
-                <input
+                <PasswordInputWithToggle
                   name="confirmPassword"
-                  type="password"
-                  placeholder="Confirm Password"
+                  placeholder="Confirm Password *"
                   value={companyForm.confirmPassword}
                   onChange={handleCompanyChange}
-                  className="w-full h-12 px-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
+                  className="w-full h-12 pl-4 pr-11 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-all text-sm"
                   required
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
+                  disabled={loading}
+                  showPassword={showConfirmPassword}
+                  onToggleVisibility={() => setShowConfirmPassword(!showConfirmPassword)}
                 />
               </div>
 

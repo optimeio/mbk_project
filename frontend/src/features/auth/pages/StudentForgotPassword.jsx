@@ -62,8 +62,8 @@ const StudentForgotPassword = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
       return;
     }
 
@@ -163,7 +163,7 @@ const StudentForgotPassword = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 style={styles.inputField}
                 placeholder="New password"
-                minLength={6}
+                minLength={8}
               />
             </div>
             <div style={styles.inputWrap}>
@@ -177,7 +177,7 @@ const StudentForgotPassword = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 style={styles.inputField}
                 placeholder="Confirm password"
-                minLength={6}
+                minLength={8}
               />
             </div>
             <CTAButton type="submit" variant="brand" size="lg" fullWidth loading={loading} loadingText="Resetting...">

@@ -1,4 +1,6 @@
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const PORT = Number(process.env.PORT || 3000);
 
@@ -45,6 +47,22 @@ const stopPid = (pid) => {
   }
   execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
 };
+
+const clearTurbopackDevCache = () => {
+  const cacheDir = path.join(process.cwd(), '.next', 'dev', 'cache', 'turbopack');
+  if (!fs.existsSync(cacheDir)) {
+    return;
+  }
+
+  try {
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    console.log('[dev] Cleared stale Turbopack cache.');
+  } catch (error) {
+    console.warn('[dev] Could not clear Turbopack cache:', error.message);
+  }
+};
+
+clearTurbopackDevCache();
 
 const pids = listListeningPids(PORT);
 if (pids.length === 0) {

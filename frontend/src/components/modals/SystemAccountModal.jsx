@@ -3,6 +3,35 @@
 import { Fragment, useState, useEffect } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { XMarkIcon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { ADMISSION_PERMISSIONS } from "@/utils/admissionPermissions";
+
+const buildFormData = (initialData, currentUserRole) => {
+  if (initialData) {
+    return {
+      name: initialData.name ?? "",
+      email: initialData.email ?? "",
+      role: initialData.role ?? "Support",
+      status: initialData.status ?? "Active",
+      password: "",
+      emailVerified: Boolean(initialData.emailVerified),
+      otpEnabled: Boolean(initialData.otpEnabled),
+      permissions: Array.isArray(initialData.permissions)
+        ? initialData.permissions
+        : [],
+    };
+  }
+
+  return {
+    name: "",
+    email: "",
+    role: currentUserRole === "SuperAdmin" ? "SPOCAdmin" : "Trainer",
+    status: "Active",
+    password: "",
+    emailVerified: true,
+    otpEnabled: false,
+    permissions: [],
+  };
+};
 
 const SystemAccountModal = ({
   isOpen,
@@ -12,36 +41,13 @@ const SystemAccountModal = ({
   currentUserRole,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    role: "Support",
-    status: "Active",
-    password: "",
-  });
+  const [formData, setFormData] = useState(() =>
+    buildFormData(initialData, currentUserRole),
+  );
 
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        name: initialData.name || "",
-        email: initialData.email || "",
-        role: initialData.role || "Support",
-        status: initialData.status || "Active",
-        password: "",
-        emailVerified: initialData.emailVerified || false,
-        otpEnabled: initialData.otpEnabled || false,
-      });
-    } else {
-      setFormData({
-        name: "",
-        email: "",
-        role: currentUserRole === "SuperAdmin" ? "SPOCAdmin" : "Trainer",
-        status: "Active",
-        password: "",
-        emailVerified: true,
-        otpEnabled: false,
-      });
-    }
+    if (!isOpen) return;
+    setFormData(buildFormData(initialData, currentUserRole));
   }, [initialData, isOpen, currentUserRole]);
 
   const handleChange = (e) => {
@@ -50,6 +56,20 @@ const SystemAccountModal = ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+  };
+
+  const toggleAdmissionPermission = (permission) => {
+    setFormData((prev) => {
+      const current = Array.isArray(prev.permissions) ? prev.permissions : [];
+      const hasPermission = current.includes(permission);
+
+      return {
+        ...prev,
+        permissions: hasPermission
+          ? current.filter((item) => item !== permission)
+          : [...current, permission],
+      };
+    });
   };
 
   const handleSubmit = (e) => {
@@ -91,8 +111,8 @@ const SystemAccountModal = ({
           <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" />
         </Transition.Child>
 
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+        <div className="dashboard-modal-scrollport fixed inset-0 z-10 overflow-y-auto">
+          <div className="dashboard-modal-center flex min-h-full items-center justify-center p-4 text-center sm:p-6">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -102,7 +122,7 @@ const SystemAccountModal = ({
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white px-6 pt-6 pb-6 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+              <Dialog.Panel className="dashboard-modal-panel relative transform rounded-2xl bg-white px-6 pt-6 pb-6 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
                 <div className="absolute top-0 right-0 pt-5 pr-5">
                   <button
                     type="button"
@@ -142,7 +162,7 @@ const SystemAccountModal = ({
                           type="text"
                           name="name"
                           id="name"
-                          value={formData.name}
+                          value={formData.name ?? ""}
                           onChange={handleChange}
                           className="block w-full rounded-xl border-gray-100 bg-gray-50/50 py-2.5 px-4 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all sm:text-sm"
                           placeholder="e.g. John Doe"
@@ -161,7 +181,7 @@ const SystemAccountModal = ({
                           type="email"
                           name="email"
                           id="email"
-                          value={formData.email}
+                          value={formData.email ?? ""}
                           onChange={handleChange}
                           placeholder="user@example.com or userid"
                           className="block w-full rounded-xl border-gray-100 bg-gray-50/50 py-2.5 px-4 text-gray-900 ring-1 ring-inset ring-gray-200 placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all sm:text-sm"
@@ -184,7 +204,7 @@ const SystemAccountModal = ({
                           <select
                             name="role"
                             id="role"
-                            value={formData.role}
+                            value={formData.role ?? ""}
                             onChange={handleChange}
                             className="block w-full rounded-xl border-gray-100 bg-gray-50/50 py-2.5 px-4 text-gray-900 ring-1 ring-inset ring-gray-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all sm:text-sm appearance-none"
                           >
@@ -215,7 +235,7 @@ const SystemAccountModal = ({
                           <select
                             name="status"
                             id="status"
-                            value={formData.status}
+                            value={formData.status ?? "Active"}
                             onChange={handleChange}
                             className="block w-full rounded-xl border-gray-100 bg-gray-50/50 py-2.5 px-4 text-gray-900 ring-1 ring-inset ring-gray-200 focus:bg-white focus:ring-2 focus:ring-inset focus:ring-blue-500 transition-all sm:text-sm appearance-none"
                           >
@@ -272,7 +292,7 @@ const SystemAccountModal = ({
                             id="emailVerified"
                             name="emailVerified"
                             type="checkbox"
-                            checked={formData.emailVerified}
+                            checked={Boolean(formData.emailVerified)}
                             onChange={handleChange}
                             className="h-5 w-5 rounded-lg border-gray-200 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
                           />
@@ -296,7 +316,7 @@ const SystemAccountModal = ({
                             id="otpEnabled"
                             name="otpEnabled"
                             type="checkbox"
-                            checked={formData.otpEnabled}
+                            checked={Boolean(formData.otpEnabled)}
                             onChange={handleChange}
                             className="h-5 w-5 rounded-lg border-gray-200 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
                           />
@@ -313,6 +333,69 @@ const SystemAccountModal = ({
                           </p>
                         </div>
                       </div>
+
+                      {currentUserRole === "SuperAdmin" &&
+                        formData.role !== "Trainer" && (
+                          <>
+                            <div className="relative flex items-center">
+                              <div className="flex h-6 items-center">
+                                <input
+                                  id="admissionApprove"
+                                  type="checkbox"
+                                  checked={(formData.permissions || []).includes(
+                                    ADMISSION_PERMISSIONS.APPROVE,
+                                  )}
+                                  onChange={() =>
+                                    toggleAdmissionPermission(
+                                      ADMISSION_PERMISSIONS.APPROVE,
+                                    )
+                                  }
+                                  className="h-5 w-5 rounded-lg border-gray-200 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                                />
+                              </div>
+                              <div className="ml-3">
+                                <label
+                                  htmlFor="admissionApprove"
+                                  className="text-sm font-bold text-gray-700 cursor-pointer"
+                                >
+                                  Approve Trainer Admissions
+                                </label>
+                                <p className="text-[11px] text-gray-400 leading-none mt-0.5">
+                                  Allow approving pending trainer signups
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="relative flex items-center">
+                              <div className="flex h-6 items-center">
+                                <input
+                                  id="admissionReject"
+                                  type="checkbox"
+                                  checked={(formData.permissions || []).includes(
+                                    ADMISSION_PERMISSIONS.REJECT,
+                                  )}
+                                  onChange={() =>
+                                    toggleAdmissionPermission(
+                                      ADMISSION_PERMISSIONS.REJECT,
+                                    )
+                                  }
+                                  className="h-5 w-5 rounded-lg border-gray-200 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer"
+                                />
+                              </div>
+                              <div className="ml-3">
+                                <label
+                                  htmlFor="admissionReject"
+                                  className="text-sm font-bold text-gray-700 cursor-pointer"
+                                >
+                                  Reject Trainer Admissions
+                                </label>
+                                <p className="text-[11px] text-gray-400 leading-none mt-0.5">
+                                  Allow rejecting pending trainer signups
+                                </p>
+                              </div>
+                            </div>
+                          </>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-3 pt-4">

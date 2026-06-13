@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { safeRouterPush } from '@/utils/safeRouterNavigation';
 
 function LegacyNavbar() {
   const pathname = usePathname();
@@ -51,7 +52,7 @@ function LegacyNavbar() {
     };
 
     if (pathname !== '/') {
-      router.push('/');
+      safeRouterPush(router, '/');
       window.setTimeout(scrollToTarget, 180);
       return;
     }

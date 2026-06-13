@@ -1,5 +1,9 @@
 import { complaintsLinksByRole, roleLinks } from "@/components/common/sidebar/sidebarConfig";
 import { AUTH_ROLES, getDashboardRouteByRole, normalizeAuthRole } from "@/utils/authRoles";
+import { safeRouterPrefetch } from "@/utils/safeRouterNavigation";
+
+/** Survives Fast Refresh so HMR does not re-dispatch prefetch actions. */
+const prefetchedPortalKeys = new Set();
 
 const roleToSidebarKey = (role, email = "") => {
   const normalizedRole = normalizeAuthRole(role, email);
@@ -32,7 +36,12 @@ export const prefetchRoutes = (router, routes, options = {}) => {
   }
 
   const excludedRoutes = new Set(options.exclude || []);
-  const targets = routes.filter((route) => route && !excludedRoutes.has(route));
+  const maxRoutes = Number.isFinite(Number(options.maxRoutes))
+    ? Math.max(1, Number(options.maxRoutes))
+    : routes.length;
+  const targets = routes
+    .filter((route) => route && !excludedRoutes.has(route))
+    .slice(0, maxRoutes);
 
   if (targets.length === 0) {
     return () => {};
@@ -50,7 +59,7 @@ export const prefetchRoutes = (router, routes, options = {}) => {
             callback();
           }
         },
-        { timeout: 1500 + delay },
+        { timeout: 300 + delay },
       );
       idleCallbacks.push(idleId);
       return;
@@ -67,13 +76,13 @@ export const prefetchRoutes = (router, routes, options = {}) => {
   targets.forEach((route, index) => {
     schedule(() => {
       try {
-        router.prefetch(route);
+        safeRouterPrefetch(router, route);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.warn("Route prefetch failed:", route, error);
         }
       }
-    }, index * 60);
+    }, index * 25);
   });
 
   return () => {
@@ -85,5 +94,12 @@ export const prefetchRoutes = (router, routes, options = {}) => {
   };
 };
 
-export const prefetchPortalRoutes = (router, role, email = "", options = {}) =>
-  prefetchRoutes(router, getPortalPrefetchRoutes(role, email), options);
+export const prefetchPortalRoutes = (router, role, email = "", options = {}) => {
+  const prefetchKey = `${String(role || "").trim().toLowerCase()}::${String(email || "").trim().toLowerCase()}`;
+  if (prefetchedPortalKeys.has(prefetchKey)) {
+    return () => {};
+  }
+
+  prefetchedPortalKeys.add(prefetchKey);
+  return prefetchRoutes(router, getPortalPrefetchRoutes(role, email), options);
+};

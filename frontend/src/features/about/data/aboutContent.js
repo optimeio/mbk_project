@@ -222,7 +222,7 @@ export const contactChannels = [
   {
     icon: 'map-pin',
     label: 'Salem office',
-    value: 'Fairlands, Salem - 636004',
+    value: 'IInd Floor, OM Shiva Towers, 259-B, Advaitha Ashram Rd, Fairlands, Salem, Tamil Nadu - 636004, India',
     href: 'https://maps.google.com/?q=MBK+Technology+Salem',
   },
 ];

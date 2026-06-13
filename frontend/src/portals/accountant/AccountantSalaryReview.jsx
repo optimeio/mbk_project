@@ -286,8 +286,8 @@ export default function AccountantSalaryReview() {
 
       {/* Salary Detail Modal */}
       {selectedSalary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="dashboard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="dashboard-modal-panel w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b">
               <h2 className="font-semibold text-gray-900">Salary Details</h2>

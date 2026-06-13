@@ -95,6 +95,7 @@ function LegacyServicesPage({ id, hideHero }) {
 
     // Counters
     const counters = document.querySelectorAll('.counter-num');
+    const counterTimers = new Set();
     const counterObs = new IntersectionObserver((entries, obs) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -107,8 +108,12 @@ function LegacyServicesPage({ id, hideHero }) {
             start += target > 1000 ? Math.ceil(target / 100) : 1;
             if (start > target) start = target;
             entry.target.innerText = start + suffix;
-            if (start === target) clearInterval(timer);
+            if (start === target) {
+              clearInterval(timer);
+              counterTimers.delete(timer);
+            }
           }, stepTime);
+          counterTimers.add(timer);
           obs.unobserve(entry.target);
         }
       });
@@ -120,6 +125,8 @@ function LegacyServicesPage({ id, hideHero }) {
       if (handleResize) window.removeEventListener('resize', handleResize);
       revealObserver.disconnect();
       counterObs.disconnect();
+      counterTimers.forEach((timer) => clearInterval(timer));
+      counterTimers.clear();
     };
   }, []);
 

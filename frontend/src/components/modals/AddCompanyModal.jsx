@@ -42,11 +42,11 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
     try {
       setLoading(true);
       setMsg("");
-      const res = await api.post("/auth/send-otp", { email: adminEmail });
+      const res = await api.post("/companies/send-otp", { email: adminEmail });
       setOtpSent(true);
       if (res?.debugOtp) {
         setOtp(String(res.debugOtp));
-        setMsg(`OTP generated in local mode. Use this OTP: ${res.debugOtp}`, "success");
+        setMsg(`OTP generated. Use this code: ${res.debugOtp}`, "success");
       } else {
         setMsg(`OTP sent to ${adminEmail}`, "success");
       }
@@ -62,7 +62,7 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
     try {
       setLoading(true);
       setMsg("");
-      await api.post("/auth/verify-otp", { email: adminEmail, otp });
+      await api.post("/companies/verify-otp", { email: adminEmail, otp });
       setIsVerified(true);
       setMsg("Email verified successfully.", "success");
     } catch (err) {
@@ -99,9 +99,10 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl p-8 relative animate-fadeIn">
+    <div className="dashboard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="dashboard-modal-panel relative w-full max-w-xl animate-fadeIn rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 text-xl font-bold p-2 leading-none"
         >
@@ -133,6 +134,7 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
             </div>
             {!isVerified && (
               <button
+                type="button"
                 onClick={handleSendOtp}
                 disabled={loading || !adminEmail}
                 className="shrink-0 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
@@ -155,6 +157,7 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-center tracking-widest font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
+                  type="button"
                   onClick={handleVerifyOtp}
                   disabled={loading || otp.length !== 6}
                   className="shrink-0 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors disabled:opacity-50"
@@ -203,6 +206,7 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
 
         <div className="flex justify-end gap-3 mt-8">
           <button
+            type="button"
             onClick={onClose}
             disabled={loading}
             className="px-6 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition-colors disabled:opacity-50"
@@ -210,6 +214,7 @@ export default function AddCompanyModal({ onClose, onSuccess }) {
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleCreateInvite}
             disabled={!isVerified || loading || !!inviteLink}
             className="px-8 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium shadow-md hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none"

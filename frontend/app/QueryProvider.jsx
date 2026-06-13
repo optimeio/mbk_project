@@ -10,8 +10,13 @@ const getErrorStatusCode = (error) =>
 const shouldRetryQuery = (failureCount, error) => {
   const statusCode = getErrorStatusCode(error);
 
-  // Do not retry auth/permission/not-found failures.
-  if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
+  // Do not retry auth/permission/not-found/rate-limit failures.
+  if (
+    statusCode === 401 ||
+    statusCode === 403 ||
+    statusCode === 404 ||
+    statusCode === 429
+  ) {
     return false;
   }
 
@@ -26,7 +31,8 @@ const createQueryClient = () =>
         gcTime: QUERY_GC_TIMES.STANDARD,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
-        refetchOnMount: 'always', // Ensure fresh data on navigation
+        // Use cached data during rapid sidebar navigation; refetch only when stale.
+        refetchOnMount: false,
         retry: shouldRetryQuery,
         networkMode: 'offlineFirst', // Use cache while offline
       },

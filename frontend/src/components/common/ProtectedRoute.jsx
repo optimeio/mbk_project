@@ -1,65 +1,109 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-
+import { memo, useEffect, useMemo, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import authService from '@/services/authService';
-import { getDashboardRouteByRole } from '@/utils/authRoles';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { getUnauthenticatedLoginPath } from '@/utils/authRedirects';
+import { getTokenRole } from '@/utils/authJwt';
+import {
+  getDashboardRouteByRole,
+  loginTypeToAuthRole,
+  normalizeAuthRole,
+  isKnownPortalRole,
+} from '@/utils/authRoles';
 
-/**
- * Client-side auth guard for Next.js App Router.
- *
- * Usage:
- *   <ProtectedRoute allowedRoles={['student']}>
- *     <StudentDashboard />
- *   </ProtectedRoute>
- *
- * - Waits for AuthContext to finish restoring the session (no logout on refresh).
- * - Unauthenticated users → /login?redirect=<current path>.
- * - Authenticated users with the wrong role → their own dashboard (no loops).
- * - Role comparison is case-insensitive (student / Student / STUDENT).
- */
+const roleMatchesAllowed = (userRole, email, allowedRoles = []) => {
+  if (!allowedRoles.length) return true;
+
+  const normalizedUser = normalizeAuthRole(userRole, email);
+  if (!normalizedUser) return false;
+
+  return allowedRoles.some((allowed) => {
+    const mappedRole = loginTypeToAuthRole(allowed);
+    const normalizedAllowed = normalizeAuthRole(
+      mappedRole || allowed,
+      email,
+    );
+    if (!normalizedAllowed) return false;
+    return normalizedAllowed.toLowerCase() === normalizedUser.toLowerCase();
+  });
+};
+
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const { currentUser, loading, isAuthenticated } = useAuth();
-  const router = useRouter();
+  const { safeReplace, isRouterReady } = useSafeRouter();
   const pathname = usePathname();
 
-  const role = currentUser?.role || '';
-  const hasToken = Boolean(authService.getToken());
-  const roleAllowed =
-    !allowedRoles ||
-    allowedRoles.some((r) => r.toLowerCase() === role.toLowerCase());
+  const validToken = authService.getValidToken();
+  const tokenRole = useMemo(() => getTokenRole(validToken), [validToken]);
+  const role = (isAuthenticated && currentUser?.role) || tokenRole || '';
+  const hasValidToken = Boolean(validToken);
+  const hasKnownRole = isKnownPortalRole(role, currentUser?.email);
+  const roleAllowed = hasKnownRole && roleMatchesAllowed(role, currentUser?.email, allowedRoles);
+  const canRenderOptimistically = hasValidToken && roleAllowed;
+  const lastRedirectRef = useRef('');
 
   useEffect(() => {
-    if (loading) return;
+    lastRedirectRef.current = '';
+  }, [pathname]);
 
-    if (!isAuthenticated || !currentUser || !hasToken) {
-      console.debug('[AUTH] ProtectedRoute: unauthenticated, redirecting to /login', { from: pathname });
-      router.replace(`/login?redirect=${encodeURIComponent(pathname)}&reason=unauthenticated`);
+  useEffect(() => {
+    if (!isRouterReady || (loading && !canRenderOptimistically)) return;
+
+    let target = '';
+
+    if (!hasValidToken || !hasKnownRole || (!isAuthenticated && !canRenderOptimistically)) {
+      target = getUnauthenticatedLoginPath(pathname, 'unauthenticated');
+    } else if (!roleAllowed) {
+      target = getDashboardRouteByRole(role);
+    }
+
+    if (!target || lastRedirectRef.current === target) {
       return;
     }
 
-    if (!roleAllowed) {
-      const home = getDashboardRouteByRole(role, currentUser.email);
-      console.warn(`[AUTH] Role mismatch: user has "${role}", required one of [${allowedRoles.join(', ')}]. Redirecting to ${home}`);
-      router.replace(home);
-    }
-  }, [loading, isAuthenticated, currentUser, hasToken, roleAllowed, pathname, router]);
+    lastRedirectRef.current = target;
+    safeReplace(target);
 
-  if (loading) {
+    const hardRedirectTimer = window.setTimeout(() => {
+      if (!authService.getValidToken()) {
+        window.location.replace(target);
+      }
+    }, 2000);
+
+    return () => window.clearTimeout(hardRedirectTimer);
+  }, [
+    canRenderOptimistically,
+    hasKnownRole,
+    hasValidToken,
+    isAuthenticated,
+    isRouterReady,
+    loading,
+    pathname,
+    role,
+    roleAllowed,
+    safeReplace,
+  ]);
+
+  if (loading && !canRenderOptimistically) {
     return (
-      <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
-        Checking your session...
+      <div className="flex min-h-[12rem] items-center justify-center p-6">
+        <p className="text-sm text-slate-500">Checking your session…</p>
       </div>
     );
   }
 
-  if (!isAuthenticated || !currentUser || !hasToken || !roleAllowed) {
-    return null; // redirect in flight
+  if (!canRenderOptimistically || !roleAllowed) {
+    return (
+      <div className="flex min-h-[12rem] items-center justify-center p-6">
+        <p className="text-sm text-slate-500">Redirecting to sign in…</p>
+      </div>
+    );
   }
 
   return children;
 };
 
-export default ProtectedRoute;
+export default memo(ProtectedRoute);

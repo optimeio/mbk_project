@@ -101,6 +101,7 @@ export const getSchedulerLiveDashboardQueryOptions = ({
   queryKey: buildSchedulerLiveDashboardQueryKey(),
   enabled: viewMode === "dashboard",
   refetchInterval: viewMode === "dashboard" ? 30_000 : false,
+  refetchIntervalInBackground: false,
   staleTime: QUERY_STALE_TIMES.LIVE_VIEW,
   gcTime: QUERY_GC_TIMES.STANDARD,
   refetchOnWindowFocus: false,

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -10,54 +11,53 @@ import {
   HandCoins, BarChart3, BadgeCheck,
 } from "lucide-react";
 
-// Max 5 items per role for mobile UX
 const NAV_MAP = {
   SuperAdmin: [
-    { name: "Home",      href: "/dashboard",                 icon: Home },
-    { name: "Trainers",  href: "/dashboard/trainers",        icon: Users },
-    { name: "Chat",      href: "/chat",                      icon: MessageSquareMore },
-    { name: "Salary",    href: "/dashboard/salary",          icon: HandCoins },
-    { name: "More",      href: "/dashboard/accounts",        icon: MoreHorizontal },
+    { name: "Home", href: "/dashboard", icon: Home },
+    { name: "Trainers", href: "/dashboard/trainers", icon: Users },
+    { name: "Chat", href: "/chat", icon: MessageSquareMore },
+    { name: "Salary", href: "/dashboard/salary", icon: HandCoins },
+    { name: "More", href: "/dashboard/accounts", icon: MoreHorizontal },
   ],
   SPOCAdmin: [
-    { name: "Home",      href: "/spoc/dashboard",            icon: Home },
-    { name: "Schedule",  href: "/spoc/schedule",             icon: Calendar },
-    { name: "Check-In",  href: "/spoc/attendance",           icon: BadgeCheck },
-    { name: "Chat",      href: "/chat",                      icon: MessageSquareMore },
-    { name: "More",      href: "/spoc/trainers",             icon: MoreHorizontal },
+    { name: "Home", href: "/spoc/dashboard", icon: Home },
+    { name: "Schedule", href: "/spoc/schedule", icon: Calendar },
+    { name: "Check-In", href: "/spoc/attendance", icon: BadgeCheck },
+    { name: "Chat", href: "/chat", icon: MessageSquareMore },
+    { name: "More", href: "/spoc/trainers", icon: MoreHorizontal },
   ],
   CollegeAdmin: [
-    { name: "Home",      href: "/spoc/dashboard",            icon: Home },
-    { name: "Schedule",  href: "/spoc/schedule",             icon: Calendar },
-    { name: "Check-In",  href: "/spoc/attendance",           icon: BadgeCheck },
-    { name: "Chat",      href: "/chat",                      icon: MessageSquareMore },
-    { name: "More",      href: "/spoc/trainers",             icon: MoreHorizontal },
+    { name: "Home", href: "/spoc/dashboard", icon: Home },
+    { name: "Schedule", href: "/spoc/schedule", icon: Calendar },
+    { name: "Check-In", href: "/spoc/attendance", icon: BadgeCheck },
+    { name: "Chat", href: "/chat", icon: MessageSquareMore },
+    { name: "More", href: "/spoc/trainers", icon: MoreHorizontal },
   ],
   Accountant: [
-    { name: "Home",      href: "/accountant/dashboard",      icon: Home },
-    { name: "Salary",    href: "/accountant/salary",         icon: HandCoins },
-    { name: "Payslips",  href: "/accountant/payslips",       icon: Receipt },
-    { name: "Reports",   href: "/accountant/reports",        icon: BarChart3 },
-    { name: "More",      href: "/accountant/settings",       icon: MoreHorizontal },
+    { name: "Home", href: "/accountant/dashboard", icon: Home },
+    { name: "Salary", href: "/accountant/salary", icon: HandCoins },
+    { name: "Payslips", href: "/accountant/payslips", icon: Receipt },
+    { name: "Reports", href: "/accountant/reports", icon: BarChart3 },
+    { name: "More", href: "/accountant/settings", icon: MoreHorizontal },
   ],
   Trainer: [
-    { name: "Home",      href: "/trainer/dashboard",         icon: Home },
-    { name: "Schedule",  href: "/trainer/schedule",          icon: Calendar },
-    { name: "Payslips",  href: "/trainer/payslips",          icon: Receipt },
-    { name: "Chat",      href: "/chat",                      icon: MessageSquareMore },
+    { name: "Home", href: "/trainer/dashboard", icon: Home },
+    { name: "Schedule", href: "/trainer/schedule", icon: Calendar },
+    { name: "Payslips", href: "/trainer/payslips", icon: Receipt },
+    { name: "Chat", href: "/chat", icon: MessageSquareMore },
   ],
   Student: [
-    { name: "Home",      href: "/student/dashboard",         icon: Home },
-    { name: "Courses",   href: "/student/courses",           icon: Calendar },
-    { name: "Chat",      href: "/chat",                      icon: MessageSquareMore },
-    { name: "More",      href: "/student/profile",           icon: MoreHorizontal },
+    { name: "Home", href: "/student/dashboard", icon: Home },
+    { name: "Courses", href: "/student/courses", icon: Calendar },
+    { name: "Chat", href: "/chat", icon: MessageSquareMore },
+    { name: "More", href: "/student/profile", icon: MoreHorizontal },
   ],
   Company: [
-    { name: "Home",      href: "/company/dashboard",         icon: Home },
-    { name: "Trainers",  href: "/company/hiring",            icon: Users },
-    { name: "Sessions",  href: "/company/sessions",          icon: Calendar },
-    { name: "Chat",      href: "/chat",                      icon: MessageSquareMore },
-    { name: "More",      href: "/company/profile",           icon: MoreHorizontal },
+    { name: "Home", href: "/company/dashboard", icon: Home },
+    { name: "Trainers", href: "/company/hiring", icon: Users },
+    { name: "Sessions", href: "/company/sessions", icon: Calendar },
+    { name: "Chat", href: "/chat", icon: MessageSquareMore },
+    { name: "More", href: "/company/profile", icon: MoreHorizontal },
   ],
 };
 
@@ -73,12 +73,15 @@ const normalizeMobileRole = (role = "") => {
   return "Student";
 };
 
-export default function MobileBottomNav() {
+function MobileBottomNav() {
   const { currentUser } = useAuth();
   const pathname = usePathname();
   const role = normalizeMobileRole(currentUser?.role);
 
-  const links = NAV_MAP[role] || NAV_MAP.Student;
+  const links = useMemo(
+    () => NAV_MAP[role] || NAV_MAP.Student,
+    [role],
+  );
 
   return (
     <div
@@ -89,19 +92,22 @@ export default function MobileBottomNav() {
         {links.map((link) => {
           const isActive =
             pathname === link.href ||
-            (link.href !== "/trainer/dashboard" && pathname.startsWith(link.href) && link.href !== "/");
+            (link.href !== "/trainer/dashboard" &&
+              pathname.startsWith(link.href) &&
+              link.href !== "/");
 
           return (
             <Link
               key={link.name}
               href={link.href}
+              prefetch
               className="relative flex flex-col items-center justify-center w-full h-full space-y-1 text-muted-foreground"
             >
               {isActive && (
                 <motion.div
                   layoutId="mobile-nav-bubble"
                   className="absolute inset-0 bg-primary/10 rounded-xl"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  transition={{ type: "spring", bounce: 0.15, duration: 0.25 }}
                 />
               )}
               <link.icon
@@ -123,3 +129,5 @@ export default function MobileBottomNav() {
     </div>
   );
 }
+
+export default memo(MobileBottomNav);

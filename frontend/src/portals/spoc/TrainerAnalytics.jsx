@@ -97,8 +97,8 @@ const BulkUploadModal = memo(function BulkUploadModal({ show, onClose, onRefresh
     if (!show) return null;
 
     return (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-60 transition-all">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="dashboard-modal-overlay fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm transition-all">
+            <div className="dashboard-modal-panel w-full max-w-xl animate-in overflow-hidden rounded-2xl bg-white shadow-2xl fade-in zoom-in duration-200">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <h3 className="text-lg font-bold text-gray-900 flex items-center">
@@ -899,8 +899,8 @@ useEffect(() => {
 
             {/* Schedule Calendar Modal */}
             {showCalendarModal ? (
-                <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="dashboard-modal-overlay fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm">
+                    <div className="dashboard-modal-panel dashboard-modal-panel--wide flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
                         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                             <h2 className="text-base font-semibold leading-6 text-gray-900 flex items-center">
                                 <CalendarIcon className="h-5 w-5 mr-2 text-indigo-500" />
@@ -988,8 +988,8 @@ useEffect(() => {
 
             {/* Add Activity Modal */}
             {showModal ? (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto transition-opacity">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="dashboard-modal-overlay dashboard-modal-scrollport fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/50 p-4 backdrop-blur-sm transition-opacity">
+                    <div className="dashboard-modal-panel dashboard-modal-panel--wide flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
                         
                         {/* Header */}
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-transparent">

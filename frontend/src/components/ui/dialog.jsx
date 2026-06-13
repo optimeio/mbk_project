@@ -14,7 +14,10 @@ const DialogClose = DialogPrimitive.Close;
 const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/80", className)}
+    className={cn(
+      "dashboard-modal-backdrop fixed inset-0 z-50 bg-black/80",
+      className,
+    )}
     {...props}
   />
 ));
@@ -24,34 +27,47 @@ const DialogContent = React.forwardRef(
   ({ className, children, hideCloseButton = false, ...props }, ref) => (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-6 shadow-xl",
-          className,
-        )}
-        {...props}
-      >
-        {!hideCloseButton ? (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        ) : null}
-        {children}
-      </DialogPrimitive.Content>
+      <div className="dashboard-modal-scrollport fixed inset-0 z-50 overflow-y-auto">
+        <div className="dashboard-modal-center flex min-h-full items-center justify-center p-4 sm:p-6">
+          <DialogPrimitive.Content
+            ref={ref}
+            className={cn(
+              "dashboard-modal-panel relative z-50 grid w-full gap-4 rounded-xl border bg-background p-6 shadow-xl sm:max-w-lg",
+              className,
+            )}
+            {...props}
+          >
+            {!hideCloseButton ? (
+              <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            ) : null}
+            {children}
+          </DialogPrimitive.Content>
+        </div>
+      </div>
     </DialogPortal>
   ),
 );
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }) => (
-  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
+  <div
+    className={cn("flex min-w-0 flex-col space-y-1.5 pr-8 text-left", className)}
+    {...props}
+  />
 );
 DialogHeader.displayName = "DialogHeader";
 
 const DialogFooter = ({ className, ...props }) => (
-  <div className={cn("flex items-center justify-end gap-2", className)} {...props} />
+  <div
+    className={cn(
+      "flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4",
+      className,
+    )}
+    {...props}
+  />
 );
 DialogFooter.displayName = "DialogFooter";
 
@@ -85,4 +101,3 @@ export {
   DialogTitle,
   DialogDescription,
 };
-

@@ -17,8 +17,8 @@ const SchedulerAssignModalSection = ({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-white max-w-md w-full border border-gray-300 shadow-lg">
+    <div className="dashboard-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="dashboard-modal-panel w-full max-w-md border border-gray-300 bg-white shadow-lg">
         <div className="bg-gray-50 p-6 border-b border-gray-200">
           <h2 className="text-xl font-serif text-gray-800">Reschedule / Assign</h2>
           <p className="text-gray-500 text-sm mt-1">Set date and time for this session</p>

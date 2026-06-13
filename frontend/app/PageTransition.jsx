@@ -15,6 +15,8 @@ export default function PageTransition({ children }) {
     pathname.startsWith('/dashboard')
     || pathname.startsWith('/spoc')
     || pathname.startsWith('/trainer')
+    || pathname.startsWith('/student')
+    || pathname.startsWith('/company')
     || pathname.startsWith('/accountant')
     || pathname.startsWith('/chat');
 

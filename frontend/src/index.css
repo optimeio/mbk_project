@@ -3,10 +3,13 @@
 @plugin "tailwindcss-animate";
 @import "./components/common/CTAButton.css";
 @import "./styles/responsive-system.css";
+@import "./styles/modal-containment.css";
 
 html, body, #root {
   height: 100%;
   margin: 0;
+  max-width: 100%;
+  overflow-x: clip;
   scroll-behavior: smooth;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

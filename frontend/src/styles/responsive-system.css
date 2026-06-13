@@ -16,8 +16,9 @@
   --text-lead: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
   --text-title: clamp(1.5rem, 1.25rem + 1.2vw, 2.25rem);
 
-  --motion-fast: 120ms;
-  --motion-base: 180ms;
+  --motion-fast: 80ms;
+  --motion-base: 120ms;
+  --motion-press: 50ms;
   --ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
 
   --focus-ring: 0 0 0 3px color-mix(in oklab, var(--ring, #f97316) 42%, transparent);
@@ -136,19 +137,27 @@ a[data-touch-target],
 .instant-press,
 .cta-btn,
 button:not(.unstyled):not(:disabled),
-[role="button"]:not(.unstyled):not([aria-disabled="true"]) {
+[role="button"]:not(.unstyled):not([aria-disabled="true"]),
+a.ant-btn,
+.ant-btn {
   transition:
     transform var(--motion-fast) var(--ease-snap),
     box-shadow var(--motion-base) var(--ease-snap),
     background-color var(--motion-base) ease,
     opacity var(--motion-fast) ease;
+  will-change: transform;
 }
 
 .instant-press:active:not(:disabled),
 .cta-btn:active:not(.cta-btn--disabled),
+.cta-btn--pressed:not(.cta-btn--disabled),
 button:not(.unstyled):not(:disabled):active,
+input[type="submit"]:not(:disabled):active,
+input[type="button"]:not(:disabled):active,
+input[type="reset"]:not(:disabled):active,
 [role="button"]:not(.unstyled):active {
   transform: scale(0.97);
+  transition-duration: var(--motion-press) !important;
 }
 
 /* ── Forms: mobile-friendly inputs ───────────────────────────────────────── */

@@ -216,8 +216,8 @@ export default function TrainerProfileModal({ isOpen, onClose, trainer }) {
           <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity" />
         </Transition.Child>
 
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+        <div className="dashboard-modal-scrollport fixed inset-0 z-10 overflow-y-auto">
+          <div className="dashboard-modal-center flex min-h-full items-center justify-center p-4 sm:p-6">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -227,7 +227,7 @@ export default function TrainerProfileModal({ isOpen, onClose, trainer }) {
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="relative w-full max-w-2xl transform overflow-hidden rounded-3xl border border-gray-100 bg-white text-left shadow-2xl transition-all">
+              <Dialog.Panel className="dashboard-modal-panel relative w-full max-w-2xl transform rounded-3xl border border-gray-100 bg-white text-left shadow-2xl transition-all">
                 <div className="absolute right-0 top-0 pr-6 pt-6">
                   <button
                     type="button"

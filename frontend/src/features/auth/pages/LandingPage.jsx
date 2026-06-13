@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { safeRouterPush } from '@/utils/safeRouterNavigation';
 import {
     AcademicCapIcon,
     ArrowRightIcon,
@@ -23,10 +24,6 @@ import {
 } from '@heroicons/react/24/outline';
 import HeroSection from '@/features/auth/pages/HeroSection';
 import CTAButton from '@/components/common/CTAButton';
-import { useAuth } from '@/context/AuthContext';
-import { getDashboardRouteByRole } from '@/utils/authRoles';
-import { prefetchPortalRoutes } from '@/utils/portalPrefetch';
-import { warmPortalDataBundle } from '@/utils/portalDataPrefetch';
 import '@/features/auth/pages/LandingPage.css';
 
 const LoginModal = dynamic(() => import('@/features/auth/components/LoginModal'), {
@@ -91,7 +88,7 @@ const localBusinessSchema = {
     telephone: '+918807653965',
     address: {
         '@type': 'PostalAddress',
-        streetAddress: '259-B, III Floor, OM Shiva Towers',
+        streetAddress: 'IInd Floor, OM Shiva Towers, 259-B, Advaitha Ashram Rd, Fairlands',
         addressLocality: 'Salem',
         addressRegion: 'Tamil Nadu',
         postalCode: '636004',
@@ -102,7 +99,6 @@ const localBusinessSchema = {
 
 const LandingPageContent = ({ initialLoginOpen = false }) => {
     const router = useRouter();
-    const { currentUser, loading, setAuthUser, login } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
     const [loginModalOpen, setLoginModalOpen] = useState(Boolean(initialLoginOpen));
     const [navigationLoading, setNavigationLoading] = useState(false);
@@ -119,27 +115,6 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
         }
     }, [initialLoginOpen]);
 
-    useEffect(() => {
-        if (loading || !currentUser) return;
-        const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-        if (!accessToken) {
-            setAuthUser?.(null);
-            return;
-        }
-
-        const targetRoute = getDashboardRouteByRole(currentUser.role, currentUser.email);
-        prefetchPortalRoutes(router, currentUser.role, currentUser.email);
-
-        void (async () => {
-            try {
-                await warmPortalDataBundle();
-            } catch (error) {
-                console.warn('Portal data warmup failed before navigation:', error);
-            }
-            router.replace(targetRoute);
-        })();
-    }, [loading, currentUser, router, setAuthUser]);
-
     const scrollTo = useCallback((targetId) => {
         const section = document.getElementById(targetId);
         if (section) {
@@ -155,7 +130,7 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
         setActiveNavRoute(route);
         
         try {
-            router.push(route);
+            safeRouterPush(router, route);
         } catch (error) {
             console.error(`Navigation error for ${type} Register:`, error);
             setNavigationLoading(false);
@@ -176,7 +151,7 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
     const handleNavSelection = useCallback((item) => {
         if (item.route) {
             setMenuOpen(false);
-            router.push(item.route);
+            safeRouterPush(router, item.route);
             return;
         }
 
@@ -254,8 +229,9 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
 
                     <button
                         type="button"
-                        className="nav-menu-btn"
+                        className={`nav-menu-btn${menuOpen ? ' nav-menu-btn--open' : ''}`}
                         aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                        aria-expanded={menuOpen}
                         onClick={() => setMenuOpen((open) => !open)}
                     >
                         {menuOpen ? <XMarkIcon /> : <Bars3Icon />}
@@ -272,8 +248,9 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
                         />
                         <aside
                             className="mobile-drawer"
+                            role="dialog"
+                            aria-modal="true"
                             aria-label="Mobile navigation"
-                            aria-hidden={false}
                         >
                             <div className="mobile-drawer-header">
                                 <button
@@ -339,7 +316,7 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
                                     fullWidth
                                     onClick={() => {
                                         setMenuOpen(false);
-                                        router.push('/signup');
+                                        safeRouterPush(router, '/signup');
                                     }}
                                 >
                                     Register
@@ -401,11 +378,7 @@ const LandingPageContent = ({ initialLoginOpen = false }) => {
                                 <div className="footer-column-content">
                                     <p className="footer-item">
                                         <MapPinIcon className="footer-item-icon" aria-hidden="true" />
-                                        <span>259-B, III Floor, OM Shiva Towers</span>
-                                    </p>
-                                    <p className="footer-item">
-                                        <MapPinIcon className="footer-item-icon" aria-hidden="true" />
-                                        <span>Salem, Tamil Nadu - 636004, India</span>
+                                        <span>IInd Floor, OM Shiva Towers, 259-B, Advaitha Ashram Rd, Fairlands, Salem, Tamil Nadu - 636004, India</span>
                                     </p>
                                     <p className="footer-item">
                                         <PhoneIcon className="footer-item-icon" aria-hidden="true" />

@@ -24,6 +24,7 @@ const nextConfig = {
   // Image optimization
   images: {
     formats: ['image/avif', 'image/webp'],
+    qualities: [75, 80],
     deviceSizes: [320, 375, 640, 750, 828, 1080, 1200, 1920, 2560],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 31536000, // 1 year
@@ -47,6 +48,26 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
 
   transpilePackages: ['@heroicons/react'],
+
+  experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      '@heroicons/react/24/outline',
+      '@heroicons/react/24/solid',
+      '@heroicons/react/20/solid',
+      'date-fns',
+      'antd',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-tooltip',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-label',
+      '@radix-ui/react-slot',
+    ],
+  },
 
   // Output file tracing root (moved from experimental in Next.js 15+)
   outputFileTracingRoot: path.resolve(__dirname),

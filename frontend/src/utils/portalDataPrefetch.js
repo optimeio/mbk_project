@@ -26,13 +26,29 @@ const clonePortalDataBundle = (bundle) => {
   return { ...clonedCore, resources };
 };
 
+const getStoredAuthToken = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return (
+    localStorage.getItem("authToken")
+    || localStorage.getItem("accessToken")
+    || localStorage.getItem("token")
+  );
+};
+
 const getCurrentSessionUser = () => {
   if (typeof window === "undefined") {
     return null;
   }
 
+  if (!getStoredAuthToken()) {
+    return null;
+  }
+
   try {
-    const rawUser = localStorage.getItem("user");
+    const rawUser = localStorage.getItem("user") || localStorage.getItem("userInfo");
     if (!rawUser) return null;
     return normalizeAuthUser(JSON.parse(rawUser));
   } catch (error) {

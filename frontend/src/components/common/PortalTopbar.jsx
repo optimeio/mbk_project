@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bars3Icon,
@@ -10,8 +11,18 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 
+import useDebouncedNavigate from "@/hooks/useDebouncedNavigate";
 import { useAuth } from "@/context/AuthContext";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import PortalBrandMark from "@/components/common/PortalBrandMark";
+import PortalTopbarErrorBoundary from "@/components/common/PortalTopbarErrorBoundary";
+import PortalUserAvatar from "@/components/common/PortalUserAvatar";
+import useTrainerPortalProfile from "@/hooks/useTrainerPortalProfile";
+import {
+  getPortalUserDisplayName,
+  getPortalUserInitial,
+  isPortalRecord,
+  normalizePortalUser,
+} from "@/utils/portalUserDisplay";
 import {
   complaintsLinksByRole,
   homeLinksByRole,
@@ -59,16 +70,26 @@ const resolveCurrentSection = (pathname, activeRole, isChatActive) => {
   return humanizePathSegment(segments[segments.length - 1] || "Overview");
 };
 
-function PortalTopbar({ onMenuClick }) {
+const IdentityTextSkeleton = ({ className = "" }) => (
+  <span
+    className={`inline-block animate-pulse rounded-md bg-slate-200/80 ${className}`}
+    aria-hidden
+  />
+);
+
+function PortalTopbarInner({ onMenuClick = () => {} }) {
   const router = useRouter();
+  const debouncedNavigate = useDebouncedNavigate();
   const pathname = usePathname() || "";
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
 
+  const safeUser = useMemo(() => normalizePortalUser(currentUser), [currentUser]);
+
   const activeRole = useMemo(
-    () => resolveSidebarRole(currentUser?.role, pathname),
-    [currentUser?.role, pathname],
+    () => resolveSidebarRole(safeUser.role, pathname),
+    [pathname, safeUser.role],
   );
 
   const isChatActive = pathname.startsWith("/chat");
@@ -82,10 +103,30 @@ function PortalTopbar({ onMenuClick }) {
     [activeRole, isChatActive, pathname],
   );
   const isCompactChatTopbar = isChatActive;
+  const isTrainerPortal = pathname.startsWith("/trainer");
 
-  const displayName =
-    currentUser?.name || currentUser?.displayName || currentUser?.email || "Portal User";
-  const userInitial = String(displayName || "U").charAt(0).toUpperCase();
+  const profileQueryEnabled =
+    isTrainerPortal && !authLoading && Boolean(currentUser);
+
+  const {
+    data: trainerProfile,
+    isLoading: isTrainerProfileLoading,
+  } = useTrainerPortalProfile({
+    enabled: profileQueryEnabled,
+  });
+
+  const safeProfile = useMemo(
+    () => (isPortalRecord(trainerProfile) ? trainerProfile : null),
+    [trainerProfile],
+  );
+
+  const isIdentityLoading =
+    authLoading
+    || (profileQueryEnabled && isTrainerProfileLoading && !safeProfile);
+
+  const displayName = getPortalUserDisplayName(safeProfile || safeUser);
+  const avatarInitial = getPortalUserInitial(safeProfile || safeUser);
+  const emailLine = safeUser.email || portalTitle;
   const fallbackRoute = homeLinksByRole[activeRole] || "/dashboard";
   const complaintsRoute = complaintsLinksByRole[activeRole] || "/trainer/complaints";
   const profileRoute = activeRole === "Trainer" ? "/trainer/profile" : fallbackRoute;
@@ -123,7 +164,7 @@ function PortalTopbar({ onMenuClick }) {
       if (chatBackHandled) {
         return;
       }
-      router.push(fallbackRoute);
+      debouncedNavigate(fallbackRoute);
       return;
     }
 
@@ -132,22 +173,20 @@ function PortalTopbar({ onMenuClick }) {
       return;
     }
 
-    router.push(fallbackRoute);
-  }, [fallbackRoute, isChatActive, router]);
+    debouncedNavigate(fallbackRoute);
+  }, [debouncedNavigate, fallbackRoute, isChatActive, router]);
 
-  const handleProfileClick = useCallback(() => {
+  const closeAccountMenu = useCallback(() => {
     setIsAccountMenuOpen(false);
-    router.push(profileRoute);
-  }, [profileRoute, router]);
-
-  const handleComplaintsClick = useCallback(() => {
-    setIsAccountMenuOpen(false);
-    router.push(complaintsRoute);
-  }, [complaintsRoute, router]);
+  }, []);
 
   return (
-    <header className="relative z-40 shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
-      <div className={`flex items-center gap-4 px-4 md:px-6 ${isCompactChatTopbar ? "h-16 justify-end" : "h-20 justify-between"}`}>
+    <header className="relative z-40 shrink-0 overflow-hidden border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+      <div
+        className={`flex min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 ${
+          isCompactChatTopbar ? "h-16 justify-end" : "h-[4.5rem] justify-between sm:h-20"
+        }`}
+      >
         {!isCompactChatTopbar ? (
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -182,15 +221,26 @@ function PortalTopbar({ onMenuClick }) {
           </div>
         ) : null}
 
-        <div className="flex items-center gap-3">
-          <div className={isCompactChatTopbar ? "hidden" : "hidden min-w-0 text-right md:block"}>
-            <p className="truncate text-sm font-semibold text-slate-900">
-              {displayName}
-            </p>
-            <p className="truncate text-xs text-slate-500">
-              {currentUser?.email || portalTitle}
-            </p>
-          </div>
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2.5">
+          {!isCompactChatTopbar ? (
+            <div className="hidden min-w-0 max-w-[34vw] text-right md:block lg:max-w-xs">
+              {isIdentityLoading ? (
+                <>
+                  <IdentityTextSkeleton className="ml-auto h-4 w-28" />
+                  <IdentityTextSkeleton className="ml-auto mt-1 h-3 w-36" />
+                </>
+              ) : (
+                <>
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {displayName}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {emailLine}
+                  </p>
+                </>
+              )}
+            </div>
+          ) : null}
 
           {!isCompactChatTopbar ? (
             <NotificationBell
@@ -199,43 +249,53 @@ function PortalTopbar({ onMenuClick }) {
             />
           ) : null}
 
-          <div ref={accountMenuRef} className="relative">
+          {isTrainerPortal ? (
+            <PortalBrandMark
+              href="/trainer/dashboard"
+              compact={isCompactChatTopbar}
+            />
+          ) : null}
+
+          <div ref={accountMenuRef} className="relative shrink-0">
             <button
               type="button"
               onClick={() => setIsAccountMenuOpen((previousOpen) => !previousOpen)}
-              aria-label="Open account menu"
+              aria-label={`Open account menu for ${displayName}`}
               className="rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1d5f87]/30"
             >
-              <Avatar className="h-11 w-11 rounded-2xl border border-[#d6e5f0] bg-[#f4f9fc] shadow-sm">
-                <AvatarFallback className="rounded-2xl bg-[#f4f9fc] text-sm font-semibold text-[#1d5f87]">
-                  {userInitial}
-                </AvatarFallback>
-              </Avatar>
+              <PortalUserAvatar
+                user={safeUser}
+                profile={isTrainerPortal ? safeProfile : null}
+                initial={avatarInitial}
+                isLoading={isIdentityLoading}
+              />
             </button>
 
             {isAccountMenuOpen ? (
               <div className="absolute right-0 top-full z-[70] mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
                 <div className="p-2">
-                  <button
-                    type="button"
-                    onClick={handleProfileClick}
+                  <Link
+                    href={profileRoute}
+                    prefetch
+                    onClick={closeAccountMenu}
                     className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
                     <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
                       <UserCircleIcon className="h-4 w-4 text-slate-500" />
                     </span>
                     Profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleComplaintsClick}
+                  </Link>
+                  <Link
+                    href={complaintsRoute}
+                    prefetch
+                    onClick={closeAccountMenu}
                     className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
                     <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
                       <ChatBubbleLeftRightIcon className="h-4 w-4 text-slate-500" />
                     </span>
                     Complaints
-                  </button>
+                  </Link>
                 </div>
               </div>
             ) : null}
@@ -245,4 +305,13 @@ function PortalTopbar({ onMenuClick }) {
     </header>
   );
 }
+
+function PortalTopbar(props) {
+  return (
+    <PortalTopbarErrorBoundary>
+      <PortalTopbarInner {...props} />
+    </PortalTopbarErrorBoundary>
+  );
+}
+
 export default memo(PortalTopbar);

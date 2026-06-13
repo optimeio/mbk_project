@@ -1,16 +1,31 @@
 "use client";
 
 import PortalViewport from "@/components/common/PortalViewport";
+import ProtectedRoute from "@/components/common/ProtectedRoute";
 
 export default function ChatRouteLayout({ children }) {
   return (
-    <PortalViewport
-      compact
-      showTopbar={false}
-      contentWrapperClassName="overflow-hidden"
-      contentInnerClassName="h-full p-0 md:p-0"
+    <ProtectedRoute
+      allowedRoles={[
+        "superadmin",
+        "admin",
+        "spocadmin",
+        "collegeadmin",
+        "trainer",
+        "accountant",
+        "student",
+        "company",
+        "companyadmin",
+      ]}
     >
-      {children}
-    </PortalViewport>
+      <PortalViewport
+        compact
+        showTopbar={false}
+        contentWrapperClassName="overflow-hidden"
+        contentInnerClassName="h-full p-0 md:p-0"
+      >
+        {children}
+      </PortalViewport>
+    </ProtectedRoute>
   );
 }

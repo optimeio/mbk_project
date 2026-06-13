@@ -406,7 +406,11 @@ const SuperAdminCollegeDetails = () => {
                 <HierarchyBreadcrumb items={hierarchyItems} />
 
                 {/* College Info */}
-                <CollegeInfoCards college={college} department={selectedDepartment} />
+                <CollegeInfoCards
+                    college={college}
+                    department={selectedDepartment}
+                    onCollegeUpdated={() => detailsQuery.refetch()}
+                />
 
                 {/* Training Progress */}
                 <TrainingProgress days={days} />

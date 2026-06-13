@@ -865,10 +865,10 @@ const AttendanceVerification = () => {
             </div>
 
             {showDetailModal && selectedSubmission && (
-                <div className="fixed inset-0 z-50 overflow-y-auto">
-                    <div className="relative flex min-h-screen items-end justify-center px-4 pb-20 pt-4 text-center sm:block sm:p-0">
+                <div className="dashboard-modal-scrollport fixed inset-0 z-50 overflow-y-auto">
+                    <div className="dashboard-modal-center relative flex min-h-screen items-center justify-center px-4 py-6 text-center sm:p-6">
                         <div className="fixed inset-0 z-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => !verifying && closeDetailModal()}></div>
-                        <div className="relative z-10 inline-block transform overflow-hidden rounded-2xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-3xl sm:align-middle">
+                        <div className="dashboard-modal-panel relative z-10 inline-block w-full max-w-3xl transform rounded-2xl bg-white text-left shadow-2xl transition-all sm:align-middle">
                             <ErrorBoundary>
                                 <div className="flex items-center justify-between bg-indigo-600 px-6 py-4">
                                     <h3 className="text-lg font-bold text-white">Attendance Verification</h3>

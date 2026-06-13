@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 import PortalLoadingState from "@/components/common/PortalLoadingState";
-import ProtectedRoute from "@/components/common/ProtectedRoute";
 
 const CompanyDashboard = dynamic(() => import("@/portals/company/CompanyDashboard"), {
   loading: () => (
@@ -12,9 +11,5 @@ const CompanyDashboard = dynamic(() => import("@/portals/company/CompanyDashboar
 });
 
 export default function CompanyDashboardPage() {
-  return (
-    <ProtectedRoute allowedRoles={["company", "companyadmin"]}>
-      <CompanyDashboard />
-    </ProtectedRoute>
-  );
+  return <CompanyDashboard />;
 }

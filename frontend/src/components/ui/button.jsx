@@ -37,7 +37,7 @@ const Button = React.forwardRef(({ className, variant = "default", size = "defau
       variant={VARIANT_MAP[variant] || "primary"}
       size={SIZE_MAP[size] || "md"}
       className={["instant-press", className].filter(Boolean).join(" ")}
-      debounceMs={100}
+      debounceMs={0}
       {...props}
     />
   )

@@ -6,11 +6,12 @@ import mbkLogo from "@/assets/mbk_tech_cyan.png";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { API_BASE_URL } from "@/services/api";
 import authService, { setAuthCookie } from "@/services/authService";
 import { isFirebaseConfigured } from "@/services/firebase";
 
-import { User, Lock } from "lucide-react";
+import { User, Lock, Eye, EyeOff } from "lucide-react";
 import MSG91OTP from "@/features/auth/components/MSG91OTP";
 import CTAButton from "@/components/common/CTAButton";
 import OptimizedImage from "@/components/common/OptimizedImage";
@@ -20,21 +21,25 @@ import {
   normalizeAuthUser,
   getDashboardRouteByRole,
   roleToLoginType,
+  isKnownPortalRole,
 } from "@/utils/authRoles";
 import { prefetchPortalRoutes } from "@/utils/portalPrefetch";
 import { warmPortalDataBundle } from "@/utils/portalDataPrefetch";
 import notify from "@/lib/toast";
+import { validateLoginForm, hasLoginCredentials } from "@/utils/authValidation";
 import "@/features/auth/components/login.css";
 
 const Login = ({ specificRole, inModal = false, onSuccess }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [queryLoginType, setQueryLoginType] = useState("");
   const [queryRedirect, setQueryRedirect] = useState("");
   const { login, setAuthUser, currentUser, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { safeReplace, isRouterReady } = useSafeRouter();
 
   const resolvePostLoginRoute = (role, userEmail) => {
     if (
@@ -59,25 +64,43 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
     } catch (error) {
       console.warn("Portal data warmup failed before navigation:", error);
     }
-    router.replace(route);
+    safeReplace(route);
   };
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!isRouterReady || typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    setQueryLoginType(params.get("type") || "");
-    setQueryRedirect(params.get("redirect") || "");
-  }, []);
+    const type = params.get("type") || "";
+    const redirect = params.get("redirect") || "";
+
+    if (type === "admin") {
+      const companyAuthQuery = new URLSearchParams();
+      if (redirect) companyAuthQuery.set("redirect", redirect);
+      const reason = params.get("reason");
+      if (reason) companyAuthQuery.set("reason", reason);
+      const suffix = companyAuthQuery.toString();
+      safeReplace(suffix ? `/company/auth?${suffix}` : "/company/auth");
+      return;
+    }
+
+    setQueryLoginType(type);
+    setQueryRedirect(redirect);
+  }, [isRouterReady, safeReplace]);
 
   useEffect(() => {
-    if (authLoading || loading || !currentUser || !isAuthenticated) return;
-    if (!authService.getToken()) return;
+    if (!isRouterReady || authLoading || loading || !currentUser || !isAuthenticated) return;
+    if (!authService.getValidToken()) return;
+    if (!isKnownPortalRole(currentUser.role, currentUser.email)) return;
+
+    const targetRoute = resolvePostLoginRoute(currentUser.role, currentUser.email);
+    if (targetRoute.startsWith("/login")) return;
+
     void navigateAfterLogin(
-      resolvePostLoginRoute(currentUser.role, currentUser.email),
+      targetRoute,
       currentUser.role,
       currentUser.email,
     );
-  }, [authLoading, loading, currentUser, isAuthenticated, queryRedirect, router]);
+  }, [authLoading, isRouterReady, loading, currentUser, isAuthenticated, queryRedirect, router]);
 
   // Determine login type
   let loginType = ""; // Unified/common default
@@ -92,6 +115,19 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
   } else if (queryLoginType === "student") {
     loginType = "student";
   } else if (queryLoginType === "company") {
+    loginType = "company";
+  } else if (
+    queryRedirect.startsWith("/dashboard") ||
+    queryRedirect.startsWith("/accountant")
+  ) {
+    loginType = roleToLoginType(AUTH_ROLES.SUPER_ADMIN);
+  } else if (queryRedirect.startsWith("/spoc")) {
+    loginType = roleToLoginType(AUTH_ROLES.SPOC);
+  } else if (queryRedirect.startsWith("/trainer")) {
+    loginType = roleToLoginType(AUTH_ROLES.TRAINER);
+  } else if (queryRedirect.startsWith("/student")) {
+    loginType = "student";
+  } else if (queryRedirect.startsWith("/company")) {
     loginType = "company";
   }
   const showGoogleSignIn =
@@ -297,8 +333,17 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
     e.currentTarget.style.transform = "translateY(0)";
   };
 
+  const canSubmitLogin = hasLoginCredentials({ email, password });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateLoginForm({ email, password });
+    if (validationError) {
+      setError(validationError);
+      notify.error(validationError);
+      return;
+    }
+
     try {
       setError("");
       setLoading(true);
@@ -321,7 +366,13 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
       );
       onSuccess?.();
     } catch (err) {
-      console.error("Login Error:", err);
+      const isExpectedAuthState =
+        err.pendingApproval || err.requiresEmailVerification || err.roleMismatch;
+      if (isExpectedAuthState) {
+        console.debug("[AUTH] login blocked:", err.message);
+      } else {
+        console.error("Login Error:", err);
+      }
       const message = err.pendingApproval
         ? err.message || "Your account is pending admin approval."
         : err.requiresEmailVerification
@@ -393,13 +444,6 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                 LOGIN
               </>
             )}
-            {loginType === "admin" && (
-              <>
-                SUPER ADMIN
-                <br />
-                CONSOLE
-              </>
-            )}
             {loginType === "student" && (
               <>
                 STUDENT
@@ -414,7 +458,7 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                 LOGIN
               </>
             )}
-            {!["trainer", "spoc", "admin", "student", "company"].includes(
+            {!["trainer", "spoc", "student", "company"].includes(
               loginType,
             ) && (
               <>
@@ -450,7 +494,7 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} autoComplete="off">
+          <form onSubmit={handleSubmit} autoComplete="off" noValidate>
             <input
               type="text"
               name="fake_username"
@@ -483,8 +527,9 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                   style={styles.input}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
-                  placeholder="Enter your email"
+                  placeholder="Enter your email *"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -494,17 +539,53 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
               <div style={{ position: "relative" }}>
                 <Lock style={{ ...styles.icon, top: "0.2rem" }} />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   name="login_password"
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  style={styles.input}
+                  style={{ ...styles.input, paddingRight: "2.75rem" }}
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
-                  placeholder="Enter your password"
+                  placeholder="Enter your password *"
                   required
+                  disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setShowPassword((prev) => !prev);
+                  }}
+                  onMouseDown={(event) => event.preventDefault()}
+                  disabled={loading}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  style={{
+                    position: "absolute",
+                    right: "4px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    padding: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: "36px",
+                    minHeight: "36px",
+                    color: inModal ? "#95c9f1" : "rgba(120, 60, 10, 0.55)",
+                    touchAction: "manipulation",
+                  }}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Eye size={18} aria-hidden="true" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -517,7 +598,8 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                 size="lg"
                 fullWidth
                 loading={loading}
-                disabled={loading}
+                disabled={loading || !canSubmitLogin}
+                loadingText="Signing in..."
               >
                 LOGIN
               </CTAButton>
@@ -540,7 +622,7 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                     fullWidth
                     className="w-full bg-white text-gray-700 font-semibold py-2 px-4 rounded-md shadow hover:shadow-md transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ transition: "all 0.3s ease" }}
-                    icon={
+                    iconLeft={
                       <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path
                           fill="#4285F4"

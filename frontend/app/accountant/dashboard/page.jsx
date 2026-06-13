@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 import PortalLoadingState from "@/components/common/PortalLoadingState";
-import ProtectedRoute from "@/components/common/ProtectedRoute";
 
 const AccountantDashboard = dynamic(
   () => import("@/portals/accountant/AccountantDashboard"),
@@ -18,9 +17,5 @@ const AccountantDashboard = dynamic(
 );
 
 export default function AccountantDashboardPage() {
-  return (
-    <ProtectedRoute allowedRoles={["accountant", "superadmin"]}>
-      <AccountantDashboard />
-    </ProtectedRoute>
-  );
+  return <AccountantDashboard />;
 }

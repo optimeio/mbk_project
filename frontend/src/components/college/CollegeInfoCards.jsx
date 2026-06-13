@@ -3,7 +3,7 @@
 import { BuildingOfficeIcon, MapPinIcon, UserIcon, PhoneIcon, DocumentArrowDownIcon, TrashIcon, ArrowUpTrayIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { api, FILE_BASE_URL } from '@/services/api';
 
-const CollegeInfoCards = ({ college, department }) => {
+const CollegeInfoCards = ({ college, department, onCollegeUpdated }) => {
     if (!college) return null;
     const collegeId = college._id || college.id;
 
@@ -140,7 +140,7 @@ const CollegeInfoCards = ({ college, department }) => {
                                         const res = await api.delete(`/students/clean/${collegeId}`);
                                         if (res.success) {
                                             alert(res.message);
-                                            window.location.reload();
+                                            onCollegeUpdated?.();
                                         } else {
                                             alert('Failed: ' + res.message);
                                         }
@@ -180,7 +180,7 @@ const CollegeInfoCards = ({ college, department }) => {
                                         const res = await api.post('/students/upload', formData);
                                         if (res.success) {
                                             alert(res.message);
-                                            window.location.reload(); 
+                                            onCollegeUpdated?.();
                                         } else {
                                             alert('Upload failed: ' + res.message);
                                         }

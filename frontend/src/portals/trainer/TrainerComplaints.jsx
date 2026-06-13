@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Form, Input, Select, Button, Upload, Switch, Radio } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-import { ArrowRightOnRectangleIcon, UserCircleIcon } from '@heroicons/react/24/outline';
-import { useRouter } from 'next/navigation';
 
 import { api } from '@/services/api';
-import { useAuth } from '@/context/AuthContext';
 import useMutationWithToast from '@/hooks/useMutationWithToast';
 import getErrorMessage from '@/lib/getErrorMessage';
 
@@ -18,11 +15,6 @@ const TrainerComplaints = () => {
     const [form] = Form.useForm();
     const [fileList, setFileList] = useState([]);
     const [isAnonymous, setIsAnonymous] = useState(false);
-    const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-    const accountMenuRef = useRef(null);
-    const router = useRouter();
-    const { currentUser, logout } = useAuth();
-    const user = currentUser || {};
 
     const submitComplaintMutation = useMutationWithToast({
         mutationFn: async (values) => {
@@ -50,17 +42,6 @@ const TrainerComplaints = () => {
         },
     });
 
-    useEffect(() => {
-        const handleOutsideClick = (event) => {
-            if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) {
-                setIsAccountMenuOpen(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleOutsideClick);
-        return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, []);
-
     const onFinish = async (values) => {
         try {
             await submitComplaintMutation.mutateWithToast(values);
@@ -76,66 +57,11 @@ const TrainerComplaints = () => {
         setFileList(newFileList);
     };
 
-    const handleProfileClick = () => {
-        setIsAccountMenuOpen(false);
-        router.push('/trainer/profile');
-    };
-
-    const handleLogout = async () => {
-        setIsAccountMenuOpen(false);
-        try {
-            await logout();
-            router.push('/');
-        } catch (error) {
-            console.error('Failed to log out', error);
-        }
-    };
-
     return (
-        <div className="min-h-screen bg-gray-50 px-2 py-4 sm:px-4">
-            <div className="mb-6 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Complaints & Feedback</h1>
-                    <p className="text-sm text-gray-500 mt-1">Submit issues or suggestions directly.</p>
-                </div>
-
-                <div ref={accountMenuRef} className="relative shrink-0">
-                    <button
-                        type="button"
-                        onClick={() => setIsAccountMenuOpen((prev) => !prev)}
-                        className="flex h-11 w-11 items-center justify-center rounded-full bg-[#153E53] text-sm font-bold text-white shadow-sm ring-1 ring-[#113142]/20 transition hover:bg-[#1b4c64]"
-                        aria-label="Open account menu"
-                    >
-                        {(user?.name || user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
-                    </button>
-
-                    {isAccountMenuOpen && (
-                        <div className="absolute right-0 top-full z-30 mt-2 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
-                            <div className="p-2">
-                                <button
-                                    type="button"
-                                    onClick={handleProfileClick}
-                                    className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                                >
-                                    <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
-                                        <UserCircleIcon className="h-4 w-4 text-slate-500" />
-                                    </span>
-                                    Profile
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleLogout}
-                                    className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
-                                >
-                                    <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-rose-50">
-                                        <ArrowRightOnRectangleIcon className="h-4 w-4 text-rose-500" />
-                                    </span>
-                                    Logout
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
+        <div className="mx-auto max-w-5xl">
+            <div className="mb-6 min-w-0">
+                <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Complaints & Feedback</h1>
+                <p className="mt-1 text-sm text-gray-500">Submit issues or suggestions directly.</p>
             </div>
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

@@ -6,6 +6,7 @@ import {
   LOCAL_API_PORT_FALLBACKS,
   resetDiscoveredApiOrigin,
 } from "@/config/apiConfig";
+import { isValidAuthToken } from "@/utils/authJwt";
 
 const cleanBaseUrl = getApiOrigin();
 const hasExplicitOrigin = Boolean(
@@ -75,6 +76,13 @@ const getLocalhostPortFallbackUrls = (requestUrl) => {
 };
 
 const GET_CACHE_BUSTER_PARAMS = new Set(["t"]);
+const API_RESPONSE_CACHE_TTL_MS = Number(
+  process.env.NEXT_PUBLIC_API_CACHE_TTL_MS || 5 * 60 * 1000,
+);
+const API_RESPONSE_CACHE_MAX_ENTRIES = Number(
+  process.env.NEXT_PUBLIC_API_CACHE_MAX_ENTRIES || 200,
+);
+/** @type {Map<string, { data: unknown, expiresAt: number }>} */
 const apiResponseCache = new Map();
 const apiInFlightRequests = new Map();
 const latestRequestStartByCacheKey = new Map();
@@ -245,10 +253,59 @@ const normalizeApiCacheKey = (endpoint = "") => {
 
 export const getApiCacheKey = (endpoint) => normalizeApiCacheKey(endpoint);
 
+const evictExpiredApiCacheEntries = () => {
+  const now = Date.now();
+  for (const [key, entry] of apiResponseCache.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      apiResponseCache.delete(key);
+    }
+  }
+};
+
+const trimApiResponseCache = () => {
+  evictExpiredApiCacheEntries();
+  while (apiResponseCache.size > API_RESPONSE_CACHE_MAX_ENTRIES) {
+    const oldestKey = apiResponseCache.keys().next().value;
+    if (!oldestKey) break;
+    apiResponseCache.delete(oldestKey);
+  }
+};
+
+const readCachedApiResponse = (cacheKey) => {
+  if (!cacheKey || !apiResponseCache.has(cacheKey)) {
+    return undefined;
+  }
+  const entry = apiResponseCache.get(cacheKey);
+  if (!entry || entry.expiresAt <= Date.now()) {
+    apiResponseCache.delete(cacheKey);
+    return undefined;
+  }
+  return cloneApiValue(entry.data);
+};
+
+const writeCachedApiResponse = (cacheKey, data) => {
+  if (!cacheKey) return;
+  trimApiResponseCache();
+  apiResponseCache.set(cacheKey, {
+    data: cloneApiValue(data),
+    expiresAt: Date.now() + API_RESPONSE_CACHE_TTL_MS,
+  });
+};
+
 export const primeApiCache = (endpoint, data) => {
   const cacheKey = normalizeApiCacheKey(endpoint);
   if (!cacheKey) return;
-  apiResponseCache.set(cacheKey, cloneApiValue(data));
+  writeCachedApiResponse(cacheKey, data);
+};
+
+/**
+ * Read a primed/cached response without making a request. Used as React Query
+ * placeholderData so dashboards paint instantly from the portal bundle while
+ * fresh data loads in the background.
+ */
+export const readApiCache = (endpoint) => {
+  const cacheKey = normalizeApiCacheKey(endpoint);
+  return readCachedApiResponse(cacheKey);
 };
 
 export const clearApiCache = (matcher) => {
@@ -278,6 +335,24 @@ export const clearApiCache = (matcher) => {
   });
 };
 
+const getStoredAccessToken = () => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const token =
+    localStorage.getItem("accessToken") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("token") ||
+    "";
+
+  if (!token || !isValidAuthToken(token)) {
+    return "";
+  }
+
+  return token;
+};
+
 /**
  * Chat System API Instance (Axios)
  * Used by the new chat system components
@@ -288,7 +363,7 @@ export const API = axios.create({
 
 API.interceptors.request.use((config) => {
   // Maintaining consistency with existing localStorage key "accessToken"
-  const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+  const token = getStoredAccessToken();
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -327,7 +402,7 @@ API.interceptors.response.use(
  * Get authentication headers with JWT token
  */
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("accessToken");
+  const token = getStoredAccessToken();
   return {
     ...(token && { Authorization: `Bearer ${token}` }),
   };
@@ -366,6 +441,13 @@ const handleResponse = async (response) => {
   return data;
 };
 
+const dispatchUnauthorized = (reason = "session_expired") => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("unauthorized", { detail: { reason } }),
+  );
+};
+
 /**
  * Refresh Access Token
  */
@@ -388,33 +470,35 @@ const refreshAccessToken = async () => {
     if (!accessToken) throw new Error("Refresh failed");
 
     localStorage.setItem("accessToken", accessToken);
+    localStorage.setItem("authToken", accessToken);
     if (refreshToken) {
       localStorage.setItem("refreshToken", refreshToken);
+    }
+    if (typeof document !== "undefined") {
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax${secure}`;
     }
     return accessToken;
   } catch (error) {
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("accessToken");
+        localStorage.removeItem("authToken");
         localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
+        localStorage.removeItem("userInfo");
+        localStorage.removeItem("userRole");
+        document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "accessToken=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "mbk_token=; path=/; max-age=0; SameSite=Lax";
         document.cookie = "portal_session=; Path=/; Max-Age=0; SameSite=Lax";
         document.cookie = "portal_role=; Path=/; Max-Age=0; SameSite=Lax";
       } catch (cleanupError) {
         console.warn("Failed to clear local auth state:", cleanupError);
       }
 
-      const pathname = window.location.pathname || "/";
-      const search = window.location.search || "";
-      const isAuthRoute =
-        pathname === "/login" ||
-        pathname === "/signup" ||
-        pathname === "/trainer-signup" ||
-        pathname === "/forgot-password";
-
-      if (!isAuthRoute) {
-        window.location.replace("/?login=true");
-      }
+      dispatchUnauthorized("session_expired");
     }
 
     throw error;
@@ -443,8 +527,11 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     ? `${method}:${normalizeApiCacheKey(endpoint)}:${String(options.dedupeKey || "")}`
     : "";
 
-  if (useCache && apiResponseCache.has(cacheKey)) {
-    return cloneApiValue(apiResponseCache.get(cacheKey));
+  if (useCache) {
+    const cachedResponse = readCachedApiResponse(cacheKey);
+    if (cachedResponse !== undefined) {
+      return cachedResponse;
+    }
   }
 
   if (shouldDedupeInFlight && apiInFlightRequests.has(dedupeKey)) {
@@ -463,8 +550,24 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     { path: "/api/trainers/nda-template", methods: ["GET"] },
     { path: "/api/trainer-documents/upload", methods: ["POST"] },
   ];
+  const publicAuthEndpoints = [
+    "/auth/login",
+    "/auth/signup",
+    "/auth/register",
+    "/auth/forgot-password",
+    "/auth/verify-reset-otp",
+    "/auth/reset-password",
+    "/auth/verify-email",
+    "/auth/otp",
+    "/auth/refresh",
+  ];
+  const normalizedEndpoint = String(endpoint || "").toLowerCase().split("?")[0];
+  const isPublicAuthEndpoint = publicAuthEndpoints.some((path) =>
+    normalizedEndpoint.includes(path),
+  );
   const skipAuthHeaders =
     options.skipAuth ||
+    isPublicAuthEndpoint ||
     publicTrainerEndpoints.some(
       (rule) =>
         url.includes(rule.path) &&
@@ -617,10 +720,11 @@ const fetchWithAuth = async (endpoint, options = {}) => {
       }
     }
 
+    // Never refresh/retry on rate limits; never attach refresh logic to public auth calls.
     if (response.status === 401 && !skipAuthHeaders) {
-      const newToken = await refreshAccessToken();
-      config.headers["Authorization"] = `Bearer ${newToken}`;
       try {
+        const newToken = await refreshAccessToken();
+        config.headers["Authorization"] = `Bearer ${newToken}`;
         response = await fetch(url, config);
       } catch (refreshRetryError) {
         if (isAbortedFetchError(refreshRetryError, config.signal)) {
@@ -628,6 +732,10 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         }
         throw refreshRetryError;
       }
+    }
+
+    if (response.status === 401 && !skipAuthHeaders) {
+      dispatchUnauthorized("session_expired");
     }
 
     const result = await handleResponse(response);
@@ -644,7 +752,7 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         latestRequestStartByCacheKey.get(cacheKey) || 0,
       );
       if (startedAt >= latestRequestStartedAt) {
-        apiResponseCache.set(cacheKey, cloneApiValue(result));
+        writeCachedApiResponse(cacheKey, result);
       }
     }
 

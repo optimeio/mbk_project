@@ -19,6 +19,7 @@ import { api } from '@/services/api';
 import { getNdaTemplate, updateNdaTemplate } from '@/services/trainerService';
 import { getProfilePictureUrl } from '@/utils/imageUtils';
 import { getDocumentStatusMeta } from '@/utils/trainerDocumentWorkflow';
+import { QUERY_STALE_TIMES, withQueryPolicy } from '@/shared/config/queryPolicies';
 
 const EMPTY_TEMPLATE_FORM = {
     title: '',
@@ -76,9 +77,13 @@ const NdaManagement = ({ compact = false }) => {
         queryKey: ['nda-records'],
         enabled: showAgreementRecords,
         queryFn: async () => {
-            const response = await api.get(`/trainers/nda-records?t=${Date.now()}`);
+            const response = await api.get('/trainers/nda-records');
             return response?.data || response || [];
         },
+        ...withQueryPolicy({
+            staleTime: QUERY_STALE_TIMES.MASTER_DATA,
+            refetchOnWindowFocus: false,
+        }),
     });
 
     const {
@@ -90,6 +95,10 @@ const NdaManagement = ({ compact = false }) => {
             const response = await getNdaTemplate();
             return response?.data || response || EMPTY_TEMPLATE_FORM;
         },
+        ...withQueryPolicy({
+            staleTime: QUERY_STALE_TIMES.MASTER_DATA,
+            refetchOnWindowFocus: false,
+        }),
     });
 
     const uploadNdaMutation = useMutation({

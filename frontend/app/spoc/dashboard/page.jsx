@@ -1,11 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 
 import PortalLoadingState from "@/components/common/PortalLoadingState";
-import ProtectedRoute from "@/components/common/ProtectedRoute";
-
-import { Suspense } from "react";
 
 const SpocDashboard = dynamic(() => import("@/portals/spoc/SpocDashboard"), {
   loading: () => (
@@ -27,9 +25,7 @@ export default function SpocDashboardPage() {
         />
       }
     >
-      <ProtectedRoute allowedRoles={["spocadmin", "collegeadmin", "superadmin"]}>
-        <SpocDashboard />
-      </ProtectedRoute>
+      <SpocDashboard />
     </Suspense>
   );
 }

@@ -128,6 +128,3 @@ export const signInWithGoogle = async () => {
   }
 };
 
-if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
-  logFirebaseConfigDiagnostics();
-}

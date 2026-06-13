@@ -19,6 +19,7 @@ export default function MobileLayout({
   bootstrap,
   tabItems = [],
   workflowHint = '',
+  channelListVersion = 0,
 }) {
   const openBroadcastChannel = () => {
     setModal('broadcast');
@@ -61,7 +62,8 @@ export default function MobileLayout({
       {!activeChannel ? (
         <div style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <Sidebar 
+            <Sidebar
+              key={`chat-sidebar-${channelListVersion}`}
               activeNav={activeNav}
               setActiveNav={setActiveNav}
               tabItems={tabItems}

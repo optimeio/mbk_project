@@ -12,6 +12,7 @@ import { MapPinIcon } from "@heroicons/react/24/outline";
 
 import useDebouncedValue from "@/hooks/useDebouncedValue";
 import {
+  GEO_VERIFICATION_QUERY_KEY,
   getGeoVerificationSubmissionsQueryOptions,
   useGeoVerificationSubmissions,
 } from "@/modules/attendance";
@@ -69,6 +70,11 @@ const GeoTagVerification = () => {
     () => submissions.slice(0, visibleCardCount),
     [submissions, visibleCardCount],
   );
+  const handleGeoActionComplete = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: GEO_VERIFICATION_QUERY_KEY,
+    });
+  }, [queryClient]);
   const hiddenLoadedCount = Math.max(0, submissions.length - visibleSubmissions.length);
 
   useEffect(() => {
@@ -255,6 +261,7 @@ const GeoTagVerification = () => {
                   accessToken={accessToken}
                   onSelectImage={setSelectedImage}
                   onDownload={handleDownload}
+                  onActionComplete={handleGeoActionComplete}
                 />
               ))}
             </div>
@@ -298,7 +305,7 @@ const GeoTagVerification = () => {
       >
         <DialogContent
           hideCloseButton
-          className="max-w-6xl border-none bg-transparent p-0 shadow-none"
+          className="dashboard-modal-panel--wide max-h-[min(90dvh,calc(100dvh-2rem))] max-w-6xl overflow-y-auto border-none bg-transparent p-0 shadow-none"
         >
           <DialogTitle className="sr-only">Geo evidence preview</DialogTitle>
           {selectedImage ? (

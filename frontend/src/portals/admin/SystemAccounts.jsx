@@ -57,7 +57,7 @@ const SystemAccounts = ({ embedded = false }) => {
         queryKey: SYSTEM_USERS_QUERY_KEY,
         queryFn: fetchSystemUsers,
         staleTime: 30_000,
-        refetchInterval: embedded ? false : (isDocumentVisible ? 30_000 : false),
+        refetchInterval: embedded ? false : (isDocumentVisible ? 120_000 : false),
         refetchIntervalInBackground: false,
         refetchOnWindowFocus: false,
     });

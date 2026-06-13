@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 import PortalLoadingState from "@/components/common/PortalLoadingState";
-import ProtectedRoute from "@/components/common/ProtectedRoute";
 
 const DashboardPage = dynamic(() => import("@/portals/admin/DashboardPage"), {
   loading: () => (
@@ -15,9 +14,5 @@ const DashboardPage = dynamic(() => import("@/portals/admin/DashboardPage"), {
 });
 
 export default function AdminDashboardPage() {
-  return (
-    <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
-      <DashboardPage />
-    </ProtectedRoute>
-  );
+  return <DashboardPage />;
 }

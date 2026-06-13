@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/context/AuthContext";
+import useDebouncedNavigate from "@/hooks/useDebouncedNavigate";
 import SidebarFooter from "@/components/common/sidebar/SidebarFooter";
 import SidebarHeader from "@/components/common/sidebar/SidebarHeader";
 import SidebarNav from "@/components/common/sidebar/SidebarNav";
@@ -16,6 +17,8 @@ import {
   resolveSidebarRole,
 } from "@/components/common/sidebar/sidebarConfig";
 import { prefetchPortalRoutes } from "@/utils/portalPrefetch";
+import useTrainerPortalProfile from "@/hooks/useTrainerPortalProfile";
+import { getPortalUserInitial, isPortalRecord } from "@/utils/portalUserDisplay";
 
 function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
   const touchStartX = useRef(0);
@@ -37,10 +40,10 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
 
   const pathname = usePathname() || "";
   const router = useRouter();
-  const { currentUser, logout } = useAuth();
+  const debouncedNavigate = useDebouncedNavigate();
+  const { currentUser, logout, loading: authLoading } = useAuth();
   const [chatTab, setChatTab] = useState("chats");
   const [hasHydrated, setHasHydrated] = useState(false);
-  const prefetchedKeyRef = useRef("");
 
   const user = currentUser || {};
   const isChatActive = pathname.startsWith("/chat");
@@ -53,6 +56,11 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
     () => resolveSidebarRole(user.role, pathname),
     [pathname, user.role],
   );
+  const isTrainerPortal = activeRole === "Trainer";
+
+  const { data: trainerProfile } = useTrainerPortalProfile({
+    enabled: isTrainerPortal && !authLoading && Boolean(currentUser),
+  });
 
   const navLinks = useMemo(
     () => resolveNavLinks({ activeRole, isChatActive }),
@@ -104,19 +112,14 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
     [activeRole, isChatActive],
   );
 
-  const userInitial = hasHydrated
-    ? (user.name || user.displayName || user.email || "U").charAt(0).toUpperCase()
-    : "U";
+  const userInitial =
+    hasHydrated && !authLoading
+      ? getPortalUserInitial(trainerProfile || user)
+      : "U";
 
   useEffect(() => {
     if (!currentUser?.role) return undefined;
 
-    const prefetchKey = `${String(currentUser.role || "").trim().toLowerCase()}::${String(currentUser.email || "").trim().toLowerCase()}`;
-    if (prefetchedKeyRef.current === prefetchKey) {
-      return undefined;
-    }
-
-    prefetchedKeyRef.current = prefetchKey;
     if (typeof window === "undefined") {
       return undefined;
     }
@@ -137,37 +140,36 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
       if (cancelled) return;
       cleanup = prefetchPortalRoutes(router, currentUser.role, currentUser.email, {
         exclude: [pathname],
+        maxRoutes: 8,
       });
     };
 
+    // Warm sibling routes right after first paint; waiting seconds means the
+    // user's first click misses the prefetch cache entirely.
     const timerId = window.setTimeout(() => {
       if ("requestIdleCallback" in window) {
-        window.requestIdleCallback(startPrefetch, { timeout: 1800 });
+        window.requestIdleCallback(startPrefetch, { timeout: 300 });
       } else {
         startPrefetch();
       }
-    }, 1200);
+    }, 100);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timerId);
       cleanup();
     };
-  }, [currentUser?.role, currentUser?.email, pathname, router]);
+  }, [currentUser?.role, currentUser?.email, router]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await logout();
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {
-      router.push("/");
+      debouncedNavigate("/");
     }
-  };
-
-  const handleNavigate = (href) => {
-    router.push(href);
-  };
+  }, [debouncedNavigate, logout]);
 
   return (
     <>
@@ -198,7 +200,6 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
         isChatActive={isChatActive}
         isComplaintsActive={isComplaintsActive}
         isHomeActive={isHomeActive}
-        onNavigate={handleNavigate}
       />
 
       {!compact ? (
@@ -211,7 +212,16 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
             pathname={pathname}
             setChatTab={setChatTab}
           />
-          <SidebarFooter handleLogout={handleLogout} userInitial={userInitial} />
+          <SidebarFooter
+            handleLogout={handleLogout}
+            user={user}
+            profile={
+              isTrainerPortal && isPortalRecord(trainerProfile)
+                ? trainerProfile
+                : null
+            }
+            userInitial={userInitial}
+          />
         </div>
       ) : null}
       </aside>

@@ -1,15 +1,20 @@
 "use client";
 
-import MobileTrainerLayout from "@/app/layouts/MobileTrainerLayout";
-import ProtectedRoute from "@/components/common/ProtectedRoute";
-import TrainerDashboard from "@/portals/trainer/TrainerDashboard";
+import dynamic from "next/dynamic";
+import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+const TrainerDashboard = dynamic(
+  () => import("@/portals/trainer/TrainerDashboard"),
+  {
+    loading: () => (
+      <PortalLoadingState
+        title="Loading dashboard"
+        description="Preparing your trainer overview."
+      />
+    ),
+  },
+);
 
 export default function TrainerDashboardPage() {
-  return (
-    <ProtectedRoute allowedRoles={["trainer"]}>
-      <MobileTrainerLayout>
-        <TrainerDashboard />
-      </MobileTrainerLayout>
-    </ProtectedRoute>
-  );
+  return <TrainerDashboard />;
 }
