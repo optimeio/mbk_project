@@ -36,6 +36,7 @@ const notificationRoutes = require("./notificationRoutes.js");
 const adminTrainerRoutes = require("./adminTrainerRoutes.js");
 const trainerDirectoryV1Routes = require("../modules/trainers/trainers.routes.js");
 const attendanceV1Routes = require("../modules/attendance/attendance.routes.js");
+const teacherWorkflowRoutes = require("./teacherWorkflowRoutes.js");
 import simpleAuth from "./simpleAuth.mjs";
 router.use("/simple-auth", simpleAuth);
 // Removed duplicate root mounting of simpleAuth
@@ -91,6 +92,7 @@ router.use("/drive-hierarchy", driveRoutes);
 router.use("/training-platform", trainingPlatformRoutes);
 router.use("/internal/metrics", internalMetricsRoutes);
 router.use("/admin/trainers", adminTrainerRoutes);
+router.use("/", teacherWorkflowRoutes);
 
 
 export default router;

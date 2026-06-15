@@ -38,14 +38,15 @@ const NotificationBell = dynamic(() => import('@/components/common/NotificationB
 
 // Temporary NavLink shim if it's not imported properly (check if it exists in scope)
 // In some migrations NavLink is a custom component.
-const NavLink = ({ children, to, className, ...props }) => {
+const NavLink = ({ children, to, className, end, ...props }) => {
     const router = useRouter();
     const pathname = window.location.pathname;
     const isActive = pathname === to || pathname.startsWith(to + '/');
     const classResult = typeof className === 'function' ? className({ isActive }) : className;
 
+    // 'end' prop is ignored for custom NavLink to avoid React warnings
     return (
-        <a 
+        <a
             href={to} 
             onClick={(e) => { e.preventDefault(); router.push(to); }} 
             className={classResult} 

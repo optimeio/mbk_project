@@ -4,15 +4,24 @@
   "private": true,
   "description": "Root runner for MBK Carrierz Portal (Frontend & Backend)",
   "scripts": {
+    "lint": "echo \"No lint configured\"",
     "install:all": "npm install --prefix frontend && npm install --prefix backend",
     "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
     "start": "concurrently \"npm run start --prefix frontend\" \"npm run start --prefix backend\""
   },
   "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.10.0",
     "concurrently": "^8.2.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "node": "^26.3.0"
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "node": "^26.3.0",
+    "pg": "^8.21.0",
+    "prisma": "^7.8.0",
+    "sharp": "^0.35.1"
   }
 }

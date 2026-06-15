@@ -1,20 +1,19 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import PortalLoadingState from "@/components/common/PortalLoadingState";
 
-const TrainerAttendancePage = dynamic(
-  () => import("@/portals/trainer/TrainerAttendancePage"),
-  {
-    loading: () => (
-      <PortalLoadingState
-        title="Loading Attendance"
-        description="Preparing your attendance upload page."
-      />
-    ),
-  },
-);
-
 export default function TrainerAttendanceRoute() {
-  return <TrainerAttendancePage />;
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/trainer/daily-visit");
+  }, [router]);
+
+  return (
+    <PortalLoadingState
+      title="Redirecting"
+      description="Redirecting you to the unified Daily Visit Workflow..."
+    />
+  );
 }

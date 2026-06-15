@@ -21,6 +21,10 @@ const collegeSchema = new mongoose.Schema({
         type: Number,
         default: null,
     },
+    geofenceRadius: {
+        type: Number,
+        default: 150,
+    },
     location: {
         address: {
             type: String,

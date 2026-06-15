@@ -366,7 +366,7 @@ const CompanyDetails = () => {
                                 </div>
                                 <div className="ml-4 flex-1">
                                     <p className="text-sm font-medium text-gray-600">Admin Email</p>
-                                    <p className="text-sm font-semibold text-gray-900 mt-1 truncate">{company.email}</p>
+                                    <p className="text-sm font-semibold text-gray-900 mt-1 break-all">{company.email}</p>
                                 </div>
                             </div>
                         </div>

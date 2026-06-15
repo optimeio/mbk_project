@@ -1,25 +1,6 @@
-import BadgeCheck from "lucide-react/dist/esm/icons/badge-check";
-import BarChart3 from "lucide-react/dist/esm/icons/bar-chart-3";
-import BookOpen from "lucide-react/dist/esm/icons/book-open";
-import Building2 from "lucide-react/dist/esm/icons/building-2";
-import CalendarClock from "lucide-react/dist/esm/icons/calendar-clock";
-import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list";
-import Clock3 from "lucide-react/dist/esm/icons/clock-3";
-import CreditCard from "lucide-react/dist/esm/icons/credit-card";
-import FileText from "lucide-react/dist/esm/icons/file-text";
-import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap";
-import HandCoins from "lucide-react/dist/esm/icons/hand-coins";
-import Home from "lucide-react/dist/esm/icons/home";
-import Image from "lucide-react/dist/esm/icons/image";
-import MapPin from "lucide-react/dist/esm/icons/map-pin";
+import { BadgeCheck, BarChart3, BookOpen, Building2, CalendarClock, ClipboardList, Clock3, CreditCard, FileText, GraduationCap, HandCoins, Home, Image, MapPin, LogOut, MessageSquareMore, Receipt, Settings, ShieldCheck, UserCheck, UserCog, Users } from "lucide-react";
 
-import MessageSquareMore from "lucide-react/dist/esm/icons/message-square-more";
-import Receipt from "lucide-react/dist/esm/icons/receipt";
-import Settings from "lucide-react/dist/esm/icons/settings";
-import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
-import UserCheck from "lucide-react/dist/esm/icons/user-check";
-import UserCog from "lucide-react/dist/esm/icons/user-cog";
-import Users from "lucide-react/dist/esm/icons/users";
+
 
 
 export const roleLinks = {
@@ -64,12 +45,15 @@ export const roleLinks = {
   ],
 
   Trainer: [
-    { label: "Dashboard",                  href: "/trainer/dashboard",             icon: Home },
-    { label: "Attendance Upload",          href: "/trainer/attendance",            icon: ClipboardList },
-    { label: "Student Activities",         href: "/trainer/student-activities",    icon: Image },
-    { label: "Student Attendance Records", href: "/trainer/student-attendance",    icon: FileText },
-    { label: "Reports",                    href: "/trainer/reports",               icon: BarChart3 },
-    { label: "Profile Settings",           href: "/trainer/settings",              icon: Settings },
+    { label: "Dashboard",                 href: "/trainer/dashboard",            icon: Home },
+    { label: "Attendance Upload",          href: "/trainer/attendance",           icon: ClipboardList },
+    { label: "Student Activities",         href: "/trainer/student-activities",   icon: Image },
+    { label: "Student Attendance Records", href: "/trainer/student-attendance",   icon: FileText },
+    { label: "Daily Visit",                href: "/trainer/daily-visit",          icon: ClipboardList },
+    { label: "Reports",                    href: "/trainer/reports",              icon: BarChart3 },
+    { label: "Profile Settings",           href: "/trainer/settings",             icon: Settings },
+    { label: "Profile",                    href: "/trainer/profile",              icon: UserCog },
+    { label: "Logout",                     href: "/logout",                       icon: LogOut },
   ],
 
   Accountant: [
@@ -152,5 +136,5 @@ export const resolveNavLinks = ({ activeRole }) =>
 export const sidebarRailIcons = {
   complaints: FileText,
   home: Home,
-  logout: MessageSquareMore,
+  logout: LogOut,
 };

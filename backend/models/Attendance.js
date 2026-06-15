@@ -301,6 +301,10 @@ const attendanceSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    workingDurationMinutes: {
+        type: Number,
+        default: null,
+    },
     driveFolderId: {
         type: String,
         default: null,
