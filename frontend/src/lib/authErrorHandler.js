@@ -58,6 +58,11 @@ export const resolveAuthErrorMessage = (error, fallback = AUTH_ERROR_MESSAGES.IN
     return AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE;
   }
 
+  // Non-JSON response body (set by parseApiJsonResponse)
+  if (error?.nonJsonBody !== undefined) {
+    return AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE;
+  }
+
   if (status >= 500) {
     return AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE;
   }
@@ -116,7 +121,8 @@ export const normalizeAuthResponseError = (response = {}, fallbackStatus = 0) =>
 
 /**
  * Safely parse a fetch Response as JSON.
- * Next.js proxy failures often return plain text ("Internal Server Error").
+ * Next.js proxy failures often return plain text ("Internal Server Error")
+ * or HTML pages. Treat any non-JSON body as a server/proxy error.
  */
 export const parseApiJsonResponse = async (response) => {
   const text = await response.text();
@@ -125,14 +131,11 @@ export const parseApiJsonResponse = async (response) => {
   try {
     return JSON.parse(text);
   } catch {
-    const isServerError = Number(response?.status || 0) >= 500;
-    const err = new Error(
-      isServerError
-        ? AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE
-        : "Server returned an invalid response. Please try again.",
-    );
+    // Any non-JSON body (HTML error pages, plain text, proxy errors) is
+    // treated as a server-side issue — never expose raw body to users.
+    const err = new Error(AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE);
     err.status = Number(response?.status || 0);
-    err.nonJsonBody = text.slice(0, 120);
+    err.nonJsonBody = text.slice(0, 120); // kept for debug only
     throw err;
   }
 };

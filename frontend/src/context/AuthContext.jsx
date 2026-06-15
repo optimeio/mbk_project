@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchWithTimeout } from '@/utils/fetchWithTimeout';
+// Removed unused import of fetchWithTimeout
 import authService, { studentAuthService, companyAuthService, setAuthCookie, clearAuthCookie, markPortalLoginSession, clearClientAuthSession } from '../services/authService';
 import { discoverApiOrigin } from '@/config/apiConfig';
 import { loginTypeMatchesUser, normalizeAuthUser, isKnownPortalRole } from '@/utils/authRoles';
@@ -453,20 +453,14 @@ export const AuthProvider = ({ children }) => {
           requestBody.expectedRole = roleForRequest;
         }
 
-<<<<<<< HEAD
         const response = await withTimeout(
           fetch(loginUrl, {
-=======
-        const response = await fetchWithTimeout(
-          `${cleanBaseUrl}/api/auth/login`,
-          {
->>>>>>> e59dd866f287c2b2434d023fd839fb00cb3ef9b3
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestBody),
-          },
+          }),
           10000 // 10‑second timeout
         );
 
@@ -655,16 +649,18 @@ export const AuthProvider = ({ children }) => {
   };
 
   const actionsRef = useRef({});
-  actionsRef.current = {
-    registerStudent,
-    loginStudent,
-    registerCompany,
-    loginCompany,
-    login,
-    setAuthUser,
-    logout,
-    setError,
-  };
+  useEffect(() => {
+    actionsRef.current = {
+      registerStudent,
+      loginStudent,
+      registerCompany,
+      loginCompany,
+      login,
+      setAuthUser,
+      logout,
+      setError,
+    };
+  });
 
   const value = useMemo(
     () => ({

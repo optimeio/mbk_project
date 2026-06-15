@@ -481,10 +481,10 @@ export default function DailyVisitPage() {
         {/* Header Title */}
         <div className="mb-8 border-b border-slate-800 pb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#0F172A' }}>
               Daily College Visit Workflow
             </h1>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm" style={{ color: '#64748B' }}>
               Guidance checklist mapping details of your daily assigned teaching visit.
             </p>
           </div>
@@ -495,7 +495,7 @@ export default function DailyVisitPage() {
 
         {/* Global Progress Stepper */}
         <div className="mb-10 rounded-2xl bg-slate-900/60 border border-slate-800 p-5 backdrop-blur-sm">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Daily Step Progress</p>
+          <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#0F172A' }}>Daily Step Progress</p>
           <div className="flex items-center justify-between gap-2">
             {[
               { num: 1, label: "Check Location" },
@@ -516,9 +516,7 @@ export default function DailyVisitPage() {
                   }`}>
                     {step > s.num ? <CheckCircle2 className="h-4 w-4" /> : s.num}
                   </div>
-                  <span className={`text-[10px] mt-1 text-center font-medium hidden sm:inline ${
-                    step === s.num ? "text-emerald-400" : "text-slate-500"
-                  }`}>
+                  <span className={`text-[10px] mt-1 text-center font-semibold hidden sm:inline`} style={{ color: step === s.num ? '#14B8A6' : '#334155' }}>
                     {s.label}
                   </span>
                 </div>

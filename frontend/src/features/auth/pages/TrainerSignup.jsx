@@ -199,7 +199,6 @@ const TrainerSignup = () => {
                 minLength={PASSWORD_MIN_LENGTH}
                 autoComplete="new-password"
                 disabled={loading}
-                minLength={PASSWORD_MIN_LENGTH}
                 showPassword={showPassword}
                 onToggleVisibility={() => setShowPassword(!showPassword)}
               />

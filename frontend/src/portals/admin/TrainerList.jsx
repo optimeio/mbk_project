@@ -370,7 +370,10 @@ const TrainerList = () => {
     staleTime: 45_000,
     gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
-    queryFn: () => api.get("/users/pending"),
+    queryFn: async () => {
+      const response = await api.get("/users/pending");
+      return response?.users || [];
+    },
   });
 
   const trainers = useMemo(

@@ -60,26 +60,7 @@ const LoginModal = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isFlipped, setIsFlipped] = useState(false);
-  const [cooldownSecs, setCooldownSecs] = useState(0); // rate-limit countdown
-  const cooldownRef = useRef(null);
 
-  // Start a visible countdown when rate-limited
-  const startCooldown = (seconds) => {
-    if (cooldownRef.current) clearInterval(cooldownRef.current);
-    setCooldownSecs(seconds);
-    cooldownRef.current = setInterval(() => {
-      setCooldownSecs((prev) => {
-        if (prev <= 1) { clearInterval(cooldownRef.current); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const formatCooldown = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
-  };
 
 
 
@@ -184,31 +165,27 @@ const LoginModal = ({ isOpen, onClose }) => {
         err.pendingApproval ||
         err.requiresEmailVerification ||
         err.roleMismatch ||
-        err.accountDeactivated;
-      if (!isExpectedAuthState) {
+        err.accountDeactivated ||
+        err.status === 401 ||
+        err.status === 429 ||
+        err.message === 'Invalid email or password' ||
+        err.message?.startsWith('Invalid email or password') ||
+        err.message?.toLowerCase().includes('too many');
+      if (!isExpectedAuthState && err.status !== 400) {
+        // Only log truly unexpected errors (network, server, timeout)
         console.error("Login Error:", err);
       }
-      if (err.status === 429) {
-        const waitSecs = err.retryAfterSeconds || 60;
-        startCooldown(waitSecs);
-        const mins = Math.ceil(waitSecs / 60);
-        const msg = err.message || `Too many attempts. Please wait ${mins} minute(s) and try again.`;
-        setError(msg);
-        notify.error(msg);
-      } else {
-        const message = err.pendingApproval
-          ? err.message || "Your account is pending admin approval."
-          : err.requiresEmailVerification
-            ? err.message || "Please verify your email before signing in."
-            : err.roleMismatch
-              ? err.message ||
-                "This email is not registered for the selected account type."
-              : err.accountDeactivated
-                ? err.message || "Your account has been deactivated."
-                : err.message || "Invalid email or password.";
-        setError(message);
-        notify.error(message);
-      }
+      const message = err.pendingApproval
+        ? err.message || "Your account is pending admin approval."
+        : err.requiresEmailVerification
+          ? err.message || "Please verify your email before signing in."
+          : err.roleMismatch
+            ? err.message || "This email is not registered for the selected account type."
+            : err.accountDeactivated
+              ? err.message || "Your account has been deactivated."
+              : err.message || "Invalid email or password.";
+      setError(message);
+      notify.error(message);
     } finally {
       setLoading(false);
     }
@@ -347,11 +324,6 @@ const LoginModal = ({ isOpen, onClose }) => {
                 {error && (
                   <div className="login-alert login-alert-error" role="alert">
                     {error}
-                    {cooldownSecs > 0 && (
-                      <div style={{ marginTop: '6px', fontSize: '0.85em', fontWeight: 700 }}>
-                        ⏳ Try again in {formatCooldown(cooldownSecs)}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -484,11 +456,11 @@ const LoginModal = ({ isOpen, onClose }) => {
                     size="lg"
                     fullWidth
                     loading={loading}
-                    disabled={loading || !canSubmitLogin || cooldownSecs > 0}
+                    disabled={loading || !canSubmitLogin}
                     loadingText="Logging in..."
                     className="login-btn"
                   >
-                    {cooldownSecs > 0 ? `Wait ${formatCooldown(cooldownSecs)}` : 'Login'}
+                    Login
                   </CTAButton>
                 </form>
 

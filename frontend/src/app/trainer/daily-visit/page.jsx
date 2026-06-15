@@ -13,7 +13,7 @@ const Step = ({ number, title, active, completed }) => {
   return (
     <div className={style}>
       <span className="font-mono font-bold">{number}.</span>
-      <span>{title}</span>
+      <span className="text-[#334155]">{title}</span>
     </div>
   );
 };
@@ -44,7 +44,7 @@ const VerifyLocation = ({ onNext }) => {
   }, []);
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">Step 1 – Verify Current GPS Location</h2>
+        <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Step 1 – Verify Current GPS Location</h2>
       {status === 'checking' && <p>Retrieving location…</p>}
       {status === 'ok' && <p className="text-success-600">Location verified.</p>}
       {status === 'error' && <p className="text-danger-600">Unable to get GPS.</p>}
@@ -63,7 +63,7 @@ const ClockIn = ({ onNext }) => {
   };
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">Step 2 – Clock‑In (Geo‑Tagged Image)</h2>
+        <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Step 2 – Clock‑In (Geo‑Tagged Image)</h2>
       {image ? (
         <Image src={image} alt="Clock‑In" width={200} height={200} />
       ) : (
@@ -77,7 +77,7 @@ const ClockIn = ({ onNext }) => {
 
 const StudentAttendance = ({ onNext }) => (
   <div className="flex flex-col items-center justify-center h-full">
-    <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">Step 3 – Student Attendance</h2>
+        <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Step 3 – Student Attendance</h2>
     <p>Upload attendance sheet or capture a photo.</p>
     <button onClick={onNext} className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition">
       Continue
@@ -87,7 +87,7 @@ const StudentAttendance = ({ onNext }) => (
 
 const StudentActivities = ({ onNext }) => (
   <div className="flex flex-col items-center justify-center h-full">
-    <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">Step 4 – Student Activities</h2>
+        <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Step 4 – Student Activities</h2>
     <p>Record activities for the day.</p>
     <button onClick={onNext} className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition">
       Continue
@@ -103,7 +103,7 @@ const ClockOut = ({ onFinish }) => {
   };
   return (
     <div className="flex flex-col items-center justify-center h-full">
-      <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">Step 5 – Clock‑Out (Geo‑Tagged Image)</h2>
+        <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Step 5 – Clock‑Out (Geo‑Tagged Image)</h2>
       {image ? (
         <Image src={image} alt="Clock‑Out" width={200} height={200} />
       ) : (
@@ -116,7 +116,7 @@ const ClockOut = ({ onFinish }) => {
 };
 const Summary = () => (
   <div className="flex flex-col items-center justify-center h-full">
-    <h2 className="text-xl font-semibold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-600">Summary</h2>
+        <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Summary</h2>
     <p>All steps completed. Thank you!</p>
     <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition">Restart</button>
   </div>
@@ -146,10 +146,13 @@ const steps = [
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-gray-900 dark:text-gray-100 p-6">
+    <div className="min-h-screen bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-blue-900 dark:text-blue-200 p-6">
+  <h1 className="text-[#0F172A] text-3xl font-bold mb-2">Daily College Visit Workflow</h1>
+  <p className="text-[#475569] mb-4">Guidance checklist mapping details of your daily assigned teaching visit.</p>
       <div className="max-w-4xl mx-auto bg-white bg-opacity-30 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden">
         <div className="flex flex-col md:flex-row">
           {/* Sidebar with step list */}
+          <h2 className="text-[#1E293B] text-xl font-semibold mb-4">Daily Step Progress</h2>
           <aside className="w-full md:w-1/4 bg-gray-50 dark:bg-gray-700 p-4">
             {steps.map((s, idx) => (
               <Step

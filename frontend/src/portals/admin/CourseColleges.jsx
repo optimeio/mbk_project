@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, memo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -9,13 +9,11 @@ import {
   PlusIcon,
   PencilSquareIcon,
   TrashIcon,
-  EyeIcon,
   ArrowPathIcon,
   BuildingOfficeIcon,
   MapPinIcon,
   AcademicCapIcon,
   MagnifyingGlassIcon,
-  UserIcon,
   PhoneIcon,
   DocumentArrowDownIcon,
   ChevronDownIcon,
@@ -27,6 +25,7 @@ import HierarchyBreadcrumb from '@/components/common/HierarchyBreadcrumb';
 import CollegeModal from '@/components/modals/CollegeModal';
 import CourseModal from '@/components/modals/CourseModal';
 import PasswordConfirmationModal from '@/components/modals/PasswordConfirmationModal';
+import useDebouncedValue from '@/hooks/useDebouncedValue';
 
 const getDepartmentCount = (departmentValue) => {
   if (!departmentValue || typeof departmentValue !== 'string') return 1;
@@ -37,6 +36,360 @@ const getDepartmentCount = (departmentValue) => {
   return parts.length || 1;
 };
 
+const CollegeStats = ({ courseId, collegeId }) => {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['admin', 'college-stats', courseId, collegeId],
+    enabled: Boolean(courseId && collegeId),
+    queryFn: () => api.get(`/batches/stats?courseId=${courseId}&collegeId=${collegeId}`),
+    staleTime: 60 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="h-4 w-32 bg-slate-100 rounded animate-pulse mt-1.5"></div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs font-semibold text-slate-500 bg-slate-50/50 border border-slate-100 rounded-lg px-2 py-1 max-w-max">
+      <span className="flex items-center gap-1">📚 {stats?.totalBatches || 0} {stats?.totalBatches === 1 ? 'Batch' : 'Batches'}</span>
+      <span className="text-slate-200">|</span>
+      <span className="flex items-center gap-1">👤 {stats?.totalTrainers || 0} {stats?.totalTrainers === 1 ? 'Trainer' : 'Trainers'}</span>
+      <span className="text-slate-200">|</span>
+      <span className="flex items-center gap-1">🎓 {stats?.totalStudents || 0} {stats?.totalStudents === 1 ? 'Student' : 'Students'}</span>
+    </div>
+  );
+};
+
+const CollegeCard = memo(function CollegeCard({
+  college,
+  isExpanded,
+  depts,
+  isLoadingDepts,
+  accessToken,
+  onToggle,
+  onEditCollege,
+  onDeleteCollege,
+  onAddDepartment,
+  onEditDepartment,
+  onDeleteDept,
+  router,
+  courseId,
+  companyId,
+}) {
+  const [isAddingDept, setIsAddingDept] = useState(false);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [savingDept, setSavingDept] = useState(false);
+
+  const [editingDeptId, setEditingDeptId] = useState(null);
+  const [editDeptName, setEditDeptName] = useState('');
+
+  const cId = college._id || college.id;
+  const deptCount = getDepartmentCount(college.department);
+  const crsId = college.courseId?._id || college.courseId || courseId;
+
+  const handleAddDept = async () => {
+    if (!newDeptName.trim()) return;
+    try {
+      setSavingDept(true);
+      await onAddDepartment(cId, newDeptName.trim());
+      setNewDeptName('');
+      setIsAddingDept(false);
+    } catch {
+      // Error is handled by parent via notify
+    } finally {
+      setSavingDept(false);
+    }
+  };
+
+  const handleSaveDeptEdit = async (deptId) => {
+    if (!editDeptName.trim()) return;
+    try {
+      setSavingDept(true);
+      await onEditDepartment(cId, deptId, editDeptName.trim());
+      setEditingDeptId(null);
+      setEditDeptName('');
+    } catch {
+      // Error is notify handled by parent
+    } finally {
+      setSavingDept(false);
+    }
+  };
+
+  return (
+    <div
+      className={`bg-white rounded-2xl shadow-sm border transition-all duration-300 overflow-hidden ${
+        isExpanded
+          ? 'border-indigo-200 shadow-[0_8px_24px_rgba(79,70,229,0.12)]'
+          : 'border-gray-100 hover:shadow-md'
+      }`}
+    >
+      {/* College Header */}
+      <div
+        className="p-5 cursor-pointer"
+        onClick={() => onToggle(cId)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center min-w-0 flex-1">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 shrink-0 transition-colors ${
+              isExpanded ? 'bg-indigo-100' : 'bg-gray-100'
+            }`}>
+              <BuildingOfficeIcon className={`w-5 h-5 ${isExpanded ? 'text-indigo-600' : 'text-gray-500'}`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className={`text-lg font-semibold truncate transition-colors ${
+                isExpanded ? 'text-indigo-700' : 'text-gray-800'
+              }`}>
+                {college.name}
+              </h3>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
+                {college.city && (
+                  <span className="flex items-center">
+                    <MapPinIcon className="h-3.5 w-3.5 mr-1 text-gray-400" />
+                    {college.city}
+                  </span>
+                )}
+                {(college.spocPhone || college.phone) && (
+                  <span className="flex items-center">
+                    <PhoneIcon className="h-3.5 w-3.5 mr-1 text-gray-400" />
+                    {college.spocPhone || college.phone}
+                  </span>
+                )}
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                  {deptCount} {deptCount === 1 ? 'Dept' : 'Depts'}
+                </span>
+                {college.department && college.department !== 'General' && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 max-w-[180px] truncate">
+                    {college.department}
+                  </span>
+                )}
+              </div>
+              {crsId && (
+                <CollegeStats courseId={crsId} collegeId={cId} />
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 ml-4 shrink-0 font-medium">
+            {crsId && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const compId = college.companyId?._id || college.companyId || companyId;
+                  router.push(`/dashboard/companies/${compId}/courses/${crsId}/colleges/${cId}`);
+                }}
+                className="inline-flex items-center rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white transition-colors shadow-sm"
+              >
+                Open College
+              </button>
+            )}
+            {college.studentAttendanceExcelUrl && (
+              <a
+                href={`${FILE_BASE_URL}/uploads/trainer-documents/${college.studentAttendanceExcelUrl.split(/[\\/]/).pop()}?token=${accessToken}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center rounded-lg border border-green-200 bg-white px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
+                title="Download Attendance Excel"
+              >
+                <DocumentArrowDownIcon className="h-3.5 w-3.5" />
+              </a>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onEditCollege(college); }}
+              className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              title="Edit College"
+            >
+              <PencilSquareIcon className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDeleteCollege(college); }}
+              className="inline-flex items-center rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+              title="Delete College"
+            >
+              <TrashIcon className="h-3.5 w-3.5" />
+            </button>
+
+            <div className={`p-1 rounded-lg transition-colors ${isExpanded ? 'text-indigo-600' : 'text-gray-400'}`}>
+              {isExpanded ? (
+                <ChevronUpIcon className="h-5 w-5" />
+              ) : (
+                <ChevronDownIcon className="h-5 w-5" />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Departments Section (expanded) */}
+      {isExpanded && (
+        <div className="border-t border-gray-100 bg-gradient-to-b from-gray-50 to-white px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-700 flex items-center">
+              <AcademicCapIcon className="h-4 w-4 mr-1.5 text-indigo-500" />
+              Departments
+            </h4>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsAddingDept(prev => !prev);
+                setNewDeptName('');
+              }}
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors"
+            >
+              <PlusIcon className="h-3.5 w-3.5 mr-1" />
+              Add Department
+            </button>
+          </div>
+
+          {/* Add Department Inline Form */}
+          {isAddingDept && (
+            <div className="mb-4 flex items-center gap-2 bg-white p-3 rounded-lg border border-indigo-200 shadow-sm animate-in fade-in duration-200">
+              <input
+                type="text"
+                placeholder="Department name (e.g. CSE, ECE, Mech)"
+                value={newDeptName}
+                onChange={(e) => setNewDeptName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddDept();
+                  }
+                }}
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleAddDept}
+                disabled={!newDeptName.trim() || savingDept}
+                className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {savingDept ? 'Adding...' : 'Add'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingDept(false);
+                  setNewDeptName('');
+                }}
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {isLoadingDepts ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mr-2"></div>
+              <span className="text-sm text-gray-500">Loading departments...</span>
+            </div>
+          ) : depts.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {depts.map((dept) => (
+                <div
+                  key={dept._id}
+                  onClick={() => {
+                    if (editingDeptId !== dept._id) {
+                      router.push(
+                        `/dashboard/companies/college/${cId}/department/${encodeURIComponent(dept.name)}`
+                      );
+                    }
+                  }}
+                  className="bg-white p-4 rounded-xl border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+                >
+                  {editingDeptId === dept._id ? (
+                    /* Inline Edit Form */
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editDeptName}
+                        onChange={(e) => setEditDeptName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveDeptEdit(dept._id);
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingDeptId(null);
+                            setEditDeptName('');
+                          }
+                        }}
+                        className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveDeptEdit(dept._id)}
+                        disabled={!editDeptName.trim() || savingDept}
+                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {savingDept ? '...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => { setEditingDeptId(null); setEditDeptName(''); }}
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    /* Normal Display */
+                    <>
+                      <div className="flex items-center justify-between">
+                        <h5 className="font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors truncate">
+                          {dept.name}
+                        </h5>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {dept.isAssigned && (
+                            <span className="bg-green-100 text-green-600 text-[10px] px-1.5 py-0.5 rounded font-medium">
+                              Assigned
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingDeptId(dept._id);
+                              setEditDeptName(dept.name);
+                            }}
+                            className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            title="Edit Department"
+                          >
+                            <PencilSquareIcon className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => onDeleteDept(dept, cId, e)}
+                            className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete Department"
+                          >
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Click to view details</span>
+                        <span className="text-xs text-indigo-500 font-medium group-hover:text-indigo-700 transition-colors">
+                          Open →
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
+              No departments found for this college.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
 const CourseColleges = () => {
   const router = useRouter();
   const params = useParams();
@@ -44,6 +397,7 @@ const CourseColleges = () => {
   const courseId = params?.courseId;
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
 
   // Expanded college & its departments
   const [expandedCollegeId, setExpandedCollegeId] = useState(null);
@@ -62,46 +416,63 @@ const CourseColleges = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
 
-  // Add Department state
-  const [addingDeptForCollege, setAddingDeptForCollege] = useState(null);
-  const [newDeptName, setNewDeptName] = useState('');
-  const [savingDept, setSavingDept] = useState(false);
+  const isCourseFiltered = Boolean(companyId && courseId);
 
-  // Edit Department state
-  const [editingDept, setEditingDept] = useState(null); // { _id, name, collegeId }
-  const [editDeptName, setEditDeptName] = useState('');
   const courseCollegesQuery = useQuery({
     queryKey: ['admin', 'course-colleges', companyId, courseId],
-    enabled: Boolean(companyId && courseId),
     queryFn: async () => {
-      const [companyRes, coursesRes, collegesRes] = await Promise.all([
-        api.get(`/companies/${companyId}`),
-        api.get(`/courses?companyId=${companyId}`),
-        api.get(`/colleges?courseId=${courseId}`),
-      ]);
+      if (isCourseFiltered) {
+        const [companyRes, coursesRes, collegesRes] = await Promise.all([
+          api.get(`/companies/${companyId}`),
+          api.get(`/courses?companyId=${companyId}`),
+          api.get(`/colleges?courseId=${courseId}`),
+        ]);
 
-      const normalizedCourses = Array.isArray(coursesRes)
-        ? coursesRes
-        : coursesRes?.data || [];
-      const normalizedColleges = Array.isArray(collegesRes)
-        ? collegesRes
-        : collegesRes?.data || [];
+        const normalizedCourses = Array.isArray(coursesRes)
+          ? coursesRes
+          : coursesRes?.data || [];
+        const normalizedColleges = Array.isArray(collegesRes)
+          ? collegesRes
+          : collegesRes?.data || [];
 
-      return {
-        company: companyRes || null,
-        course:
-          normalizedCourses.find(
-            (item) => String(item._id || item.id) === String(courseId),
-          ) || null,
-        colleges: normalizedColleges,
-      };
+        return {
+          company: companyRes || null,
+          course:
+            normalizedCourses.find(
+              (item) => String(item._id || item.id) === String(courseId),
+            ) || null,
+          colleges: normalizedColleges,
+        };
+      } else {
+        const [companiesRes, coursesRes, collegesRes] = await Promise.all([
+          api.get('/companies'),
+          api.get('/courses'),
+          api.get('/colleges'),
+        ]);
+
+        const normalizedColleges = Array.isArray(collegesRes)
+          ? collegesRes
+          : collegesRes?.data || [];
+
+        return {
+          company: null,
+          course: null,
+          colleges: normalizedColleges,
+          companies: Array.isArray(companiesRes) ? companiesRes : companiesRes?.data || [],
+          courses: Array.isArray(coursesRes) ? coursesRes : coursesRes?.data || [],
+        };
+      }
     },
     placeholderData: (previousData) => previousData,
   });
 
   const company = courseCollegesQuery.data?.company || null;
   const course = courseCollegesQuery.data?.course || null;
-  const colleges = courseCollegesQuery.data?.colleges || [];
+  // Memoize to prevent stale closure issues in hooks that depend on `colleges`
+  const colleges = useMemo(
+    () => courseCollegesQuery.data?.colleges || [],
+    [courseCollegesQuery.data]
+  );
 
   const refetchCourseColleges = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -131,19 +502,15 @@ const CourseColleges = () => {
   }, [departmentsMap]);
 
   // Add Department handler
-  const handleAddDepartment = async (collegeId) => {
-    if (!newDeptName.trim()) return;
+  const handleAddDepartment = useCallback(async (collegeId, deptName) => {
     try {
-      setSavingDept(true);
       const college = colleges.find((c) => (c._id || c.id) === collegeId);
       await api.post('/departments', {
-        name: newDeptName.trim(),
+        name: deptName,
         collegeId,
         companyId: college?.companyId || companyId,
         courseId: college?.courseId || courseId,
       });
-      setNewDeptName('');
-      setAddingDeptForCollege(null);
       // Refresh departments for this college
       await fetchDepartments(collegeId, true);
       // Refresh colleges to update dept count
@@ -151,31 +518,24 @@ const CourseColleges = () => {
     } catch (error) {
       console.error('Error adding department:', error);
       notify.error(error.response?.data?.message || error.message || 'Failed to add department');
-    } finally {
-      setSavingDept(false);
+      throw error;
     }
-  };
+  }, [colleges, companyId, courseId, fetchDepartments, refetchCourseColleges]);
 
   // Edit Department handler
-  const handleSaveDeptEdit = async () => {
-    if (!editingDept || !editDeptName.trim()) return;
+  const handleEditDepartment = useCallback(async (collegeId, deptId, deptName) => {
     try {
-      setSavingDept(true);
-      await api.put(`/departments/${editingDept._id}`, { name: editDeptName.trim() });
-      const collegeId = editingDept.collegeId;
-      setEditingDept(null);
-      setEditDeptName('');
+      await api.put(`/departments/${deptId}`, { name: deptName });
       await fetchDepartments(collegeId, true);
       await refetchCourseColleges();
     } catch (error) {
       console.error('Error renaming department:', error);
       notify.error(error.response?.data?.message || error.message || 'Failed to rename department');
-    } finally {
-      setSavingDept(false);
+      throw error;
     }
-  };
+  }, [fetchDepartments, refetchCourseColleges]);
 
-  const handleDeleteDept = (dept, collegeId, e) => {
+  const handleDeleteDept = useCallback((dept, collegeId, e) => {
     e.stopPropagation();
     setDeleteItem({
       type: 'department',
@@ -184,7 +544,7 @@ const CourseColleges = () => {
       collegeId,
     });
     setIsDeleteModalOpen(true);
-  };
+  }, []);
 
   // Toggle college expand/collapse
   const toggleCollege = useCallback((collegeId) => {
@@ -198,8 +558,8 @@ const CourseColleges = () => {
 
   // Filtered colleges based on search
   const filteredColleges = useMemo(() => {
-    if (!searchTerm) return colleges;
-    const lower = searchTerm.toLowerCase();
+    if (!debouncedSearchTerm) return colleges;
+    const lower = debouncedSearchTerm.toLowerCase();
     return colleges.filter(
       (c) =>
         c.name?.toLowerCase().includes(lower) ||
@@ -207,25 +567,28 @@ const CourseColleges = () => {
         c.department?.toLowerCase().includes(lower) ||
         c.spocName?.toLowerCase().includes(lower)
     );
-  }, [colleges, searchTerm]);
+  }, [colleges, debouncedSearchTerm]);
 
-  const breadcrumbItems = useMemo(
-    () => [
-      { label: 'Companies', value: 'Companies', to: '/dashboard/companies' },
-      {
-        label: company?.name || 'Company',
-        value: company?.name || 'Company',
-        to: `/dashboard/companies/${companyId}`,
-      },
-      {
-        label: course?.title || 'Course',
-        value: `${colleges.length} Colleges`,
-      },
-    ],
-    [company?.name, course?.title, companyId, colleges.length]
-  );
+  const breadcrumbItems = useMemo(() => {
+    if (isCourseFiltered) {
+      return [
+        { label: 'Companies', value: 'Companies', to: '/dashboard/companies' },
+        {
+          label: company?.name || 'Company',
+          value: company?.name || 'Company',
+          to: `/dashboard/companies/${companyId}`,
+        },
+        {
+          label: course?.title || 'Course',
+          value: `${colleges.length} Colleges`,
+        },
+      ];
+    }
+    return [
+      { label: 'Colleges', value: `${colleges.length} Colleges` }
+    ];
+  }, [isCourseFiltered, company?.name, course?.title, companyId, colleges.length]);
 
-  // College Handlers
   // Course Handlers
   const handleSaveCourse = async (data) => {
     try {
@@ -253,11 +616,10 @@ const CourseColleges = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const handleEditCollege = (college, e) => {
-    e.stopPropagation();
+  const handleEditCollege = useCallback((college) => {
     setEditingCollege(college);
     setIsCollegeModalOpen(true);
-  };
+  }, []);
 
   const handleSaveCollege = async (data) => {
     try {
@@ -288,15 +650,14 @@ const CourseColleges = () => {
     }
   };
 
-  const handleDeleteCollege = (college, e) => {
-    e.stopPropagation();
+  const handleDeleteCollege = useCallback((college) => {
     setDeleteItem({
       type: 'college',
       id: college._id || college.id,
       name: college.name || 'this college',
     });
     setIsDeleteModalOpen(true);
-  };
+  }, []);
 
   const handleConfirmDelete = async (password) => {
     if (!deleteItem) return;
@@ -352,7 +713,7 @@ const CourseColleges = () => {
   if (courseCollegesQuery.error)
     return (
       <div className="p-8 text-center text-red-600">
-        {courseCollegesQuery.error.message || 'Failed to load course colleges'}
+        {courseCollegesQuery.error.message || 'Failed to load colleges'}
       </div>
     );
 
@@ -363,11 +724,11 @@ const CourseColleges = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">
             <button
-              onClick={() => router.push(`/dashboard/companies/${companyId}`)}
+              onClick={() => router.push(companyId ? `/dashboard/companies/${companyId}` : '/dashboard')}
               className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeftIcon className="h-5 w-5 mr-2" />
-              Back to Company
+              {companyId ? 'Back to Company' : 'Back to Dashboard'}
             </button>
             <button
               onClick={() => courseCollegesQuery.refetch()}
@@ -385,38 +746,73 @@ const CourseColleges = () => {
         <HierarchyBreadcrumb items={breadcrumbItems} />
 
         {/* Course Info Card */}
-        <div className="mb-6 mt-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mr-4">
-                <AcademicCapIcon className="w-6 h-6 text-indigo-600" />
+        {course && (
+          <div className="mb-6 mt-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mr-4">
+                  <AcademicCapIcon className="w-6 h-6 text-indigo-600" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {course.title || 'Course'}
+                  </h1>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {colleges.length} {colleges.length === 1 ? 'College' : 'Colleges'} in this course
+                    {course.courseHead && ` • Course Head: ${course.courseHead}`}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {course?.title || 'Course'}
-                </h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  {colleges.length} {colleges.length === 1 ? 'College' : 'Colleges'} in this course
-                  {course?.courseHead && ` • Course Head: ${course.courseHead}`}
-                </p>
+              <button
+                onClick={() => setIsCourseModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                <PencilSquareIcon className="h-4 w-4" />
+                Edit Course
+              </button>
+              <button
+                onClick={handleDeleteCourse}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+              >
+                <TrashIcon className="h-4 w-4" />
+                Delete Course
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* All Colleges Summary Card */}
+        {!course && (
+          <div className="mb-6 mt-4 rounded-2xl border border-slate-100 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30 p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mr-4">
+                  <AcademicCapIcon className="w-6 h-6 text-indigo-600" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-800">
+                    Colleges Directory
+                  </h1>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Overview of all colleges, departments, and course affiliations.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-100 text-center shadow-xs">
+                  <span className="block text-xl font-bold text-slate-800">{colleges.length}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Colleges</span>
+                </div>
+                <div className="bg-white/80 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-100 text-center shadow-xs">
+                  <span className="block text-xl font-bold text-slate-800">
+                    {[...new Set(colleges.map(c => c.city).filter(Boolean))].length}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Cities</span>
+                </div>
               </div>
             </div>
-            <button
-              onClick={() => setIsCourseModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              <PencilSquareIcon className="h-4 w-4" />
-              Edit Course
-            </button>
-            <button
-              onClick={handleDeleteCourse}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
-            >
-              <TrashIcon className="h-4 w-4" />
-              Delete Course
-            </button>
           </div>
-        </div>
+        )}
 
         {/* Search and Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -434,14 +830,16 @@ const CourseColleges = () => {
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
-            <button
-              type="button"
-              onClick={handleAddCollege}
-              className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm w-full sm:w-auto"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Add College
-            </button>
+            {isCourseFiltered && (
+              <button
+                type="button"
+                onClick={handleAddCollege}
+                className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm w-full sm:w-auto"
+              >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Add College
+              </button>
+            )}
           </div>
         </div>
 
@@ -450,267 +848,24 @@ const CourseColleges = () => {
           <div className="space-y-4">
             {filteredColleges.map((college) => {
               const cId = college._id || college.id;
-              const isExpanded = expandedCollegeId === cId;
-              const depts = departmentsMap[cId] || [];
-              const isLoadingDepts = loadingDepartments === cId;
-              const deptCount = getDepartmentCount(college.department);
-
               return (
-                <div
+                <CollegeCard
                   key={cId}
-                  className={`bg-white rounded-2xl shadow-sm border transition-all duration-300 overflow-hidden ${
-                    isExpanded
-                      ? 'border-indigo-200 shadow-[0_8px_24px_rgba(79,70,229,0.12)]'
-                      : 'border-gray-100 hover:shadow-md'
-                  }`}
-                >
-                  {/* College Header */}
-                  <div
-                    className="p-5 cursor-pointer"
-                    onClick={() => toggleCollege(cId)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center min-w-0 flex-1">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-4 shrink-0 transition-colors ${
-                          isExpanded ? 'bg-indigo-100' : 'bg-gray-100'
-                        }`}>
-                          <BuildingOfficeIcon className={`w-5 h-5 ${isExpanded ? 'text-indigo-600' : 'text-gray-500'}`} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className={`text-lg font-semibold truncate transition-colors ${
-                            isExpanded ? 'text-indigo-700' : 'text-gray-800'
-                          }`}>
-                            {college.name}
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-gray-500">
-                            {college.city && (
-                              <span className="flex items-center">
-                                <MapPinIcon className="h-3.5 w-3.5 mr-1 text-gray-400" />
-                                {college.city}
-                              </span>
-                            )}
-                            {(college.spocPhone || college.phone) && (
-                              <span className="flex items-center">
-                                <PhoneIcon className="h-3.5 w-3.5 mr-1 text-gray-400" />
-                                {college.spocPhone || college.phone}
-                              </span>
-                            )}
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-                              {deptCount} {deptCount === 1 ? 'Dept' : 'Depts'}
-                            </span>
-                            {college.department && college.department !== 'General' && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 max-w-[180px] truncate">
-                                {college.department}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 ml-4 shrink-0">
-                        {college.studentAttendanceExcelUrl && (
-                          <a
-                            href={`${FILE_BASE_URL}/uploads/trainer-documents/${college.studentAttendanceExcelUrl.split(/[\\/]/).pop()}?token=${accessToken}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center rounded-lg border border-green-200 bg-white px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-colors"
-                            title="Download Attendance Excel"
-                          >
-                            <DocumentArrowDownIcon className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                        <button
-                          onClick={(e) => handleEditCollege(college, e)}
-                          className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                          title="Edit College"
-                        >
-                          <PencilSquareIcon className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteCollege(college, e)}
-                          className="inline-flex items-center rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
-                          title="Delete College"
-                        >
-                          <TrashIcon className="h-3.5 w-3.5" />
-                        </button>
-                        <div className={`p-1 rounded-lg transition-colors ${isExpanded ? 'text-indigo-600' : 'text-gray-400'}`}>
-                          {isExpanded ? (
-                            <ChevronUpIcon className="h-5 w-5" />
-                          ) : (
-                            <ChevronDownIcon className="h-5 w-5" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Departments Section (expanded) */}
-                  {isExpanded && (
-                    <div className="border-t border-gray-100 bg-gradient-to-b from-gray-50 to-white px-5 py-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-gray-700 flex items-center">
-                          <AcademicCapIcon className="h-4 w-4 mr-1.5 text-indigo-500" />
-                          Departments
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAddingDeptForCollege(addingDeptForCollege === cId ? null : cId);
-                            setNewDeptName('');
-                          }}
-                          className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors"
-                        >
-                          <PlusIcon className="h-3.5 w-3.5 mr-1" />
-                          Add Department
-                        </button>
-                      </div>
-
-                      {/* Add Department Inline Form */}
-                      {addingDeptForCollege === cId && (
-                        <div className="mb-4 flex items-center gap-2 bg-white p-3 rounded-lg border border-indigo-200 shadow-sm">
-                          <input
-                            type="text"
-                            placeholder="Department name (e.g. CSE, ECE, Mech)"
-                            value={newDeptName}
-                            onChange={(e) => setNewDeptName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddDepartment(cId);
-                              }
-                            }}
-                            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddDepartment(cId)}
-                            disabled={!newDeptName.trim() || savingDept}
-                            className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {savingDept ? 'Adding...' : 'Add'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddingDeptForCollege(null);
-                              setNewDeptName('');
-                            }}
-                            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      )}
-
-                      {isLoadingDepts ? (
-                        <div className="flex items-center justify-center py-6">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mr-2"></div>
-                          <span className="text-sm text-gray-500">Loading departments...</span>
-                        </div>
-                      ) : depts.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                          {depts.map((dept) => (
-                            <div
-                              key={dept._id}
-                              onClick={() => {
-                                if (editingDept?._id !== dept._id) {
-                                  router.push(
-                                    `/dashboard/companies/college/${cId}/department/${encodeURIComponent(dept.name)}`
-                                  );
-                                }
-                              }}
-                              className="bg-white p-4 rounded-xl border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
-                            >
-                              {editingDept?._id === dept._id ? (
-                                /* Inline Edit Form */
-                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="text"
-                                    value={editDeptName}
-                                    onChange={(e) => setEditDeptName(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleSaveDeptEdit();
-                                      }
-                                      if (e.key === 'Escape') {
-                                        setEditingDept(null);
-                                        setEditDeptName('');
-                                      }
-                                    }}
-                                    className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                    autoFocus
-                                  />
-                                  <button
-                                    onClick={handleSaveDeptEdit}
-                                    disabled={!editDeptName.trim() || savingDept}
-                                    className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                                  >
-                                    {savingDept ? '...' : 'Save'}
-                                  </button>
-                                  <button
-                                    onClick={() => { setEditingDept(null); setEditDeptName(''); }}
-                                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                /* Normal Display */
-                                <>
-                                  <div className="flex items-center justify-between">
-                                    <h5 className="font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors truncate">
-                                      {dept.name}
-                                    </h5>
-                                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                                      {dept.isAssigned && (
-                                        <span className="bg-green-100 text-green-600 text-[10px] px-1.5 py-0.5 rounded font-medium">
-                                          Assigned
-                                        </span>
-                                      )}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setEditingDept({ _id: dept._id, name: dept.name, collegeId: cId });
-                                          setEditDeptName(dept.name);
-                                        }}
-                                        className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                                        title="Edit Department"
-                                      >
-                                        <PencilSquareIcon className="h-3.5 w-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={(e) => handleDeleteDept(dept, cId, e)}
-                                        className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                        title="Delete Department"
-                                      >
-                                        <TrashIcon className="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div className="mt-2 flex items-center justify-between">
-                                    <span className="text-xs text-gray-400">Click to view details</span>
-                                    <span className="text-xs text-indigo-500 font-medium group-hover:text-indigo-700 transition-colors">
-                                      Open →
-                                    </span>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
-                          No departments found for this college.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                  college={college}
+                  isExpanded={expandedCollegeId === cId}
+                  depts={departmentsMap[cId] || []}
+                  isLoadingDepts={loadingDepartments === cId}
+                  accessToken={accessToken}
+                  onToggle={toggleCollege}
+                  onEditCollege={handleEditCollege}
+                  onDeleteCollege={handleDeleteCollege}
+                  onAddDepartment={handleAddDepartment}
+                  onEditDepartment={handleEditDepartment}
+                  onDeleteDept={handleDeleteDept}
+                  router={router}
+                  courseId={courseId}
+                  companyId={companyId}
+                />
               );
             })}
           </div>
@@ -725,7 +880,7 @@ const CourseColleges = () => {
                 ? 'Try adjusting your search term'
                 : 'Add your first college to this course'}
             </p>
-            {!searchTerm && (
+            {!searchTerm && isCourseFiltered && (
               <button
                 onClick={handleAddCollege}
                 className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -764,7 +919,7 @@ const CourseColleges = () => {
           setDeleteItem(null);
         }}
         onConfirm={handleConfirmDelete}
-        title="Delete College"
+        title="Delete Item"
         message={`Are you sure you want to delete "${deleteItem?.name}"? This action cannot be undone.`}
       />
     </div>

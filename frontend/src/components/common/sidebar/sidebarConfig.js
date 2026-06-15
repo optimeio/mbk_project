@@ -46,11 +46,7 @@ export const roleLinks = {
 
   Trainer: [
     { label: "Dashboard",                 href: "/trainer/dashboard",            icon: Home },
-    { label: "Attendance Upload",          href: "/trainer/attendance",           icon: ClipboardList },
-    { label: "Student Activities",         href: "/trainer/student-activities",   icon: Image },
-    { label: "Student Attendance Records", href: "/trainer/student-attendance",   icon: FileText },
     { label: "Daily Visit",                href: "/trainer/daily-visit",          icon: ClipboardList },
-    { label: "Reports",                    href: "/trainer/reports",              icon: BarChart3 },
     { label: "Profile Settings",           href: "/trainer/settings",             icon: Settings },
     { label: "Profile",                    href: "/trainer/profile",              icon: UserCog },
     { label: "Logout",                     href: "/logout",                       icon: LogOut },

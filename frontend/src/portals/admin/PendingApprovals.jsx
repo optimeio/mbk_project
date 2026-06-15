@@ -16,6 +16,19 @@ import { QUERY_STALE_TIMES, withQueryPolicy } from '@/shared/config/queryPolicie
 
 const PENDING_USERS_QUERY_KEY = ADMIN_PENDING_USERS_KEY;
 
+const unwrapPendingUsersCollection = (response) => {
+    if (Array.isArray(response)) {
+        return response;
+    }
+    if (Array.isArray(response?.users)) {
+        return response.users;
+    }
+    if (Array.isArray(response?.data?.users)) {
+        return response.data.users;
+    }
+    return [];
+};
+
 const fetchPendingUsers = async () => {
     const response = await getPendingUsers();
     if (!response?.success) {
@@ -32,7 +45,7 @@ const PendingApprovals = () => {
     const canApprove = canApproveAdmission(currentUser);
     const canReject = canRejectAdmission(currentUser);
     const {
-        data: users = [],
+        data,
         isPending: loading,
         error,
         refetch,
@@ -45,10 +58,21 @@ const PendingApprovals = () => {
         }),
     });
 
+    const users = unwrapPendingUsersCollection(data);
+
     const removePendingUserFromCache = (id) => {
-        queryClient.setQueryData(PENDING_USERS_QUERY_KEY, (current = []) =>
-            current.filter((user) => String(user._id) !== String(id)),
-        );
+        queryClient.setQueryData(PENDING_USERS_QUERY_KEY, (current) => {
+            const usersList = unwrapPendingUsersCollection(current).filter(
+                (user) => String(user._id || user.id) !== String(id)
+            );
+            if (Array.isArray(current)) {
+                return usersList;
+            }
+            if (current && typeof current === 'object') {
+                return { ...current, users: usersList };
+            }
+            return usersList;
+        });
     };
 
     const approveMutation = useMutationWithToast({

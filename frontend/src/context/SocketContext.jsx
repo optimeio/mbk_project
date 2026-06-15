@@ -124,7 +124,9 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider = ({ children }) => {
   const pathname = usePathname() || '';
   const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
   const { currentUser } = useAuth();
   const socketUserId = resolveUserId(currentUser);
   const socketAccessToken = resolveAccessToken(currentUser);

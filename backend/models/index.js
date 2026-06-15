@@ -35,6 +35,7 @@ const WebRegistration = require('./WebRegistration');
 const WebMessage = require('./WebMessage');
 const AnalyticsEvent = require('./AnalyticsEvent');
 const StudentActivity = require('./StudentActivity');
+const Batch = require('./Batch');
 
 module.exports = {
   User,
@@ -73,5 +74,7 @@ module.exports = {
   WebRegistration,
   WebMessage,
   AnalyticsEvent,
-  StudentActivity
+  StudentActivity,
+  Batch
 };
+

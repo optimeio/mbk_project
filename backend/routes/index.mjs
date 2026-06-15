@@ -37,6 +37,8 @@ const adminTrainerRoutes = require("./adminTrainerRoutes.js");
 const trainerDirectoryV1Routes = require("../modules/trainers/trainers.routes.js");
 const attendanceV1Routes = require("../modules/attendance/attendance.routes.js");
 const teacherWorkflowRoutes = require("./teacherWorkflowRoutes.js");
+const batchRoutes = require("./batchRoutes.js");
+
 import simpleAuth from "./simpleAuth.mjs";
 router.use("/simple-auth", simpleAuth);
 // Removed duplicate root mounting of simpleAuth
@@ -67,6 +69,8 @@ router.use("/companies", companyRoutes);
 router.use("/company-invite", companyInviteRoutes);
 router.use("/colleges", collegeRoutes);
 router.use("/courses", courseRoutes);
+router.use("/batches", batchRoutes);
+
 router.use("/trainers", trainerRoutes);
 router.use("/schedules", scheduleRoutes);
 router.post(

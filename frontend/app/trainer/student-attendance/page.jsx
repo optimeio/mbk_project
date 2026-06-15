@@ -1,29 +1,5 @@
 "use client";
 
-<<<<<<< HEAD
-import dynamic from "next/dynamic";
-import { memo } from "react";
-
-const TrainerStudentAttendanceRecords = dynamic(
-  () => import("@/portals/trainer/TrainerStudentAttendanceRecords"),
-  {
-    loading: () => (
-      <div className="h-64 animate-pulse rounded-2xl bg-slate-100" />
-    ),
-    ssr: false,
-  },
-);
-
-function TrainerStudentAttendancePage() {
-  return (
-    <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8">
-      <TrainerStudentAttendanceRecords />
-    </div>
-  );
-}
-
-export default memo(TrainerStudentAttendancePage);
-=======
 import React, { useState, useEffect, useCallback } from 'react';
 import MainLayout from '@/app/layouts/MainLayout';
 import FileUploadCard from './components/FileUploadCard';
@@ -34,7 +10,7 @@ import { MapPin, RefreshCw, Loader2 } from 'lucide-react';
 
 export default function StudentAttendancePage() {
   const { currentUser } = useAuth();
-  
+
   const [excelFile, setExcelFile] = useState(null);
   const [liveFile, setLiveFile] = useState(null);
 
@@ -182,21 +158,25 @@ export default function StudentAttendancePage() {
         </div>
 
         {/* GPS Location Banner */}
-        <div className={`mb-8 flex flex-col justify-between gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center ${
-          locationStatus === "ready" 
-            ? "bg-emerald-50/50 border-emerald-100" 
-            : locationStatus === "error" 
-              ? "bg-rose-50/50 border-rose-100" 
-              : "bg-slate-50 border-slate-100"
-        }`}>
+        <div
+          className={`mb-8 flex flex-col justify-between gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center ${
+            locationStatus === "ready"
+              ? "bg-emerald-50/50 border-emerald-100"
+              : locationStatus === "error"
+                ? "bg-rose-50/50 border-rose-100"
+                : "bg-slate-50 border-slate-100"
+          }`}
+        >
           <div className="flex items-start gap-3">
-            <MapPin className={`h-5 w-5 shrink-0 ${
-              locationStatus === "ready" 
-                ? "text-emerald-600" 
-                : locationStatus === "error" 
-                  ? "text-rose-500" 
-                  : "text-slate-400 animate-pulse"
-            }`} />
+            <MapPin
+              className={`h-5 w-5 shrink-0 ${
+                locationStatus === "ready"
+                  ? "text-emerald-600"
+                  : locationStatus === "error"
+                    ? "text-rose-500"
+                    : "text-slate-400 animate-pulse"
+              }`}
+            />
             <div>
               <p className="text-sm font-semibold text-slate-800">
                 GPS Location Geotagging
@@ -206,9 +186,7 @@ export default function StudentAttendancePage() {
                   Latitude: {location.lat.toFixed(6)} | Longitude: {location.lng.toFixed(6)} (Acc: ±{Math.round(location.accuracy)}m)
                 </p>
               ) : locationStatus === "error" ? (
-                <p className="text-xs text-rose-700 mt-0.5">
-                  {locationError}
-                </p>
+                <p className="text-xs text-rose-700 mt-0.5">{locationError}</p>
               ) : (
                 <p className="text-xs text-slate-500 mt-0.5">
                   Acquiring satellites coordinates for verification...
@@ -216,12 +194,12 @@ export default function StudentAttendancePage() {
               )}
             </div>
           </div>
-          
+
           <button
             type="button"
             onClick={captureLocation}
             disabled={locationStatus === "locating"}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 shrink-0 self-start sm-self-auto"
           >
             {locationStatus === "locating" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
@@ -259,4 +237,3 @@ export default function StudentAttendancePage() {
     </MainLayout>
   );
 }
->>>>>>> e59dd866f287c2b2434d023fd839fb00cb3ef9b3

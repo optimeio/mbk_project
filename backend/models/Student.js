@@ -31,6 +31,7 @@ const studentSchema = new mongoose.Schema({
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
     companyCode: { type: String, default: null, index: true, uppercase: true, trim: true },
     courseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', default: null },
+    batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', default: null },
 }, { timestamps: true });
 
 // Composite index to ensure unique students within a college.

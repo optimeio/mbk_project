@@ -43,34 +43,106 @@ const getStoredLogoPath = (file) => {
 // @access  Super Admin
 router.post('/send-otp', authenticate, async (req, res) => {
     try {
+        console.log('[COMPANY-OTP] Request received:', req.body);
         const { email } = req.body;
         if (!email) {
+            console.warn('[COMPANY-OTP] Missing email in request');
             return res.status(400).json({ message: 'Admin email is required' });
         }
-
+        // Email lookup (optional, e.g., verify email exists in system)
+        console.log(`[COMPANY-OTP] Looking up email: ${email}`);
         // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log(`[COMPANY-OTP] Generated OTP: ${otp}`);
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
-
-        // Upsert OTP in DB (replaces any existing OTP for this email, auto-deletes at expiresAt)
-        await Otp.findOneAndUpdate(
-            { email },
-            { otp, purpose: 'company_admin_verify', expiresAt, verified: false },
-            { upsert: true, new: true }
-        );
-
-        // Send OTP email
-        await sendMail(
+        // Create new OTP entry (allow multiple OTPs for same email)
+        console.log('[COMPANY-OTP] Saving OTP to database');
+        // Hash OTP before storing
+        const crypto = require('crypto');
+        const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+        await Otp.create({
             email,
-            '?? Company Admin Verification OTP � MBK CarrierZ',
-            `Your OTP for Company Admin account creation is: ${otp}\n\nThis OTP is valid for 5 minutes. Do not share it with anyone.`
-        );
-
-        console.log(`[COMPANY-OTP] OTP sent to ${email}: ${otp}`);
-        res.json({ success: true, message: `OTP sent to ${email}` });
+            hashedOtp,
+            purpose: 'company_admin_verify',
+            expiresAt,
+            verified: false
+        });
+        console.log('[COMPANY-OTP] OTP saved successfully');
+        // Send OTP email
+        let emailSent = false;
+        try {
+            await sendMail(
+                email,
+                '🔑 Company Admin Verification OTP — MBK CarrierZ',
+                `Your OTP for Company Admin account creation is: ${otp}\n\nThis OTP is valid for 5 minutes. Do not share it with anyone.`
+            );
+            emailSent = true;
+            console.log('[COMPANY-OTP] Email sent successfully');
+        } catch (mailError) {
+            console.error('SMTP email failed in /send-otp:', mailError.message);
+            const allowOtpDebug = process.env.NODE_ENV !== 'production' || String(process.env.ALLOW_OTP_DEBUG || '').trim() === '1';
+            if (!allowOtpDebug) {
+                throw mailError; // Re-throw if not allowed to debug
+            }
+        }
+        console.log(`[COMPANY-OTP] OTP generated for ${email}: ${otp}`);
+        // Log to local otp_debug.txt
+        const allowOtpDebug = process.env.NODE_ENV !== 'production' || String(process.env.ALLOW_OTP_DEBUG || '').trim() === '1';
+        if (allowOtpDebug) {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const serverDebugFile = path.join(__dirname, '../otp_debug.txt');
+                const rootDebugFile = path.join(__dirname, '../../otp_debug.txt');
+                const logContent = `[${new Date().toISOString()}] Email: ${email} | OTP: ${otp} (Company Admin Verification)\n`;
+                fs.appendFileSync(serverDebugFile, logContent);
+                try {
+                    fs.appendFileSync(rootDebugFile, logContent);
+                } catch (e) {}
+            } catch (err) {
+                console.error('Failed to write local OTP debug log:', err.message);
+            }
+        }
+        res.json({
+            success: true,
+            message: emailSent ? `OTP sent to ${email}` : `OTP generated (local fallback)`,
+            ...(allowOtpDebug ? { debugOtp: otp } : {})
+        });
     } catch (error) {
         console.error('Error sending company OTP:', error);
+        console.error(error.stack);
         res.status(500).json({ message: 'Failed to send OTP', error: error.message });
+    }
+});
+
+// @route   POST /api/companies/verify-otp
+// @desc    Verify OTP for Company Admin Email
+// @access  Super Admin
+router.post('/verify-otp', authenticate, async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        if (!email || !otp) {
+            return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+        }
+        // Hash incoming OTP for comparison
+        const crypto = require('crypto');
+        const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+        console.log(`[COMPANY-OTP] Verifying OTP for ${email}`);
+        const record = await Otp.findOne({ email, hashedOtp, purpose: 'company_admin_verify' });
+        if (!record) {
+            return res.status(404).json({ success: false, message: 'OTP not found or already used. Please request a new one.' });
+        }
+        if (record.expiresAt < new Date()) {
+            return res.status(410).json({ success: false, message: 'OTP has expired' });
+        }
+        // Mark as verified
+        record.verified = true;
+        await record.save();
+        console.log(`[COMPANY-OTP] OTP verified for ${email}`);
+        return res.json({ success: true, message: 'OTP verified successfully' });
+    } catch (error) {
+        console.error('Error verifying company OTP:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 });
 

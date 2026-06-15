@@ -21,6 +21,11 @@ const attendanceSchema = new mongoose.Schema({
         ref: 'Course',
         default: null,
     },
+    batchId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Batch',
+        default: null,
+    },
     dayNumber: {
         type: Number,
         default: null,

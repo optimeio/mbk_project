@@ -17,7 +17,7 @@ const readRootEnvValue = (key) => {
   }
 };
 
-const rootBackendPort = readRootEnvValue('BACKEND_PORT') || readRootEnvValue('PORT') || '5006';
+const rootBackendPort = readRootEnvValue('BACKEND_PORT') || readRootEnvValue('PORT') || '5005';
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',

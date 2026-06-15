@@ -11,8 +11,8 @@ import { API_BASE_URL } from "@/services/api";
 import authService, { setAuthCookie } from "@/services/authService";
 import { isFirebaseConfigured } from "@/services/firebase";
 
-import { User, Lock, Eye, EyeOff } from "lucide-react";
-import MSG91OTP from "@/features/auth/components/MSG91OTP";
+import { User, Lock, Eye, EyeOff, Home } from "lucide-react";
+import EmailOTP from "@/features/auth/components/EmailOTP";
 import CTAButton from "@/components/common/CTAButton";
 import OptimizedImage from "@/components/common/OptimizedImage";
 import {
@@ -35,8 +35,6 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [cooldownSecs, setCooldownSecs] = useState(0); // rate-limit countdown
-  const cooldownRef = useRef(null);
   const [queryLoginType, setQueryLoginType] = useState("");
   const [queryRedirect, setQueryRedirect] = useState("");
   const { login, setAuthUser, currentUser, isAuthenticated, loading: authLoading } = useAuth();
@@ -88,6 +86,16 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
     setQueryLoginType(type);
     setQueryRedirect(redirect);
   }, [isRouterReady, safeReplace]);
+
+  // Redirect to home when user presses the browser Back button from the login page
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handlePopState = () => {
+      window.location.replace("/");
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     if (!isRouterReady || authLoading || loading || !currentUser || !isAuthenticated) return;
@@ -335,26 +343,6 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
     e.currentTarget.style.transform = "translateY(0)";
   };
 
-  // Start a visible countdown when rate-limited
-  const startCooldown = (seconds) => {
-    if (cooldownRef.current) clearInterval(cooldownRef.current);
-    setCooldownSecs(seconds);
-    cooldownRef.current = setInterval(() => {
-      setCooldownSecs((prev) => {
-        if (prev <= 1) {
-          clearInterval(cooldownRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const formatCooldown = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
-  };
 
   const canSubmitLogin = hasLoginCredentials({ email, password });
 
@@ -390,29 +378,32 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
       onSuccess?.();
     } catch (err) {
       const isExpectedAuthState =
-        err.pendingApproval || err.requiresEmailVerification || err.roleMismatch;
+        err.pendingApproval ||
+        err.requiresEmailVerification ||
+        err.roleMismatch ||
+        err.accountDeactivated ||
+        err.status === 401 ||
+        err.status === 429 ||
+        err.message === 'Invalid email or password' ||
+        err.message?.startsWith('Invalid email or password') ||
+        err.message?.toLowerCase().includes('too many');
       if (isExpectedAuthState) {
         console.debug("[AUTH] login blocked:", err.message);
-      } else {
+      } else if (err.status !== 400) {
+        // Only log truly unexpected errors (network, server, timeout)
         console.warn("Login Error:", err);
       }
-      if (err.status === 429) {
-        const waitSecs = err.retryAfterSeconds || 60;
-        startCooldown(waitSecs);
-        const mins = Math.ceil(waitSecs / 60);
-        const msg = err.message || `Too many attempts. Please wait ${mins} minute(s) and try again.`;
-        setError(msg);
-        notify.error(msg);
-      } else {
-        const message = err.pendingApproval
-          ? err.message || "Your account is pending admin approval."
-          : err.requiresEmailVerification
-            ? err.message || "Please verify your email before signing in."
-            : err.roleMismatch
-              ? err.message || "This email is not registered for the selected account type."
-            : err.message || "Invalid email or password";
-        setError(message);
-        notify.error(message);
+      const message = err.pendingApproval
+        ? err.message || "Your account is pending admin approval."
+        : err.requiresEmailVerification
+          ? err.message || "Please verify your email before signing in."
+          : err.roleMismatch
+            ? err.message || "This email is not registered for the selected account type."
+          : err.message || "Invalid email or password";
+      setError(message);
+      notify.error(message);
+      if (err.requiresEmailVerification) {
+          setUseOtpLogin(true);
       }
     } finally {
       setLoading(false);
@@ -452,6 +443,40 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
         className={inModal ? "" : "login-page-card"}
         style={styles.glassCard}
       >
+        {/* Home button — top-left of card */}
+        {!inModal && (
+          <div style={{ marginBottom: '1rem' }}>
+            <Link
+              href="/"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: '#f97316',
+                textDecoration: 'none',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(249,115,22,0.3)',
+                background: 'rgba(249,115,22,0.06)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(249,115,22,0.15)';
+                e.currentTarget.style.borderColor = 'rgba(249,115,22,0.6)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(249,115,22,0.06)';
+                e.currentTarget.style.borderColor = 'rgba(249,115,22,0.3)';
+              }}
+            >
+              <Home size={14} aria-hidden="true" />
+              Home
+            </Link>
+          </div>
+        )}
+
         <div className="flex flex-col items-center mb-6">
           <OptimizedImage
             src={mbkLogo}
@@ -505,30 +530,20 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
         {error && (
           <div className="bg-red-500/20 border border-red-500 text-red-100 p-3 rounded mb-4 text-center">
             {error}
-            {cooldownSecs > 0 && (
-              <div style={{ marginTop: '6px', fontSize: '0.9em', fontWeight: 600, color: '#fca5a5' }}>
-                ⏳ Try again in {formatCooldown(cooldownSecs)}
-              </div>
-            )}
           </div>
         )}
 
         {useOtpLogin ? (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <MSG91OTP
-              onSuccess={handleMsg91Success}
-              onFailure={(err) =>
-                setError(err.message || "OTP Verification Failed")
-              }
+            <EmailOTP
+              email={email}
+              password={password}
+              onSuccess={() => {
+                setUseOtpLogin(false);
+                handleSubmit({ preventDefault: () => {} });
+              }}
+              onCancel={() => setUseOtpLogin(false)}
             />
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => setUseOtpLogin(false)}
-                style={{ ...styles.link, background: "none", border: "none" }}
-              >
-                Back to Password Login
-              </button>
-            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} autoComplete="off" noValidate>
@@ -635,10 +650,10 @@ const Login = ({ specificRole, inModal = false, onSuccess }) => {
                 size="lg"
                 fullWidth
                 loading={loading}
-                disabled={loading || !canSubmitLogin || cooldownSecs > 0}
+                disabled={loading || !canSubmitLogin}
                 loadingText="Signing in..."
               >
-                {cooldownSecs > 0 ? `Wait ${formatCooldown(cooldownSecs)}` : 'LOGIN'}
+                LOGIN
               </CTAButton>
             </div>
 
