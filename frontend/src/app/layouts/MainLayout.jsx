@@ -66,7 +66,7 @@ const [isMobileSettingsOpen, setIsMobileSettingsOpen] = useState(false);
         // Optional: Refresh every 60 seconds
         const interval = setInterval(refreshTrainerStatus, 60000);
         return () => clearInterval(interval);
-    }, []);
+    }, [currentUser, setAuthUser]);
 
     useEffect(() => {
         const handleOutsideClick = (event) => {

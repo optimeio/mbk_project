@@ -15,31 +15,62 @@ const {
 const escapeRegex = (value = "") =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const findScopedCompanyIdsByUserId = async (userId) => {
-  if (!userId) {
-    return [];
+const normalizeCompanyCode = (value) =>
+  String(value || "").trim().toUpperCase();
+
+const findScopedCompanyIdentifiersByUser = async (user) => {
+  if (!user) {
+    return {
+      scopedCompanyIds: [],
+      scopedCompanyCodes: [],
+    };
   }
 
-  const linkedCompanies = await Company.find({
-    $or: [
-      { adminId: userId },
-      { userId },
-    ],
-  })
-    .select("_id")
-    .lean();
+  const scopedCompanyIds = new Set();
+  const scopedCompanyCodes = new Set();
 
-  const seen = new Set();
-  const scopedCompanyIds = [];
+  const userId = user?._id || user?.id || user?.userId || null;
 
-  linkedCompanies.forEach((company) => {
-    const token = String(company?._id || "").trim();
-    if (!token || seen.has(token)) return;
-    seen.add(token);
-    scopedCompanyIds.push(company._id);
-  });
+  if (user?.companyId) {
+    scopedCompanyIds.add(String(user.companyId));
+  }
 
-  return scopedCompanyIds;
+  if (Array.isArray(user?.companyIds)) {
+    user.companyIds.forEach((companyId) => {
+      if (companyId) scopedCompanyIds.add(String(companyId));
+    });
+  }
+
+  if (user?.companyCode) {
+    scopedCompanyCodes.add(normalizeCompanyCode(user.companyCode));
+  }
+
+  if (Array.isArray(user?.companyCodes)) {
+    user.companyCodes.forEach((companyCode) => {
+      if (companyCode) scopedCompanyCodes.add(normalizeCompanyCode(companyCode));
+    });
+  }
+
+  if ((!scopedCompanyIds.size && !scopedCompanyCodes.size) && userId) {
+    const linkedCompanies = await Company.find({
+      $or: [
+        { adminId: userId },
+        { userId: userId },
+      ],
+    })
+      .select("_id companyCode")
+      .lean();
+
+    linkedCompanies.forEach((company) => {
+      if (company?._id) scopedCompanyIds.add(String(company._id));
+      if (company?.companyCode) scopedCompanyCodes.add(normalizeCompanyCode(company.companyCode));
+    });
+  }
+
+  return {
+    scopedCompanyIds: [...scopedCompanyIds],
+    scopedCompanyCodes: [...scopedCompanyCodes],
+  };
 };
 
 const buildSchedulesListQuery = (filter = {}) =>
@@ -325,40 +356,39 @@ const resolveTrainerScheduleFilterContext = async ({ trainerIdentifier } = {}) =
     };
   }
 
+  // Build lookup filters for MongoDB query
   const trainerLookupFilters = [];
   if (mongoose.Types.ObjectId.isValid(normalizedIdentifier)) {
-    trainerLookupFilters.push(
-      { _id: normalizedIdentifier },
-      { userId: normalizedIdentifier },
-    );
+    // Allow lookup by _id or userId (both ObjectId strings)
+    trainerLookupFilters.push({ _id: normalizedIdentifier }, { userId: normalizedIdentifier });
   }
+  // Always allow lookup by custom trainerId (string)
   trainerLookupFilters.push({
     trainerId: { $regex: new RegExp(`^${escapeRegex(normalizedIdentifier)}$`, "i") },
   });
 
+  // Query Trainer collection
   const trainerDocs = trainerLookupFilters.length
     ? await Trainer.find({ $or: trainerLookupFilters }).select("_id").lean()
     : [];
 
+  // Extract ObjectId strings from matched docs
   const resolvedTrainerDocIds = trainerDocs
-    .map((trainerDoc) => String(trainerDoc?._id || "").trim())
+    .map((doc) => String(doc?._id || "").trim())
     .filter(Boolean);
 
-  const uniqueFilterTrainerIds = Array.from(
-    new Set([
-      ...resolvedTrainerDocIds,
-      normalizedIdentifier,
-    ].filter(Boolean)),
-  );
+  // Use only the resolved ObjectId(s) for filtering; do not include raw identifier string
+  const uniqueFilterTrainerIds = Array.from(new Set(resolvedTrainerDocIds));
 
   return {
-    cacheTrainerId: resolvedTrainerDocIds[0] || normalizedIdentifier,
+    // Use the first resolved ObjectId as cacheTrainerId; if none, leave empty
+    cacheTrainerId: resolvedTrainerDocIds[0] || "",
     filterTrainerIds: uniqueFilterTrainerIds,
   };
 };
 
 module.exports = {
-  findScopedCompanyIdsByUserId,
+  findScopedCompanyIdentifiersByUser,
   listSchedules,
   listLiveDashboardSchedules,
   listLatestAttendanceByScheduleIds,

@@ -93,11 +93,14 @@ router.get('/:id', authenticate, async (req, res) => {
 // @access  Super Admin
 router.post('/', authenticate, async (req, res) => {
     try {
-        const { courseId, collegeId, batchName, trainerIds, startDate, endDate, capacity, status } = req.body;
+        const { courseId, collegeId, batchName, trainerIds, startDate, endDate, capacity, status, sessionType, endSessionType } = req.body;
 
         if (!courseId || !collegeId || !batchName) {
             return res.status(400).json({ message: 'courseId, collegeId, and batchName are required' });
         }
+
+        const cleanSessionType = (sessionType && ['FN', 'AN', 'Both'].includes(sessionType)) ? sessionType : 'Both';
+        const cleanEndSessionType = (endSessionType && ['FN', 'AN', 'Both'].includes(endSessionType)) ? endSessionType : 'Both';
 
         const batch = await Batch.create({
             courseId,
@@ -107,12 +110,20 @@ router.post('/', authenticate, async (req, res) => {
             startDate,
             endDate,
             capacity: capacity || 60,
-            status: status || 'active'
+            status: status || 'active',
+            sessionType: cleanSessionType,
+            endSessionType: cleanEndSessionType
         });
 
         res.status(201).json(batch);
     } catch (error) {
         console.error('[ERROR] POST /api/batches failed:', error);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: error.message, errors: error.errors });
+        }
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Duplicate key error: A batch with this code already exists.' });
+        }
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });
@@ -127,7 +138,7 @@ router.put('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ message: 'Batch not found' });
         }
 
-        const { batchName, batchCode, trainerIds, startDate, endDate, capacity, status } = req.body;
+        const { batchName, batchCode, trainerIds, startDate, endDate, capacity, status, sessionType, endSessionType } = req.body;
 
         if (batchName) batch.batchName = batchName;
         if (batchCode) batch.batchCode = batchCode;
@@ -136,11 +147,23 @@ router.put('/:id', authenticate, async (req, res) => {
         if (endDate !== undefined) batch.endDate = endDate;
         if (capacity) batch.capacity = capacity;
         if (status) batch.status = status;
+        if (sessionType !== undefined) {
+            batch.sessionType = ['FN', 'AN', 'Both'].includes(sessionType) ? sessionType : 'Both';
+        }
+        if (endSessionType !== undefined) {
+            batch.endSessionType = ['FN', 'AN', 'Both'].includes(endSessionType) ? endSessionType : 'Both';
+        }
 
         await batch.save();
         res.json(batch);
     } catch (error) {
         console.error('[ERROR] PUT /api/batches/:id failed:', error);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: error.message, errors: error.errors });
+        }
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Duplicate key error: A batch with this code already exists.' });
+        }
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 });

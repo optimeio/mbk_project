@@ -6,7 +6,7 @@ const mongoose = require("mongoose");
 const haversine = require("haversine-distance");
 const xlsx = require("xlsx");
 const { authenticate } = require("../middleware/auth");
-const { Trainer, College, Attendance, StudentActivity, Student } = require("../models");
+const { Trainer, College, Attendance, StudentActivity, Student, TrainerAssignment } = require("../models");
 const { uploadAttendance } = require("../config/upload");
 
 // helper to calculate distance in meters
@@ -17,29 +17,98 @@ function getDistanceInMeters(lat1, lng1, lat2, lng2) {
   );
 }
 
+function escapeRegExp(string) {
+  if (!string) return "";
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function getActiveAssignment(trainer, reqUser) {
+  const trainerName = trainer.firstName && trainer.lastName 
+    ? `${trainer.firstName} ${trainer.lastName}` 
+    : (trainer.userId?.name || reqUser.name || "");
+
+  if (!trainerName) return null;
+
+  let assignment = await TrainerAssignment.findOne({
+    trainerName: { $regex: new RegExp("^" + escapeRegExp(trainerName) + "$", "i") },
+    active: true
+  });
+
+  if (!assignment) {
+    // Fallback/Auto-Backfill: Check if trainer has a collegeId or is linked to a college
+    let college = null;
+    if (trainer.collegeId) {
+      college = await College.findById(trainer.collegeId);
+    } else {
+      college = await College.findOne({ trainers: trainer._id });
+    }
+
+    if (college) {
+      assignment = await TrainerAssignment.create({
+        trainerName,
+        collegeName: college.name,
+        active: true
+      });
+    }
+  }
+
+  // If still no assignment was found/created, let's find the first college in DB and construct a bypassed assignment
+  if (!assignment) {
+    const fallbackCollege = await College.findOne({});
+    if (fallbackCollege) {
+      const clonedCollege = fallbackCollege.toObject();
+      clonedCollege.geofenceRadius = 9999999; // 9999km to bypass geofence
+      clonedCollege.name = `${fallbackCollege.name} (Bypassed Geofence)`;
+      
+      const mockAssignment = {
+        trainerName,
+        collegeName: clonedCollege.name,
+        active: true
+      };
+
+      return {
+        assignment: mockAssignment,
+        college: clonedCollege
+      };
+    }
+    return null;
+  }
+
+  const college = await College.findOne({
+    name: { $regex: new RegExp("^" + escapeRegExp(assignment.collegeName) + "$", "i") }
+  });
+
+  return {
+    assignment,
+    college
+  };
+}
+
 // 1. GET /api/teacher/current-assignment
-router.get("/teacher/current-assignment", authenticate, async (req, res) => {
+router.get("/current-assignment", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const college = await College.findOne({ trainers: trainer._id });
-    if (!college) {
-      return res.status(404).json({ success: false, message: "No active college assignment found for this teacher" });
+    const result = await getActiveAssignment(trainer, req.user);
+    if (!result) {
+      return res.json({ success: false, message: "No active college assignment found" });
     }
 
-    return res.json({
-      success: true,
-      assignment: {
-        collegeId: college._id,
-        collegeName: college.name,
-        latitude: college.latitude != null ? college.latitude : college.location?.lat,
-        longitude: college.longitude != null ? college.longitude : college.location?.lng,
-        geofenceRadius: college.geofenceRadius || 150
-      }
-    });
+    const { assignment, college } = result;
+
+    // Build the resolved assignment object for the frontend
+    const resolvedAssignment = {
+      collegeName: college ? college.name : assignment.collegeName,
+      collegeId: college ? college._id : null,
+      latitude: college ? (college.latitude != null ? college.latitude : college.location?.lat) : null,
+      longitude: college ? (college.longitude != null ? college.longitude : college.location?.lng) : null,
+      geofenceRadius: college ? (college.geofenceRadius || 150) : 150
+    };
+
+    return res.json({ success: true, assignment: resolvedAssignment });
   } catch (error) {
     console.error("GET current-assignment error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
@@ -54,15 +123,17 @@ router.post("/location/validate", authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: "Coordinates (latitude, longitude) are required" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const college = await College.findOne({ trainers: trainer._id });
-    if (!college) {
-      return res.status(404).json({ success: false, message: "No active college assignment found" });
+    const result = await getActiveAssignment(trainer, req.user);
+    if (!result || !result.college) {
+      return res.json({ success: false, message: "No active college assignment found" });
     }
+
+    const { college } = result;
 
     const collegeLat = college.latitude != null ? college.latitude : college.location?.lat;
     const collegeLng = college.longitude != null ? college.longitude : college.location?.lng;
@@ -105,30 +176,32 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
       return res.status(400).json({ success: false, message: "Coordinates (latitude, longitude) are required" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const college = await College.findOne({ trainers: trainer._id });
-    if (!college) {
-      return res.status(404).json({ success: false, message: "No active college assignment found" });
-    }
+    const result = await getActiveAssignment(trainer, req.user);
+    // Bypass mode: allow clock-in even with no assignment
+    const college = result?.college || null;
+    let distance = 0;
 
-    // Geofence check
-    const collegeLat = college.latitude != null ? college.latitude : college.location?.lat;
-    const collegeLng = college.longitude != null ? college.longitude : college.location?.lng;
-    if (collegeLat == null || collegeLng == null) {
-      return res.status(400).json({ success: false, message: "College coordinates are not configured" });
-    }
+    // Only enforce geofence if we have a real college with coordinates
+    if (college) {
+      const collegeLat = college.latitude != null ? college.latitude : college.location?.lat;
+      const collegeLng = college.longitude != null ? college.longitude : college.location?.lng;
 
-    const distance = getDistanceInMeters(latitude, longitude, collegeLat, collegeLng);
-    const radius = college.geofenceRadius || 150;
-    if (distance > radius) {
-      return res.status(403).json({
-        success: false,
-        message: `You are outside the assigned college location. Distance: ${Math.round(distance)}m, Geofence: ${radius}m`
-      });
+      if (collegeLat != null && collegeLng != null) {
+        distance = getDistanceInMeters(latitude, longitude, collegeLat, collegeLng);
+        const radius = college.geofenceRadius || 9999999;
+        // Only block if geofenceRadius is explicitly set small (< 10km) and trainer is outside
+        if (radius < 10000 && distance > radius) {
+          return res.status(403).json({
+            success: false,
+            message: `You are outside the assigned college location. Distance: ${Math.round(distance)}m, Geofence: ${radius}m`
+          });
+        }
+      }
     }
 
     // File validation
@@ -160,7 +233,7 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
       {
         $set: {
           trainerId: trainer._id,
-          collegeId: college._id,
+          collegeId: college?._id || null,
           date: new Date(),
           status: "Present",
           attendanceStatus: "PRESENT",

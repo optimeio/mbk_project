@@ -38,6 +38,7 @@ import {
   normalizeDriveSyncDryRunNormalization,
   runDriveSyncDryRunPreview,
 } from "../../src/portals/admin/driveSyncPreview.js";
+import { parseApiJsonResponse } from "../../src/lib/authErrorHandler.js";
 
 const tests = [
   {
@@ -720,6 +721,22 @@ const tests = [
       assert.match(message, /Errors: 1/);
       assert.match(message, /Legacy folder skipped/);
       assert.match(message, /Drive metadata read timeout/);
+    },
+  },
+  {
+    name: "parseApiJsonResponse returns nonJsonBody marker for failed non-JSON responses",
+    run: async () => {
+      const response = {
+        ok: false,
+        status: 502,
+        text: async () => "<html>Bad Gateway</html>",
+      };
+
+      const result = await parseApiJsonResponse(response);
+      assert.deepEqual(result, {
+        nonJsonBody: "<html>Bad Gateway</html>",
+        message: "Server temporarily unavailable.",
+      });
     },
   },
 ];

@@ -42,6 +42,16 @@ const batchSchema = new mongoose.Schema({
         type: Number,
         default: 60,
     },
+    sessionType: {
+        type: String,
+        enum: ['FN', 'AN', 'Both'],
+        default: 'Both',
+    },
+    endSessionType: {
+        type: String,
+        enum: ['FN', 'AN', 'Both'],
+        default: 'Both',
+    },
     status: {
         type: String,
         enum: ['active', 'completed', 'upcoming'],
@@ -74,8 +84,18 @@ batchSchema.pre('validate', async function (next) {
         if (!prefix) prefix = 'B';
 
         const count = await mongoose.model('Batch').countDocuments({ courseId: this.courseId, collegeId: this.collegeId });
-        const codeSuffix = String(count + 1).padStart(3, '0');
-        this.batchCode = `${prefix}-B${codeSuffix}`;
+        
+        let suffixNum = count + 1;
+        let candidateCode = `${prefix}-B${String(suffixNum).padStart(3, '0')}`;
+        
+        let exists = await mongoose.model('Batch').exists({ batchCode: candidateCode });
+        while (exists) {
+            suffixNum++;
+            candidateCode = `${prefix}-B${String(suffixNum).padStart(3, '0')}`;
+            exists = await mongoose.model('Batch').exists({ batchCode: candidateCode });
+        }
+        
+        this.batchCode = candidateCode;
         next();
     } catch (err) {
         next(err);

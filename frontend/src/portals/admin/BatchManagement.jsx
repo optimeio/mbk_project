@@ -42,6 +42,8 @@ const BatchManagement = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [capacity, setCapacity] = useState(60);
+    const [sessionType, setSessionType] = useState('Both');
+    const [endSessionType, setEndSessionType] = useState('Both');
     const [status, setStatus] = useState('active');
     const [selectedTrainers, setSelectedTrainers] = useState([]);
 
@@ -157,6 +159,8 @@ const BatchManagement = () => {
         setStartDate('');
         setEndDate('');
         setCapacity(60);
+        setSessionType('Both');
+        setEndSessionType('Both');
         setStatus('active');
         setSelectedTrainers([]);
         setEditingBatch(null);
@@ -174,6 +178,8 @@ const BatchManagement = () => {
         setStartDate(batch.startDate ? new Date(batch.startDate).toISOString().split('T')[0] : '');
         setEndDate(batch.endDate ? new Date(batch.endDate).toISOString().split('T')[0] : '');
         setCapacity(batch.capacity || 60);
+        setSessionType(batch.sessionType || 'Both');
+        setEndSessionType(batch.endSessionType || 'Both');
         setStatus(batch.status || 'active');
         setSelectedTrainers(batch.trainerIds?.map(t => t._id || t) || []);
         setIsBatchModalOpen(true);
@@ -195,6 +201,8 @@ const BatchManagement = () => {
             startDate: startDate || null,
             endDate: endDate || null,
             capacity: Number(capacity),
+            sessionType,
+            endSessionType,
             status,
             trainerIds: selectedTrainers
         };
@@ -515,29 +523,64 @@ const BatchManagement = () => {
                             )}
 
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Start Date</label>
-                                    <input
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">End Date</label>
-                                    <input
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
+                                <div className="col-span-2">
+                                    <label className="flex items-center text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                                        <CalendarDaysIcon className="h-4 w-4 mr-1 text-slate-400" /> Timeline
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 flex items-center border border-slate-200 rounded-xl focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500 bg-white overflow-hidden relative">
+                                            <span className="pl-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                                                Start
+                                            </span>
+                                            <input
+                                                type="date"
+                                                value={startDate}
+                                                onChange={(e) => setStartDate(e.target.value)}
+                                                className="flex-1 pl-3 pr-1 py-2 text-sm focus:outline-none bg-transparent"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setSessionType(prev => prev === 'Both' ? 'FN' : prev === 'FN' ? 'AN' : 'Both')}
+                                                className={`px-3 py-2 text-[11px] font-bold border-l border-slate-200 transition-colors shrink-0 ${
+                                                    sessionType !== 'Both' 
+                                                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
+                                                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                                title="Toggle Session (Both / FN / AN)"
+                                            >
+                                                {sessionType === 'Both' ? 'Both' : sessionType}
+                                            </button>
+                                        </div>
+                                        <div className="relative flex-1 flex items-center border border-slate-200 rounded-xl focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500 bg-white overflow-hidden">
+                                            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                                                End
+                                            </span>
+                                            <input
+                                                type="date"
+                                                value={endDate}
+                                                onChange={(e) => setEndDate(e.target.value)}
+                                                className="w-full pl-12 pr-1 py-2 text-sm focus:outline-none bg-transparent"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setEndSessionType(prev => prev === 'Both' ? 'FN' : prev === 'FN' ? 'AN' : 'Both')}
+                                                className={`px-3 py-2 text-[11px] font-bold border-l border-slate-200 transition-colors shrink-0 ${
+                                                    endSessionType !== 'Both' 
+                                                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
+                                                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                                                }`}
+                                                title="Toggle End Session (Both / FN / AN)"
+                                            >
+                                                {endSessionType === 'Both' ? 'Both' : endSessionType}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Capacity</label>
+                                    <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">Students</label>
                                     <input
                                         type="number"
                                         min="1"

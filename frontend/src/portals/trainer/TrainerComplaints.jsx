@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Form, Input, Select, Button, Upload, Switch, Radio } from 'antd';
+import { Form, Input, Select, Button, Upload, Switch, Radio, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 
 import { api } from '@/services/api';
@@ -12,6 +12,20 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const TrainerComplaints = () => {
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  const isJpgOrPng = (file) => /image\/(jpeg|png)$/i.test(file.type);
+  const beforeUpload = (file) => {
+    if (!isJpgOrPng(file)) {
+      message.error('You can only upload JPG or PNG images!');
+      return Upload.LIST_IGNORE;
+    }
+    if (file.size > maxSize) {
+      message.error('Image must be smaller than 5MB!');
+      return Upload.LIST_IGNORE;
+    }
+    // Return false to prevent automatic upload, will be handled manually
+    return false;
+  };
     const [form] = Form.useForm();
     const [fileList, setFileList] = useState([]);
     const [isAnonymous, setIsAnonymous] = useState(false);
@@ -156,23 +170,37 @@ const TrainerComplaints = () => {
                             label="Attachment (Optional)"
                             className="mb-0"
                         >
-                            <Upload 
-                                fileList={fileList}
-                                onChange={handleUploadChange}
-                                beforeUpload={() => false}
-                                maxCount={1}
-                                className="w-full"
-                            >
-                                <Button icon={<UploadOutlined />} size="large" block>Tap to Upload File</Button>
-                            </Upload>
+                            <Upload
+                                    fileList={fileList}
+                                    onChange={handleUploadChange}
+                                    beforeUpload={beforeUpload}
+                                    maxCount={1}
+                                    listType="text"
+                                    className="w-full"
+                                >
+                                    <Button icon={<UploadOutlined />} size="large" block>Tap to Upload File</Button>
+                                    </Upload>
+                                    {fileList.length > 0 && (
+                                      <div className="mt-2 flex items-center space-x-4">
+                                        <img
+                                          src={URL.createObjectURL(fileList[0].originFileObj)}
+                                          alt="preview"
+                                          className="h-16 w-16 object-cover rounded"
+                                        />
+                                        <span className="text-sm text-gray-600">
+                                          {fileList[0].name} - {(fileList[0].size / 1024).toFixed(2)} KB
+                                        </span>
+                                      </div>
+                                    )}
+
                         </Form.Item>
 
                         <div className="bg-gray-50 p-4 rounded-xl flex items-center justify-between border border-gray-100">
-                            <div className="flex w-full items-center justify-between">
-                                <div>
-                                    <span className="text-gray-700 font-medium text-sm">Submit Anonymously</span>
-                                    <p className="text-xs text-gray-500 mt-0.5">Your name will be hidden from the admin reports.</p>
-                                </div>
+                                <div className="flex w-full items-center justify-between">
+                                    <div>
+                                        <span className="text-gray-700 font-medium text-sm">Submit Anonymously</span>
+                                        <p className="text-xs text-gray-500 mt-0.5">Your name will be hidden from the admin reports.</p>
+                                    </div>
                                 <Switch
                                     checked={isAnonymous}
                                     onChange={(checked) => setIsAnonymous(checked)}

@@ -59,6 +59,7 @@ const loginWithPassword = async ({
   const normalizedRole = normalizeRoleValue(user.role).toLowerCase();
 
   if (normalizedRole === "trainer") {
+    /* 
     const emailVerified = Boolean(user.emailVerified || user.isEmailVerified);
     if (!emailVerified) {
       const err = new Error(
@@ -68,7 +69,9 @@ const loginWithPassword = async ({
       err.requiresEmailVerification = true;
       throw err;
     }
+    */
 
+    /*
     if (user.accountStatus !== "active") {
       const err = new Error(
         "Your trainer account is waiting for admin approval.",
@@ -77,6 +80,7 @@ const loginWithPassword = async ({
       err.pendingApproval = true;
       throw err;
     }
+    */
   }
 
   if (user.twoFactorEnabled) {

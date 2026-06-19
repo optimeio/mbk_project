@@ -200,6 +200,11 @@ const trainerSchema = new mongoose.Schema(
       uppercase: true,
       trim: true,
     },
+    collegeId: { // Optional direct association to a college
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'College',
+      default: null,
+    },
     trainerId: {
       type: String,
       unique: true,

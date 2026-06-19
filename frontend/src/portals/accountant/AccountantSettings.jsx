@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from 'next/navigation';
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
 import { notify } from "@/lib/toast";
-import { User, Bell, Shield, LogOut, Save, Eye, EyeOff } from "lucide-react";
+import { Shield, LogOut, Save, Eye, EyeOff } from "lucide-react";
 
 const Section = ({ title, children }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-5">
@@ -23,6 +24,7 @@ const Field = ({ label, children }) => (
 );
 
 export default function AccountantSettings() {
+  const router = useRouter();
   const { currentUser, logout } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [notifications, setNotifications] = useState({
@@ -161,8 +163,16 @@ export default function AccountantSettings() {
       {/* Danger Zone */}
       <div className="bg-red-50 rounded-2xl p-5 border border-red-100">
         <h3 className="font-semibold text-red-900 mb-1">Sign Out</h3>
-        <p className="text-sm text-red-700 mb-3">You will be redirected to the login page.</p>
-        <button onClick={logout}
+        <p className="text-sm text-red-700 mb-3">You will be logged out and returned to the home page.</p>
+        <button onClick={async () => {
+            try {
+              await logout();
+              router.push('/');
+            } catch (error) {
+              console.error('Logout failed:', error);
+              router.push('/');
+            }
+          }}
           className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-xl hover:bg-red-700">
           <LogOut className="w-4 h-4" />
           Sign out

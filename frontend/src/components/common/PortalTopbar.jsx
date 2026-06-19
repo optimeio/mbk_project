@@ -208,12 +208,6 @@ function PortalTopbarInner({ onMenuClick = () => {} }) {
             badgeClassName="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white"
           />
 
-          {isTrainerPortal ? (
-            <PortalBrandMark
-              href="/trainer/dashboard"
-            />
-          ) : null}
-
           <div ref={accountMenuRef} className="relative shrink-0">
             <button
               type="button"

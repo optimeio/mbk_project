@@ -48,8 +48,6 @@ export const roleLinks = {
     { label: "Dashboard",                 href: "/trainer/dashboard",            icon: Home },
     { label: "Daily Visit",                href: "/trainer/daily-visit",          icon: ClipboardList },
     { label: "Profile Settings",           href: "/trainer/settings",             icon: Settings },
-    { label: "Profile",                    href: "/trainer/profile",              icon: UserCog },
-    { label: "Logout",                     href: "/logout",                       icon: LogOut },
   ],
 
   Accountant: [
@@ -66,7 +64,6 @@ export const roleLinks = {
     { label: "Dashboard",         href: "/student/dashboard",            icon: Home },
     { label: "Courses",             href: "/student/courses",              icon: BookOpen },
     { label: "Learning Hub",        href: "/lms",                          icon: GraduationCap },
-    { label: "Profile",             href: "/student/profile",              icon: UserCog },
   ],
 
   Company: [
@@ -76,7 +73,6 @@ export const roleLinks = {
     { label: "Colleges",          href: "/company/colleges",             icon: GraduationCap },
     { label: "Trainers",          href: "/company/hiring",               icon: Users },
     { label: "Reports",           href: "/company/reports",              icon: BarChart3 },
-    { label: "Profile",           href: "/company/profile",              icon: Settings },
   ],
 };
 

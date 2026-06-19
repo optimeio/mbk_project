@@ -1,7 +1,8 @@
 // src/lib/socket.js
 import { io } from "socket.io-client";
+import { getSocketOrigin } from "@/config/apiConfig";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5006";
+const BACKEND_URL = getSocketOrigin();
 
 let socketInstance = null;
 

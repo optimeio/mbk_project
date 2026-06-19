@@ -125,17 +125,36 @@ export const normalizeAuthResponseError = (response = {}, fallbackStatus = 0) =>
  * or HTML pages. Treat any non-JSON body as a server/proxy error.
  */
 export const parseApiJsonResponse = async (response) => {
+  // Capture response status for error context
+  const status = Number(response?.status ?? 0);
   const text = await response.text();
+
+  // If body is empty, return empty object
   if (!text) return {};
 
   try {
+    // Attempt to parse JSON normally
     return JSON.parse(text);
-  } catch {
-    // Any non-JSON body (HTML error pages, plain text, proxy errors) is
-    // treated as a server-side issue — never expose raw body to users.
-    const err = new Error(AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE);
-    err.status = Number(response?.status || 0);
-    err.nonJsonBody = text.slice(0, 120); // kept for debug only
+  } catch (e) {
+    // Non-JSON body: if the response failed, let the caller use status-based error handling.
+    const preview = text.slice(0, 200);
+    if (!response.ok) {
+      if (typeof process !== "undefined" && process?.env?.NODE_ENV !== "production") {
+        console.warn("Non-JSON response body:", text);
+      }
+      return {
+        nonJsonBody: preview,
+        message: AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE,
+      };
+    }
+
+    const err = new Error(`${AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE} (Status ${status}): ${preview}`);
+    err.status = status;
+    err.nonJsonBody = preview;
+    // Log the full body for debugging in non-production environments
+    if (typeof process !== "undefined" && process?.env?.NODE_ENV !== "production") {
+      console.warn("Non-JSON response body:", text);
+    }
     throw err;
   }
 };

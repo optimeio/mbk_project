@@ -6,7 +6,7 @@ const { parseDepartments } = require("../../utils/departmentAccess");
 const {
   listDepartmentAttendanceDocs,
   listDepartmentSchedules,
-  findScopedCompanyIdsByUserId,
+  findScopedCompanyIdentifiersByUser,
   listLatestAttendanceByScheduleIds,
   listLiveDashboardSchedules,
   listSchedules,
@@ -127,21 +127,30 @@ const listSchedulesFeed = async ({
   query,
   user,
   listSchedulesLoader = listSchedules,
-  findScopedCompanyIdsLoader = findScopedCompanyIdsByUserId,
+  findScopedCompanyIdsLoader = findScopedCompanyIdentifiersByUser,
 } = {}) => {
   const filter = {};
 
   if (isSpocRole(user?.role)) {
-    const userId = user?._id || user?.id || null;
-    const scopedCompanyIds = await findScopedCompanyIdsLoader(userId);
+    const userId = user?._id || user?.id || user?.userId || null;
+    const {
+      scopedCompanyIds,
+      scopedCompanyCodes,
+    } = await findScopedCompanyIdsLoader(user);
 
+    const ors = [];
     if (scopedCompanyIds.length > 0) {
-      filter.$or = [
-        { companyId: { $in: scopedCompanyIds } },
-        { createdBy: userId },
-      ];
-    } else if (userId) {
-      filter.createdBy = userId;
+      ors.push({ companyId: { $in: scopedCompanyIds } });
+    }
+    if (scopedCompanyCodes.length > 0) {
+      ors.push({ companyCode: { $in: scopedCompanyCodes } });
+    }
+    if (userId) {
+      ors.push({ createdBy: userId });
+    }
+
+    if (ors.length > 0) {
+      filter.$or = ors;
     } else {
       return { success: true, count: 0, data: [] };
     }
@@ -196,7 +205,7 @@ const listLiveDashboardFeed = async ({
   user,
   listLiveDashboardSchedulesLoader = listLiveDashboardSchedules,
   listLatestAttendanceLoader = listLatestAttendanceByScheduleIds,
-  findScopedCompanyIdsLoader = findScopedCompanyIdsByUserId,
+  findScopedCompanyIdsLoader = findScopedCompanyIdentifiersByUser,
 } = {}) => {
   const today = dayjs().startOf("day").toDate();
   const tomorrow = dayjs().endOf("day").toDate();
@@ -207,16 +216,25 @@ const listLiveDashboardFeed = async ({
   };
 
   if (isSpocRole(user?.role)) {
-    const userId = user?._id || user?.id || null;
-    const scopedCompanyIds = await findScopedCompanyIdsLoader(userId);
+    const userId = user?._id || user?.id || user?.userId || null;
+    const {
+      scopedCompanyIds,
+      scopedCompanyCodes,
+    } = await findScopedCompanyIdsLoader(user);
 
+    const ors = [];
     if (scopedCompanyIds.length > 0) {
-      filter.$or = [
-        { companyId: { $in: scopedCompanyIds } },
-        { createdBy: userId },
-      ];
-    } else if (userId) {
-      filter.createdBy = userId;
+      ors.push({ companyId: { $in: scopedCompanyIds } });
+    }
+    if (scopedCompanyCodes.length > 0) {
+      ors.push({ companyCode: { $in: scopedCompanyCodes } });
+    }
+    if (userId) {
+      ors.push({ createdBy: userId });
+    }
+
+    if (ors.length > 0) {
+      filter.$or = ors;
     } else {
       return { success: true, count: 0, data: [] };
     }
@@ -674,22 +692,43 @@ const deriveTrainerScheduleActionability = (schedule, attendance) => {
   return Boolean(schedule?._id);
 };
 
+const getAssignedDateKey = (value) => {
+  if (!value) return "";
+  const normalized = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+};
+
 const buildTrainerSchedulesPayload = ({
   schedules = [],
   attendanceDocs = [],
 } = {}) => {
-  const latestAttendanceByScheduleId = new Map();
+  const latestAttendanceByKey = new Map();
 
   attendanceDocs.forEach((attendance) => {
-    const scheduleKey = String(attendance?.scheduleId || "").trim();
-    const current = latestAttendanceByScheduleId.get(scheduleKey);
-    if (scheduleKey && isPreferredAttendanceCandidate(attendance, current)) {
-      latestAttendanceByScheduleId.set(scheduleKey, attendance);
+    const scheduleId = String(attendance?.scheduleId || "").trim();
+    if (!scheduleId) return;
+
+    const dateKey = getAssignedDateKey(attendance.assignedDate || attendance.createdAt);
+    const key = `${scheduleId}::${dateKey}`;
+
+    const current = latestAttendanceByKey.get(key);
+    if (isPreferredAttendanceCandidate(attendance, current)) {
+      latestAttendanceByKey.set(key, attendance);
     }
   });
 
   return schedules.map((schedule) => {
-    const attendance = latestAttendanceByScheduleId.get(String(schedule?._id || "")) || null;
+    const scheduleId = String(schedule?._id || schedule?.id || "");
+    const originalId = scheduleId.split("_")[0];
+    const dateKey = getAssignedDateKey(schedule.scheduledDate);
+    const key = `${originalId}::${dateKey}`;
+
+    const attendance = latestAttendanceByKey.get(key) || null;
     const dayUploadStatus = buildDayUploadStatus(schedule, attendance);
     const trainerScheduleStatus = deriveTrainerScheduleStatus(schedule, attendance);
     const isActionable = deriveTrainerScheduleActionability(schedule, attendance);
@@ -716,6 +755,31 @@ const buildTrainerSchedulesPayload = ({
   });
 };
 
+const DAY_NAME_TO_INDEX = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+const getDatesForDayOfWeek = (year, month, dayOfWeekName) => {
+  const dayIndex = DAY_NAME_TO_INDEX[String(dayOfWeekName || "").trim().toLowerCase()];
+  if (dayIndex === undefined) return [];
+
+  const dates = [];
+  const date = new Date(year, month - 1, 1);
+  while (date.getMonth() === month - 1) {
+    if (date.getDay() === dayIndex) {
+      dates.push(new Date(date));
+    }
+    date.setDate(date.getDate() + 1);
+  }
+  return dates;
+};
+
 const listTrainerSchedulesFeed = async ({
   trainerId,
   month,
@@ -732,6 +796,7 @@ const listTrainerSchedulesFeed = async ({
   });
   const effectiveTrainerFilterIds = trainerFilterContext.filterTrainerIds;
   const cacheTrainerId = trainerFilterContext.cacheTrainerId || trainerId;
+  console.log('[TrainerScheduleService] Effective Trainer IDs:', effectiveTrainerFilterIds, 'CacheTrainerId:', cacheTrainerId);
 
   if (!effectiveTrainerFilterIds.length) {
     return {
@@ -762,20 +827,48 @@ const listTrainerSchedulesFeed = async ({
   if (month && year) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 1);
-    filter.scheduledDate = {
-      $gte: startDate,
-      $lt: endDate,
-    };
+    filter.$or = [
+      {
+        scheduledDate: {
+          $gte: startDate,
+          $lt: endDate,
+        },
+      },
+      {
+        dayOfWeek: { $ne: null },
+        scheduledDate: null,
+      },
+    ];
   }
 
-  const schedules = await listTrainerSchedulesLoader({ filter });
-  const scheduleIds = schedules.map((schedule) => schedule._id);
+  const rawSchedules = await listTrainerSchedulesLoader({ filter });
+
+  // Expand weekly recurring schedules into concrete dates for the requested month
+  const expandedSchedules = [];
+  rawSchedules.forEach((schedule) => {
+    if (schedule.dayOfWeek && !schedule.scheduledDate && month && year) {
+      const dates = getDatesForDayOfWeek(year, month, schedule.dayOfWeek);
+      dates.forEach((d) => {
+        expandedSchedules.push({
+          ...schedule,
+          _id: `${schedule._id}_${d.toISOString().split("T")[0]}`,
+          scheduledDate: d,
+          dayNumber: schedule.dayNumber || 1, // Ensure dayNumber > 0 so it is actionable
+        });
+      });
+    } else {
+      expandedSchedules.push(schedule);
+    }
+  });
+
+  const scheduleIds = rawSchedules.map((schedule) => schedule._id);
   const attendanceDocs = await listTrainerAttendanceDocsLoader({ scheduleIds });
   const schedulesWithAttendance = buildTrainerSchedulesPayload({
-    schedules,
+    schedules: expandedSchedules,
     attendanceDocs,
   });
 
+  console.log('[TrainerScheduleService] Fetched schedules count:', schedulesWithAttendance.length);
   const responsePayload = {
     success: true,
     count: schedulesWithAttendance.length,
@@ -1771,7 +1864,7 @@ const assignScheduleFeed = async ({
   getCourseByIdLoader = getCourseById,
   getUserByIdLoader = getUserById,
   sendScheduleChangeEmailLoader = sendScheduleChangeEmail,
-  sendInAppNotificationLoader,
+  sendInAppNotificationLoader = notifyTrainerSchedule,
   createTrainerAdminChannelsLoader = autoCreateTrainerAdminChannels,
   invalidateTrainerScheduleCachesLoader = invalidateTrainerScheduleCaches,
 } = {}) => {
@@ -1788,6 +1881,35 @@ const assignScheduleFeed = async ({
   schedule.scheduledDate = scheduledDate;
   schedule.startTime = startTime || schedule.startTime;
   schedule.endTime = endTime || schedule.endTime;
+  schedule.status = "scheduled";
+
+  const { TrainerAssignment } = require("../../models");
+  try {
+    const trainerDoc = await getTrainerByIdLoader({ trainerId });
+    if (trainerDoc) {
+      const collegeDoc = await getCollegeByIdLoader({ collegeId: schedule.collegeId });
+      const tName = trainerDoc.name || trainerDoc.userId?.name || "Trainer";
+      const cName = collegeDoc?.name || "Assigned College";
+      
+      await TrainerAssignment.updateMany(
+        { trainerName: { $regex: new RegExp("^" + String(tName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "$", "i") } },
+        { $set: { active: false } }
+      );
+      
+      await TrainerAssignment.create({
+        trainerName: tName,
+        collegeName: cName,
+        active: true,
+        collegename: cName,
+        trainername: tName,
+        trainerid: String(trainerId),
+        scheduleDate: scheduledDate ? String(scheduledDate) : "",
+        status: "assigned"
+      });
+    }
+  } catch (taError) {
+    console.error("Failed to sync TrainerAssignment in assignScheduleFeed", taError);
+  }
   schedule.status = "scheduled";
 
   const folderFields = await resolveScheduleFolderFields({

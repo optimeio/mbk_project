@@ -3,6 +3,8 @@ const router = express.Router();
 const { College, Trainer, User } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { cascadeDeleteCollegesByIds } = require('../services/hierarchyDeleteService');
+const { sendNotification } = require('../services/notificationService');
+const { sendBulkScheduleEmail } = require('../utils/emailService');
 const {
     ensureCollegeHierarchy,
     ensureDepartmentHierarchy,
@@ -1225,16 +1227,18 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
         const { Schedule } = require('../models');
         const { notifyTrainerSchedule } = require('../services/notificationService');
 
-        const college = await College.findOne({
-            _id: req.params.id,
-            companyId: req.user.id
-        });
+        const college = await College.findById(req.params.id).populate('courseId');
 
         if (!college) {
             return res.status(404).json({ message: 'College not found' });
         }
 
+        if (!canAccessCollegeByCompany({ user: req.user, college })) {
+            return res.status(403).json({ message: 'Access denied for this college' });
+        }
+
         const notificationResults = [];
+        const { invalidateTrainerScheduleCaches } = require('../services/trainerScheduleCacheService');
 
         for (const trainerData of trainers) {
             // Get trainer details with user information
@@ -1252,6 +1256,38 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                 await college.save();
             }
 
+            // -------------------------------------------------
+            // NEW: Keep the Trainer document in sync – set the collegeId
+            // -------------------------------------------------
+            await Trainer.findByIdAndUpdate(trainer._id, {
+                collegeId: college._id,
+                // batchId: trainerData.batchId, // uncomment if needed
+            });
+
+            // -------------------------------------------------
+            // NEW: Create/update TrainerAssignment using Names
+            // -------------------------------------------------
+            const { TrainerAssignment } = require('../models');
+            const trainerName = trainer.firstName && trainer.lastName
+                ? `${trainer.firstName} ${trainer.lastName}`
+                : (trainer.userId?.name || "");
+
+            if (trainerName) {
+                // Deactivate any existing active assignments for this trainer
+                await TrainerAssignment.updateMany(
+                    { trainerName, active: true },
+                    { $set: { active: false } }
+                );
+
+                // Create new assignment
+                await TrainerAssignment.create({
+                    trainerName,
+                    collegeName: college.name,
+                    batchName: trainerData.batchName || "",
+                    active: true
+                });
+            }
+
             // Create schedules if provided
             const createdSchedules = [];
             if (trainerData.schedules && trainerData.schedules.length > 0) {
@@ -1259,13 +1295,21 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                     const newSchedule = await Schedule.create({
                         trainerId: trainer._id,
                         collegeId: college._id,
+                        companyId: college.companyId,
+                        courseId: college.courseId,
                         dayOfWeek: schedule.dayOfWeek,
                         startTime: schedule.startTime,
                         endTime: schedule.endTime,
-                        subject: schedule.subject || null
+                        subject: schedule.subject || null,
+                        dayNumber: 1 // Default dayNumber to 1 so that it satisfies validation and is actionable
                     });
                     createdSchedules.push(newSchedule);
                 }
+            }
+
+            // Invalidate cache for this trainer
+            if (typeof invalidateTrainerScheduleCaches === 'function') {
+                await invalidateTrainerScheduleCaches(trainer._id);
             }
 
             // Send notifications if schedules were created
@@ -1280,6 +1324,41 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                     college,
                     createdSchedules
                 );
+
+                // Send in-app notification
+                try {
+                    const io = req.app?.get?.('io') || req.io || null;
+                    await sendNotification(io, {
+                        userId: trainer.userId?._id || trainer.userId,
+                        role: "Trainer",
+                        title: "Training Assigned",
+                        message: `Training Assigned - ${college.courseId?.title || 'Course'} (Weekly Recurring). ${college.name}. Contact SPOC: ${college.principalName || college.spocName || 'N/A'} (${college.phone || college.spocPhone || ''})`,
+                        type: "Schedule",
+                        link: "/trainer/schedule",
+                    });
+                } catch (notiError) {
+                    console.error('Error sending in-app notification to trainer:', notiError);
+                }
+
+                // Send email notification
+                try {
+                    if (trainer.userId?.email) {
+                        const emailAssignments = createdSchedules.map(s => ({
+                            course: college.courseId?.title || college.courseId?.name || 'Assigned Course',
+                            day: s.dayOfWeek,
+                            college: college.name,
+                            date: 'Weekly Recurring',
+                            startTime: s.startTime,
+                            endTime: s.endTime,
+                            spocName: college.principalName || college.spocName || 'N/A',
+                            spocPhone: college.phone || college.spocPhone || '',
+                            mapLink: college.location?.mapUrl || ''
+                        }));
+                        await sendBulkScheduleEmail(trainer.userId.email, trainer.name || trainer.userId.name, emailAssignments);
+                    }
+                } catch (emailError) {
+                    console.error('Error sending assignment email to trainer:', emailError);
+                }
 
                 notificationResults.push({
                     trainerId: trainer._id,

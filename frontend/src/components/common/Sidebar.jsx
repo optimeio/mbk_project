@@ -9,22 +9,18 @@ import {
     HomeIcon,
     BuildingOfficeIcon,
     UsersIcon,
-    CreditCardIcon,
     ClipboardDocumentListIcon,
     DocumentCheckIcon,
     CurrencyRupeeIcon,
-    BanknotesIcon,
     ChartBarIcon,
     ClockIcon,
     BuildingLibraryIcon,
     UserGroupIcon,
     ClipboardDocumentCheckIcon,
-    UserCircleIcon,
     CalendarIcon as Calendar,
     MapPinIcon,
     ChatBubbleLeftRightIcon,
-    Cog6ToothIcon,
-    ArrowRightOnRectangleIcon
+    Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/services/api';
@@ -38,13 +34,12 @@ const NotificationBell = dynamic(() => import('@/components/common/NotificationB
 
 // Temporary NavLink shim if it's not imported properly (check if it exists in scope)
 // In some migrations NavLink is a custom component.
-const NavLink = ({ children, to, className, end, ...props }) => {
+const NavLink = ({ children, to, className, end = false, ...props }) => {
     const router = useRouter();
     const pathname = window.location.pathname;
-    const isActive = pathname === to || pathname.startsWith(to + '/');
+    const isActive = end ? pathname === to : pathname === to || pathname.startsWith(to + '/');
     const classResult = typeof className === 'function' ? className({ isActive }) : className;
 
-    // 'end' prop is ignored for custom NavLink to avoid React warnings
     return (
         <a
             href={to} 
@@ -125,17 +120,6 @@ const Sidebar = () => {
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
 
-    const handleLogout = async () => {
-        setIsUserMenuOpen(false);
-        setIsQuickSettingsOpen(false);
-        try {
-            await logout();
-            router.push('/');
-        } catch (error) {
-            console.error('Failed to log out', error);
-        }
-    };
-
     const handleSettingsSave = async (data) => {
         try {
             const userId = user.id || user._id || user.uid;
@@ -167,14 +151,17 @@ const Sidebar = () => {
         }
     };
 
-    const handleProfileClick = () => {
-        setIsUserMenuOpen(false);
+    const handleLogout = async () => {
         setIsQuickSettingsOpen(false);
-        if (user?.role === 'Trainer') {
-            router.push('/trainer/profile');
-            return;
+        setIsUserMenuOpen(false);
+
+        try {
+            await logout();
+        } catch (error) {
+            console.error('Logout failed:', error);
+        } finally {
+            router.push('/');
         }
-        setIsSettingsOpen(true);
     };
 
     const handleSettingsClick = () => {
@@ -309,16 +296,6 @@ const Sidebar = () => {
                         {isUserMenuOpen && (
                             <div className="absolute bottom-full left-3 right-3 z-30 mb-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.18)]">
                                 <div className="p-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleProfileClick}
-                                        className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                                    >
-                                        <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
-                                            <UserCircleIcon className="h-4 w-4 text-slate-500" />
-                                        </span>
-                                        Profile
-                                    </button>
                                     {user?.role === 'Trainer' && (
                                         <button
                                             type="button"
@@ -343,16 +320,6 @@ const Sidebar = () => {
                                             <Cog6ToothIcon className="h-4 w-4 text-slate-500" />
                                         </span>
                                         Settings
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleLogout}
-                                        className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
-                                    >
-                                        <span className="mr-3 flex h-8 w-8 items-center justify-center rounded-full bg-rose-50">
-                                            <ArrowRightOnRectangleIcon className="h-4 w-4 text-rose-500" />
-                                        </span>
-                                        Logout
                                     </button>
                                 </div>
                             </div>

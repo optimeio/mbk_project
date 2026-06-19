@@ -35,6 +35,8 @@ export default function SignupPage() {
     const type = searchParams.get('type');
     if (type === 'company') {
       setActiveTab('company');
+    } else if (type === 'trainer') {
+      setActiveTab('trainer');
     } else {
       setActiveTab('student');
     }
@@ -224,6 +226,22 @@ export default function SignupPage() {
             <button
               type="button"
               onClick={() => {
+                setActiveTab('trainer');
+                setError('');
+                setShowPassword(false);
+                setShowConfirmPassword(false);
+              }}
+              className={`pb-3 text-lg font-bold border-b-2 transition-all px-2 ${
+                activeTab === 'trainer'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Trainer Register
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setActiveTab('company');
                 setError('');
                 setShowPassword(false);
@@ -241,11 +259,17 @@ export default function SignupPage() {
 
           <div className="text-center md:text-left mb-6">
             <h2 className="text-3xl font-bold text-gray-900">
-              {activeTab === 'student' ? 'Student Registration' : 'Company Registration'}
+              {activeTab === 'student'
+                ? 'Student Registration'
+                : activeTab === 'trainer'
+                ? 'Trainer Registration'
+                : 'Company Registration'}
             </h2>
             <p className="text-gray-500 mt-2 text-sm">
               {activeTab === 'student'
                 ? 'Create your account to access training and career support'
+                : activeTab === 'trainer'
+                ? 'Register as a trainer to manage sessions, attendance, and delivery operations.'
                 : 'Register your company profile to access our recruitment pipelines'}
             </p>
           </div>
@@ -262,6 +286,34 @@ export default function SignupPage() {
                   and use <strong>Forgot Password</strong> to set your password, or open the onboarding link from your invite email.
                 </p>
               )}
+            </div>
+          )}
+
+          {activeTab === 'trainer' && (
+            <div className="space-y-6">
+              <div className="rounded-3xl bg-orange-50 p-6 border border-orange-100">
+                <h3 className="text-2xl font-semibold text-gray-900">Trainer Registration</h3>
+                <p className="mt-3 text-gray-600 leading-relaxed">
+                  Register as a trainer to manage sessions, attendance, and delivery operations in the MBK CarrierZ platform. Your account will be reviewed by the admin team.
+                </p>
+                <div className="mt-6 sm:flex sm:items-center sm:gap-4">
+                  <CTAButton
+                    type="button"
+                    variant="brand"
+                    size="lg"
+                    fullWidth
+                    onClick={() => router.push('/trainer-signup')}
+                  >
+                    Continue to Trainer Signup
+                  </CTAButton>
+                </div>
+                <p className="mt-4 text-sm text-gray-500">
+                  Already registered?{' '}
+                  <Link href="/login" className="text-orange-600 font-semibold underline">
+                    Sign in instead
+                  </Link>
+                </p>
+              </div>
             </div>
           )}
 

@@ -5,7 +5,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/context/AuthContext";
 import useDebouncedNavigate from "@/hooks/useDebouncedNavigate";
-import SidebarFooter from "@/components/common/sidebar/SidebarFooter";
 import SidebarHeader from "@/components/common/sidebar/SidebarHeader";
 import SidebarNav from "@/components/common/sidebar/SidebarNav";
 import SidebarRail from "@/components/common/sidebar/SidebarRail";
@@ -17,8 +16,6 @@ import {
   resolveSidebarRole,
 } from "@/components/common/sidebar/sidebarConfig";
 import { prefetchPortalRoutes } from "@/utils/portalPrefetch";
-import useTrainerPortalProfile from "@/hooks/useTrainerPortalProfile";
-import { getPortalUserInitial, isPortalRecord } from "@/utils/portalUserDisplay";
 
 function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
   const touchStartX = useRef(0);
@@ -41,26 +38,16 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
   const pathname = usePathname() || "";
   const router = useRouter();
   const debouncedNavigate = useDebouncedNavigate();
-  const { currentUser, logout, loading: authLoading } = useAuth();
+  const { currentUser, logout } = useAuth();
   const [chatTab, setChatTab] = useState("chats");
-  const [hasHydrated, setHasHydrated] = useState(false);
 
   const user = currentUser || {};
-  const isChatActive = pathname.startsWith("/chat") && activeRole !== "Trainer";
-
-  useEffect(() => {
-    setHasHydrated(true);
-  }, []);
 
   const activeRole = useMemo(
     () => resolveSidebarRole(user.role, pathname),
     [pathname, user.role],
   );
-  const isTrainerPortal = activeRole === "Trainer";
-
-  const { data: trainerProfile } = useTrainerPortalProfile({
-    enabled: isTrainerPortal && !authLoading && Boolean(currentUser),
-  });
+  const isChatActive = pathname.startsWith("/chat") && activeRole !== "Trainer";
 
   const navLinks = useMemo(
     () => resolveNavLinks({ activeRole, isChatActive }),
@@ -112,11 +99,6 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
     [activeRole, isChatActive],
   );
 
-  const userInitial =
-    hasHydrated && !authLoading
-      ? getPortalUserInitial(trainerProfile || user)
-      : "U";
-
   useEffect(() => {
     if (!currentUser?.role) return undefined;
 
@@ -159,7 +141,7 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
       window.clearTimeout(timerId);
       cleanup();
     };
-  }, [currentUser?.role, currentUser?.email, router]);
+  }, [currentUser?.role, currentUser?.email, pathname, router]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -211,16 +193,6 @@ function AppSidebar({ compact = false, isOpen = false, onClose = () => {} }) {
             navLinks={navLinks}
             pathname={pathname}
             setChatTab={setChatTab}
-          />
-          <SidebarFooter
-            handleLogout={handleLogout}
-            user={user}
-            profile={
-              isTrainerPortal && isPortalRecord(trainerProfile)
-                ? trainerProfile
-                : null
-            }
-            userInitial={userInitial}
           />
         </div>
       ) : null}

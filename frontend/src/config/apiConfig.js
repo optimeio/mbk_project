@@ -3,7 +3,7 @@
  * All frontend HTTP clients should import from here — never hardcode ports.
  */
 
-const DEFAULT_DEV_API_ORIGIN = 'http://localhost:5006';
+const DEFAULT_DEV_API_ORIGIN = 'http://localhost:5005';
 
 const rawApiUrl = (
   process.env.NEXT_PUBLIC_API_URL ||

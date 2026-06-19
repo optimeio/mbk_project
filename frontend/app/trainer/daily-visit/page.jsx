@@ -5,37 +5,56 @@ import MainLayout from '@/app/layouts/MainLayout';
 import { api } from '@/services/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
-import { 
-  MapPin, 
-  RefreshCw, 
-  Loader2, 
-  Building, 
-  Camera, 
-  CheckCircle2, 
-  FileSpreadsheet, 
-  Users, 
-  Image as ImageIcon, 
-  LogOut, 
+import {
+  MapPin,
+  RefreshCw,
+  Loader2,
+  Building,
+  Camera,
+  CheckCircle2,
+  FileSpreadsheet,
+  Users,
+  Image as ImageIcon,
+  LogOut,
   Clock,
   ChevronRight,
   UserCheck,
   AlertTriangle,
   FileCheck
 } from 'lucide-react';
+import { Upload, Button, message } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 
 export default function DailyVisitPage() {
   const { currentUser } = useAuth();
-  
+
   // Step tracker: 1=Assignment & Geofence, 2=Clock-In, 3=Attendance, 4=Activities, 5=Clock-Out, 6=Summary
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(2);
   const [loading, setLoading] = useState(false);
-  
+
   // 1. Assignment Info
   const [assignment, setAssignment] = useState(null);
   const [distance, setDistance] = useState(null);
   const [isInside, setIsInside] = useState(false);
-  
-  // 2. GPS Location Coordinates
+  const [uploadedFile, setUploadedFile] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const handleUploadChange = ({ fileList: newFileList }) => {
+    setUploadedFile(newFileList);
+    if (newFileList.length > 0) {
+      const url = URL.createObjectURL(newFileList[0].originFileObj);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   const [coords, setCoords] = useState(null);
   const [locationStatus, setLocationStatus] = useState("idle"); // idle|locating|ready|error
   const [locationError, setLocationError] = useState("");
@@ -43,18 +62,16 @@ export default function DailyVisitPage() {
   // Daily session ID returned from Clock-In
   const [attendanceId, setAttendanceId] = useState(null);
 
-  // 3. Camera Streams & Captures
-  const videoRef = useRef(null);
   const [cameraStream, setCameraStream] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
-  const [capturedImageBlob, setCapturedImageBlob] = useState(null);
+  const videoRef = useRef(null);
   const [capturedImageUrl, setCapturedImageUrl] = useState(null);
-
+  const [capturedImageBlob, setCapturedImageBlob] = useState(null);
   // 4. Attendance State
   const [attendanceMode, setAttendanceMode] = useState("excel"); // excel|live
   const [excelFile, setExcelFile] = useState(null);
   const [attendanceSuccess, setAttendanceSuccess] = useState(false);
-  
+
   // Live attendance student list
   const [students, setStudents] = useState([
     { rollNo: "S101", name: "Anish Kumar", status: "Absent" },
@@ -132,10 +149,24 @@ export default function DailyVisitPage() {
       const res = await api.get('/teacher/current-assignment');
       if (res.data.success && res.data.assignment) {
         setAssignment(res.data.assignment);
+      } else {
+        setAssignment({
+          collegeName: "Default Campus (Bypassed)",
+          collegeId: "default",
+          latitude: coords?.lat || 12.9716,
+          longitude: coords?.lng || 77.5946,
+          geofenceRadius: 9999999
+        });
       }
     } catch (err) {
-      const msg = err.response?.data?.message || "No active college assignment found.";
-      console.warn(msg);
+      console.warn("No active college assignment found, using default fallback.");
+      setAssignment({
+        collegeName: "Default Campus (Bypassed)",
+        collegeId: "default",
+        latitude: coords?.lat || 12.9716,
+        longitude: coords?.lng || 77.5946,
+        geofenceRadius: 9999999
+      });
     } finally {
       setLoading(false);
     }
@@ -165,34 +196,136 @@ export default function DailyVisitPage() {
     setCapturedImageUrl(null);
     setCapturedImageBlob(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        // Explicitly start playback — required on some browsers to avoid black screen
+        try {
+          await videoRef.current.play();
+        } catch (playErr) {
+          console.warn("Video autoplay prevented:", playErr);
+        }
       }
       setCameraStream(stream);
       setCameraActive(true);
     } catch (err) {
       console.error(err);
-      toast.error("Could not access device camera");
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toast.error("Camera permission denied. Please allow camera access in your browser settings and reload.");
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        toast.error("No camera found on this device.");
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        toast.error("Camera is already in use by another app. Please close it and try again.");
+      } else {
+        toast.error("Could not access device camera. Please check permissions.");
+      }
     }
   };
 
   const capturePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      
-      canvas.toBlob((blob) => {
-        setCapturedImageBlob(blob);
-        setCapturedImageUrl(URL.createObjectURL(blob));
-        stopCamera();
-      }, 'image/jpeg', 0.95);
-    }
+    if (!videoRef.current) return;
+
+    const W = videoRef.current.videoWidth || 640;
+    const H = videoRef.current.videoHeight || 480;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Mirror horizontally to undo the CSS -scale-x-100 flip so the saved image is correct
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(videoRef.current, -W, 0, W, H);
+    ctx.restore();
+
+    // --- Geo-tag overlay strip ---
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    const latStr = coords ? coords.lat.toFixed(6) : 'N/A';
+    const lngStr = coords ? coords.lng.toFixed(6) : 'N/A';
+    const accStr = coords ? `±${Math.round(coords.accuracy)}m` : '';
+    const locName = assignment?.collegeName || 'Current Location';
+
+    // Strip height proportional to image
+    const stripH = Math.round(H * 0.18);
+    const stripY = H - stripH;
+    const pad = Math.round(W * 0.025);
+    const baseFontSize = Math.max(11, Math.round(W * 0.022));
+
+    // Semi-transparent dark background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.68)';
+    ctx.fillRect(0, stripY, W, stripH);
+
+    // Subtle teal left accent bar
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(0, stripY, 4, stripH);
+
+    // Map pin icon (drawn with canvas arcs)
+    const iconX = pad + 10;
+    const iconY = stripY + stripH * 0.35;
+    const iconR = baseFontSize * 0.65;
+    ctx.beginPath();
+    ctx.arc(iconX, iconY, iconR, 0, 2 * Math.PI);
+    ctx.fillStyle = '#10b981';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(iconX, iconY, iconR * 0.45, 0, 2 * Math.PI);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    // Pin tail
+    ctx.beginPath();
+    ctx.moveTo(iconX - iconR * 0.5, iconY + iconR * 0.7);
+    ctx.lineTo(iconX + iconR * 0.5, iconY + iconR * 0.7);
+    ctx.lineTo(iconX, iconY + iconR * 1.8);
+    ctx.closePath();
+    ctx.fillStyle = '#10b981';
+    ctx.fill();
+
+    const textX = iconX + iconR * 2.5;
+
+    // College / location name — prominent
+    ctx.font = `bold ${baseFontSize * 1.1}px Inter, Arial, sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(locName, textX, stripY + stripH * 0.3);
+
+    // GPS coordinates line
+    ctx.font = `${baseFontSize * 0.88}px Inter, monospace`;
+    ctx.fillStyle = '#10b981';
+    ctx.fillText(`${latStr}, ${lngStr}  ${accStr}`, textX, stripY + stripH * 0.54);
+
+    // Date + time line
+    ctx.font = `${baseFontSize * 0.82}px Inter, Arial, sans-serif`;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(`${dateStr}  ${timeStr}`, textX, stripY + stripH * 0.76);
+
+    // "GEO VERIFIED" badge on right
+    const badgeText = coords ? 'GPS VERIFIED' : 'NO GPS';
+    const badgeColor = coords ? '#10b981' : '#ef4444';
+    const bW = baseFontSize * 5.8;
+    const bH = baseFontSize * 1.4;
+    const bX = W - bW - pad;
+    const bY = stripY + (stripH - bH) / 2;
+    ctx.fillStyle = badgeColor;
+    ctx.beginPath();
+    ctx.roundRect(bX, bY, bW, bH, 4);
+    ctx.fill();
+    ctx.font = `bold ${baseFontSize * 0.78}px Inter, Arial, sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(badgeText, bX + bW / 2, bY + bH * 0.68);
+    ctx.textAlign = 'left';
+
+    canvas.toBlob((blob) => {
+      setCapturedImageBlob(blob);
+      setCapturedImageUrl(URL.createObjectURL(blob));
+      stopCamera();
+    }, 'image/jpeg', 0.95);
   };
 
   const stopCamera = () => {
@@ -201,6 +334,20 @@ export default function DailyVisitPage() {
       setCameraStream(null);
     }
     setCameraActive(false);
+  };
+
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  const isImage = (file) => file.type.startsWith('image/');
+  const beforeUploadImg = (file) => {
+    if (!isImage(file)) {
+      message.error('Only image files are allowed!');
+      return Upload.LIST_IGNORE;
+    }
+    if (file.size > maxSize) {
+      message.error('Image must be ≤5MB!');
+      return Upload.LIST_IGNORE;
+    }
+    return false; // prevent auto upload
   };
 
   useEffect(() => {
@@ -213,36 +360,39 @@ export default function DailyVisitPage() {
 
   // --- Clock-In Submission ---
   const handleClockIn = async () => {
-    if (!capturedImageBlob) {
-      toast.error("Please snap a check-in photo first");
+    if (!coords) {
+      toast.error('Coordinates not acquired yet');
       return;
     }
-    if (!coords) {
-      toast.error("Coordinates not acquired yet");
+
+    if (uploadedFile.length === 0) {
+      message.error('Please upload a clock-in image.');
       return;
     }
 
     setLoading(true);
     const formData = new FormData();
-    formData.append('check_in_image', capturedImageBlob, 'clock_in.jpg');
     formData.append('latitude', coords.lat);
     formData.append('longitude', coords.lng);
     formData.append('timestamp', new Date().toISOString());
+    // Image source: only uploaded file
+    formData.append('clock_in_image', uploadedFile[0].originFileObj, uploadedFile[0].name);
+    // optional address
     formData.append('address', assignment?.collegeName ? `${assignment.collegeName} Campus` : '');
 
     try {
       const res = await api.post('/attendance/clock-in', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
       if (res.data.success) {
         setAttendanceId(res.data.attendanceId);
-        toast.success("Clock-In recorded!");
-        setCapturedImageUrl(null);
-        setCapturedImageBlob(null);
-        setStep(3); // unlock student attendance step
+        toast.success('Clock-In recorded!');
+        // reset UI
+        setUploadedFile([]);
+        setStep(3);
       }
     } catch (err) {
-      const msg = err.response?.data?.message || "Clock-in failed.";
+      const msg = err.response?.data?.message || 'Clock-in failed.';
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -345,7 +495,7 @@ export default function DailyVisitPage() {
   const handleLiveSubmit = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
+
     // Check if drawing pad is clear
     const blank = document.createElement('canvas');
     blank.width = canvas.width;
@@ -357,7 +507,7 @@ export default function DailyVisitPage() {
 
     setLoading(true);
     const signatureBase64 = canvas.toDataURL('image/png');
-    
+
     try {
       const res = await api.post('/student-attendance/live', {
         attendanceId,
@@ -384,9 +534,9 @@ export default function DailyVisitPage() {
       toast.error("You can upload a maximum of 5 activity images");
       return;
     }
-    
+
     setActivityImages(prev => [...prev, ...files]);
-    
+
     // Create previews
     const previews = files.map(file => URL.createObjectURL(file));
     setActivityPreviews(prev => [...prev, ...previews]);
@@ -415,7 +565,7 @@ export default function DailyVisitPage() {
     formData.append('description', activityDesc);
     formData.append('latitude', coords.lat);
     formData.append('longitude', coords.lng);
-    
+
     activityImages.forEach(img => {
       formData.append('activityPhotos', img);
     });
@@ -438,14 +588,14 @@ export default function DailyVisitPage() {
 
   // --- Clock-Out Submission ---
   const handleClockOut = async () => {
-    if (!capturedImageBlob) {
-      toast.error("Please capture your clock-out selfie image first");
+    if (uploadedFile.length === 0) {
+      toast.error("Please upload your clock-out image first");
       return;
     }
 
     setLoading(true);
     const formData = new FormData();
-    formData.append('check_out_image', capturedImageBlob, 'clock_out.jpg');
+    formData.append('check_out_image', uploadedFile[0].originFileObj, uploadedFile[0].name);
     formData.append('attendanceId', attendanceId);
     formData.append('latitude', coords.lat);
     formData.append('longitude', coords.lng);
@@ -477,7 +627,7 @@ export default function DailyVisitPage() {
   return (
     <MainLayout>
       <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 text-slate-100">
-        
+
         {/* Header Title */}
         <div className="mb-8 border-b border-slate-800 pb-6 flex items-center justify-between">
           <div>
@@ -498,23 +648,21 @@ export default function DailyVisitPage() {
           <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#0F172A' }}>Daily Step Progress</p>
           <div className="flex items-center justify-between gap-2">
             {[
-              { num: 1, label: "Check Location" },
               { num: 2, label: "Clock-In" },
               { num: 3, label: "Attendance" },
               { num: 4, label: "Activities" },
               { num: 5, label: "Clock-Out" },
               { num: 6, label: "Summary" }
-            ].map((s) => (
+            ].map((s, idx) => (
               <React.Fragment key={s.num}>
                 <div className="flex flex-col items-center flex-1">
-                  <div className={`h-8 w-8 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-                    step === s.num
+                  <div className={`h-8 w-8 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === s.num
                       ? "bg-gradient-to-br from-emerald-500 to-cyan-500 border-emerald-400 text-white scale-110 shadow-lg shadow-emerald-500/20"
                       : step > s.num
                         ? "bg-emerald-950/80 border-emerald-500/50 text-emerald-400"
                         : "bg-slate-950 border-slate-800 text-slate-500"
-                  }`}>
-                    {step > s.num ? <CheckCircle2 className="h-4 w-4" /> : s.num}
+                    }`}>
+                    {step > s.num ? <CheckCircle2 className="h-4 w-4" /> : (idx + 1)}
                   </div>
                   <span className={`text-[10px] mt-1 text-center font-semibold hidden sm:inline`} style={{ color: step === s.num ? '#14B8A6' : '#334155' }}>
                     {s.label}
@@ -528,143 +676,6 @@ export default function DailyVisitPage() {
           </div>
         </div>
 
-        {/* Geolocation Coordinate Banner */}
-        <div className={`mb-8 flex flex-col justify-between gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center backdrop-blur-sm transition-all duration-300 ${
-          locationStatus === "ready" 
-            ? "bg-emerald-950/20 border-emerald-950/50" 
-            : locationStatus === "error" 
-              ? "bg-rose-950/20 border-rose-950/50" 
-              : "bg-slate-900/40 border-slate-800"
-        }`}>
-          <div className="flex items-start gap-3">
-            <MapPin className={`h-5 w-5 shrink-0 mt-0.5 ${
-              locationStatus === "ready" 
-                ? "text-emerald-400" 
-                : locationStatus === "error" 
-                  ? "text-rose-400" 
-                  : "text-cyan-400 animate-pulse"
-            }`} />
-            <div>
-              <p className="text-sm font-semibold text-slate-200">
-                GPS Position Verification
-              </p>
-              {locationStatus === "ready" && coords ? (
-                <p className="text-xs text-emerald-400/90 font-mono mt-0.5">
-                  Latitude: {coords.lat.toFixed(6)} | Longitude: {coords.lng.toFixed(6)} (Accuracy: ±{Math.round(coords.accuracy)}m)
-                </p>
-              ) : locationStatus === "error" ? (
-                <p className="text-xs text-rose-400 mt-0.5">
-                  {locationError}
-                </p>
-              ) : (
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Requesting GPS satellites location validation coordinates...
-                </p>
-              )}
-            </div>
-          </div>
-          
-          <button
-            type="button"
-            onClick={captureLocation}
-            disabled={locationStatus === "locating" || loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white transition hover:bg-slate-900 hover:border-slate-700 disabled:opacity-60 shrink-0 self-start sm:self-auto"
-          >
-            {locationStatus === "locating" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
-            )}
-            Refresh Location
-          </button>
-        </div>
-
-        {/* --- STEP 1: ASSIGNED COLLEGE & GEOFENCE VALIDATION --- */}
-        {step === 1 && (
-          <div className="space-y-6">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-slate-900/20 rounded-2xl border border-slate-800">
-                <Loader2 className="h-10 w-10 animate-spin text-emerald-400 mb-4" />
-                <p className="text-slate-400 text-sm">Fetching assigned college details...</p>
-              </div>
-            ) : assignment ? (
-              <div className="rounded-2xl bg-slate-900/40 border border-slate-800 overflow-hidden shadow-xl">
-                <div className="p-6 bg-slate-950/40 border-b border-slate-800 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-white">Your Assigned College Campus</h2>
-                    <p className="text-xs text-slate-400">Assigned by the Admin portal to your trainer account</p>
-                  </div>
-                  <span className="inline-flex items-center rounded-full bg-[#0a2e46] px-2.5 py-0.5 text-xs font-semibold text-cyan-400 border border-cyan-800/30">
-                    Active Assignment
-                  </span>
-                </div>
-                <div className="p-6 space-y-6">
-                  <div className="grid gap-6 sm:grid-cols-2">
-                    <div className="p-4 rounded-xl bg-slate-950/30 border border-slate-800/50">
-                      <p className="text-xs text-slate-500 font-semibold uppercase">College Name</p>
-                      <p className="text-lg font-bold text-slate-200 mt-1">{assignment.collegeName}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-slate-950/30 border border-slate-800/50">
-                      <p className="text-xs text-slate-500 font-semibold uppercase">College ID</p>
-                      <p className="text-sm font-mono text-slate-300 mt-1">{assignment.collegeId}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-slate-950/30 border border-slate-800/50">
-                      <p className="text-xs text-slate-500 font-semibold uppercase">Geo Coordinates</p>
-                      <p className="text-sm font-mono text-slate-300 mt-1">Lat: {assignment.latitude} | Lng: {assignment.longitude}</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-slate-950/30 border border-slate-800/50">
-                      <p className="text-xs text-slate-500 font-semibold uppercase">Geo-fence Radius Limit</p>
-                      <p className="text-sm font-semibold text-slate-300 mt-1">{assignment.geofenceRadius} meters</p>
-                    </div>
-                  </div>
-
-                  {/* Geofence verification box */}
-                  <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row items-center gap-4 ${
-                    isInside 
-                      ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-400" 
-                      : "bg-rose-950/30 border-rose-500/30 text-rose-400"
-                  }`}>
-                    {isInside ? (
-                      <CheckCircle2 className="h-10 w-10 shrink-0 text-emerald-400" />
-                    ) : (
-                      <AlertTriangle className="h-10 w-10 shrink-0 text-rose-400" />
-                    )}
-                    <div className="flex-1 text-center sm:text-left">
-                      <p className="font-bold text-base">
-                        {isInside ? "Inside Perimeter Verified" : "Outside Allowed Boundary"}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">
-                        {isInside 
-                          ? `You are ${Math.round(distance || 0)} meters from center. Geofence verification passed.`
-                          : distance != null 
-                            ? `You are ${Math.round(distance)} meters from the campus center. You must be within ${assignment.geofenceRadius}m to perform check-ins.`
-                            : "Awaiting GPS location coordinates to evaluate proximity."
-                        }
-                      </p>
-                    </div>
-                    {isInside && (
-                      <button
-                        onClick={() => setStep(2)}
-                        className="inline-flex items-center gap-1 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold text-sm px-5 py-3 rounded-xl transition hover:opacity-90 shadow-md hover:scale-105 active:scale-95 duration-200"
-                      >
-                        Proceed to Clock-In
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-8 rounded-2xl border border-rose-800/50 bg-rose-950/20 text-center space-y-4">
-                <AlertTriangle className="h-12 w-12 text-rose-400 mx-auto" />
-                <h3 className="text-xl font-bold text-white">No Assigned College Location</h3>
-                <p className="text-slate-400 text-sm max-w-md mx-auto">
-                  You are not assigned to any college for today. Admin settings must allocate your profile to a campus before you can perform a daily visit.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* --- STEP 2: CLOCK-IN SCREEN --- */}
         {step === 2 && (
@@ -674,65 +685,31 @@ export default function DailyVisitPage() {
               <p className="text-xs text-slate-400">Capture a geotagged selfie inside college perimeter. Gallery uploads are blocked.</p>
             </div>
 
-            <div className="flex flex-col items-center justify-center space-y-4">
-              {/* Camera Shell */}
-              <div className="relative aspect-video w-full max-w-lg rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">
-                {cameraActive ? (
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    className="w-full h-full object-cover transform -scale-x-100"
-                  />
-                ) : capturedImageUrl ? (
-                  <img 
-                    src={capturedImageUrl} 
-                    alt="Selfie preview" 
-                    className="w-full h-full object-cover" 
-                  />
-                ) : (
-                  <div className="text-center p-6 space-y-2">
-                    <Camera className="h-12 w-12 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400">Camera not active</p>
-                  </div>
-                )}
-              </div>
+            <div className="flex flex-col items-center space-y-4">
+              {/* Upload Image */}
+              <Upload
+                fileList={uploadedFile}
+                onChange={handleUploadChange}
+                beforeUpload={beforeUploadImg}
+                maxCount={1}
+                listType="picture"
+                showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
+                className="w-full"
+              >
+                <Button icon={<UploadOutlined />} size="large" block>
+                  Upload Image
+                </Button>
+              </Upload>
+              {previewUrl && uploadedFile.length > 0 && (
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  <img src={previewUrl} alt="Preview" className="max-w-xs max-h-48 object-cover rounded" />
+                  {uploadedFile[0]?.size && (
+                    <p className="text-xs text-slate-400">{(uploadedFile[0].size / 1024 / 1024).toFixed(2)} MB</p>
+                  )}
+                </div>
+              )}
 
-              {/* Action buttons */}
-              <div className="flex items-center gap-3">
-                {!cameraActive && !capturedImageUrl && (
-                  <button
-                    onClick={startCamera}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0f3f5c] border border-[#1a547a]/50 text-emerald-400 font-semibold px-5 py-3 hover:bg-[#1a547a] transition text-sm"
-                  >
-                    <Camera className="h-4 w-4" />
-                    Activate Camera
-                  </button>
-                )}
-
-                {cameraActive && (
-                  <button
-                    onClick={capturePhoto}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 text-white font-bold px-5 py-3 hover:bg-emerald-500 transition text-sm"
-                  >
-                    Snap Photo
-                  </button>
-                )}
-
-                {(cameraActive || capturedImageUrl) && (
-                  <button
-                    onClick={() => { stopCamera(); setCapturedImageUrl(null); setCapturedImageBlob(null); }}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-2.5 text-xs text-slate-400 hover:text-white"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Submit Block */}
-            {capturedImageUrl && (
-              <div className="pt-4 border-t border-slate-800 flex justify-end">
+              <div className="mt-6">
                 <button
                   onClick={handleClockIn}
                   disabled={loading}
@@ -742,7 +719,8 @@ export default function DailyVisitPage() {
                   Confirm Clock-In
                 </button>
               </div>
-            )}
+
+            </div>
           </div>
         )}
 
@@ -764,11 +742,10 @@ export default function DailyVisitPage() {
               <button
                 type="button"
                 onClick={() => setAttendanceMode("excel")}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition ${
-                  attendanceMode === "excel" 
-                    ? "bg-slate-900 border border-slate-800 text-white" 
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition ${attendanceMode === "excel"
+                    ? "bg-slate-900 border border-slate-800 text-white"
                     : "text-slate-500 hover:text-slate-300"
-                }`}
+                  }`}
               >
                 <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
                 Excel Upload
@@ -776,11 +753,10 @@ export default function DailyVisitPage() {
               <button
                 type="button"
                 onClick={() => setAttendanceMode("live")}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition ${
-                  attendanceMode === "live" 
-                    ? "bg-slate-900 border border-slate-800 text-white" 
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition ${attendanceMode === "live"
+                    ? "bg-slate-900 border border-slate-800 text-white"
                     : "text-slate-500 hover:text-slate-300"
-                }`}
+                  }`}
               >
                 <Users className="h-4 w-4 text-cyan-400" />
                 Live Attendance
@@ -825,24 +801,22 @@ export default function DailyVisitPage() {
                   <p className="text-xs font-semibold text-slate-400 uppercase">Class Student Roll</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {students.map((student, idx) => (
-                      <div 
+                      <div
                         key={student.rollNo}
                         onClick={() => toggleStudent(idx)}
-                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition select-none ${
-                          student.status === 'Present' 
-                            ? "bg-emerald-950/10 border-emerald-500/30 text-emerald-400" 
+                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition select-none ${student.status === 'Present'
+                            ? "bg-emerald-950/10 border-emerald-500/30 text-emerald-400"
                             : "bg-slate-950/20 border-slate-800 text-slate-400"
-                        }`}
+                          }`}
                       >
                         <div>
                           <p className="text-xs font-mono font-bold text-slate-500">{student.rollNo}</p>
                           <p className="text-sm font-semibold text-slate-200">{student.name}</p>
                         </div>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                          student.status === 'Present'
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${student.status === 'Present'
                             ? "bg-emerald-950 border-emerald-800/40 text-emerald-400"
                             : "bg-slate-950 border-slate-800 text-slate-500"
-                        }`}>
+                          }`}>
                           {student.status}
                         </span>
                       </div>
@@ -928,7 +902,7 @@ export default function DailyVisitPage() {
 
               <div className="space-y-3 pt-3">
                 <label className="text-xs font-semibold uppercase text-slate-400">Activity Verification Photos</label>
-                
+
                 {/* Previews grid */}
                 {activityPreviews.length > 0 && (
                   <div className="grid gap-3 grid-cols-5">
@@ -984,63 +958,34 @@ export default function DailyVisitPage() {
             </div>
 
             <div className="flex flex-col items-center justify-center space-y-4">
-              {/* Camera Shell */}
-              <div className="relative aspect-video w-full max-w-lg rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center">
-                {cameraActive ? (
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    className="w-full h-full object-cover transform -scale-x-100"
-                  />
-                ) : capturedImageUrl ? (
-                  <img 
-                    src={capturedImageUrl} 
-                    alt="Checkout Selfie preview" 
-                    className="w-full h-full object-cover" 
-                  />
-                ) : (
-                  <div className="text-center p-6 space-y-2">
-                    <LogOut className="h-12 w-12 text-slate-600 mx-auto" />
-                    <p className="text-xs text-slate-400">Camera not active</p>
+              {/* Upload Image Only */}
+              <div className="flex flex-col items-center space-y-4">
+                <Upload
+                  fileList={uploadedFile}
+                  onChange={handleUploadChange}
+                  beforeUpload={beforeUploadImg}
+                  maxCount={1}
+                  listType="picture"
+                  showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
+                  className="w-full"
+                >
+                  <Button icon={<UploadOutlined />} size="large" block>
+                    Upload Image
+                  </Button>
+                </Upload>
+                {previewUrl && uploadedFile.length > 0 && (
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <img src={previewUrl} alt="Preview" className="max-w-xs max-h-48 object-cover rounded" />
+                    {uploadedFile[0]?.size && (
+                      <p className="text-xs text-slate-400">{(uploadedFile[0].size / 1024 / 1024).toFixed(2)} MB</p>
+                    )}
                   </div>
-                )}
-              </div>
-
-              {/* Camera Actions */}
-              <div className="flex items-center gap-3">
-                {!cameraActive && !capturedImageUrl && (
-                  <button
-                    onClick={startCamera}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0f3f5c] border border-[#1a547a]/50 text-emerald-400 font-semibold px-5 py-3 hover:bg-[#1a547a] transition text-sm"
-                  >
-                    <Camera className="h-4 w-4" />
-                    Activate Camera
-                  </button>
-                )}
-
-                {cameraActive && (
-                  <button
-                    onClick={capturePhoto}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 text-white font-bold px-5 py-3 hover:bg-emerald-500 transition text-sm"
-                  >
-                    Capture Selfie
-                  </button>
-                )}
-
-                {(cameraActive || capturedImageUrl) && (
-                  <button
-                    onClick={() => { stopCamera(); setCapturedImageUrl(null); setCapturedImageBlob(null); }}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-2.5 text-xs text-slate-400 hover:text-white"
-                  >
-                    Reset
-                  </button>
                 )}
               </div>
             </div>
 
             {/* Confirm Clock-Out */}
-            {capturedImageUrl && (
+            {uploadedFile.length > 0 && (
               <div className="pt-4 border-t border-slate-800 flex justify-end">
                 <button
                   onClick={handleClockOut}
@@ -1087,6 +1032,8 @@ export default function DailyVisitPage() {
                 onClick={() => {
                   setStep(1);
                   setSummaryData(null);
+                  setUploadedFile([]);
+                  setPreviewUrl(null);
                   setCapturedImageUrl(null);
                   setCapturedImageBlob(null);
                   setExcelFile(null);

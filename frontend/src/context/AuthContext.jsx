@@ -196,8 +196,9 @@ export const AuthProvider = ({ children }) => {
       }
       return response;
     } catch (err) {
-      setError('Registration failed. Please try again.');
-      return { success: false, message: 'Registration failed. Please try again.' };
+      const message = resolveAuthErrorMessage(err, 'Registration failed. Please try again.');
+      setError(message);
+      return { success: false, message };
     }
   };
 
@@ -251,10 +252,11 @@ export const AuthProvider = ({ children }) => {
       }
       return response;
     } catch (err) {
-      setError(err.message || 'Registration failed. Please try again.');
+      const message = resolveAuthErrorMessage(err, 'Registration failed. Please try again.');
+      setError(message);
       return {
         success: false,
-        message: err.message || 'Registration failed. Please try again.',
+        message,
         status: err.status,
       };
     }
@@ -341,15 +343,30 @@ export const AuthProvider = ({ children }) => {
       return userInfo;
     };
 
-    const buildAuthError = (data, payload, fallbackMessage = 'Invalid credentials') => {
+    const buildAuthError = (
+      data,
+      payload,
+      fallbackMessage = 'Invalid credentials',
+      status = undefined,
+    ) => {
       const safeData = data || {};
       const safePayload = payload || {};
-      const err = new Error(safeData.message || safePayload.message || fallbackMessage);
+      const authMessage =
+        safeData.message ||
+        safePayload.message ||
+        ((status >= 500 || safeData.nonJsonBody || safePayload.nonJsonBody)
+          ? AUTH_ERROR_MESSAGES.SERVER_UNAVAILABLE
+          : fallbackMessage);
+      const err = new Error(authMessage);
+      err.status = status || safePayload.status || safeData.status;
       err.pendingApproval = safePayload.pendingApproval || safeData.pendingApproval;
       err.requiresEmailVerification =
         safePayload.requiresEmailVerification || safeData.requiresEmailVerification;
       err.accountDeactivated = safePayload.accountDeactivated || safeData.accountDeactivated;
       err.roleMismatch = safePayload.roleMismatch || safeData.roleMismatch;
+      err.retryAfterSeconds =
+        safePayload.retryAfterSeconds || safeData.retryAfterSeconds;
+      err.nonJsonBody = safePayload.nonJsonBody || safeData.nonJsonBody;
       return err;
     };
 
@@ -525,7 +542,7 @@ export const AuthProvider = ({ children }) => {
           strict ||
           !response.ok
         ) {
-          throw buildAuthError(data, payload);
+          throw buildAuthError(data, payload, 'Invalid credentials', response.status);
         }
       } catch (e) {
         if (

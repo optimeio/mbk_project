@@ -43,7 +43,7 @@ const HeroSection = ({ onGetStarted, onLearnMore }) => {
         </div>
 
         <div className="rb-hero-content">
-            <h1>MBK CARRIERz will create the future for you!</h1>
+            <h1>MBK Carrierz will create the future for you!</h1>
             <div className="rb-hero-cta-row">
                 <CTAButton
                   type="button"

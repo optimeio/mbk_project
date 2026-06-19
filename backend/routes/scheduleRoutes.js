@@ -1,10 +1,11 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
+const { authenticate, authorize } = require('../middleware/auth');
 const {
   createAssignScheduleController,
+  createCreateScheduleController,
   createBulkCreateScheduleController,
   createBulkUploadScheduleController,
-  createCreateScheduleController,
   createDeleteScheduleController,
   createUpdateScheduleController,
   departmentDaysController,
@@ -15,8 +16,8 @@ const {
   trainerSchedulesController,
 } = require("../modules/schedules/schedules.controller");
 const { resolveScheduleFolderFields } = require("../modules/schedules/schedules.drive");
-const authenticate = require("../middleware/auth").authenticate;
-const authorize = require("../middleware/auth").authorize;
+
+
 
 const assignScheduleController = createAssignScheduleController({
   resolveScheduleFolderFields,
@@ -60,10 +61,67 @@ router.get("/live-dashboard", authenticate, authorize(["SPOCAdmin", "SuperAdmin"
 // @access  SPOC Admin, SuperAdmin
 router.get("/days", authenticate, authorize(["SPOCAdmin", "SuperAdmin"]), departmentDaysController);
 
+// Shared handler – resolves trainerId from URL param or authenticated user
+// Shared handler – resolves trainerId from URL param or authenticated user, always using the Trainer ObjectId for schedule queries
+const trainerScheduleHandler = async (req, res) => {
+  try {
+    // Resolve trainer identifier from route param or authenticated user
+    let identifier = req.params.trainerId;
+    if (!identifier) {
+      if (req.user?.trainerId) {
+        identifier = String(req.user.trainerId);
+      } else if (req.user?.id) {
+        identifier = String(req.user.id);
+      } else if (req.user?.userId) {
+        identifier = String(req.user.userId);
+      }
+    }
+
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: "Trainer ID is required" });
+    }
+
+    // Load Trainer model to resolve ObjectId (supports both code MBK001 and ObjectId)
+    const { Trainer } = require("../models");
+    const trainerDoc = await Trainer.findOne({
+      $or: [{ trainerId: identifier }, { _id: identifier }, { userId: req.user?.id }],
+    }).select("_id");
+
+    if (!trainerDoc) {
+      return res.status(404).json({ success: false, message: "Trainer not found" });
+    }
+
+    console.log("[TrainerResolution] Identifier:", identifier, "Resolved ObjectId:", trainerDoc._id);
+
+    // Use the ObjectId for downstream controller
+    req.params.trainerId = String(trainerDoc._id);
+    return trainerSchedulesController(req, res);
+  } catch (error) {
+    console.error("[TrainerScheduleHandler] Error:", error);
+    return res.status(500).json({ success: false, message: "Server error while resolving trainer", error: error.message });
+  }
+};
+
+// @route   GET /api/schedules/trainer
+// @desc    Get schedules for the authenticated trainer (no param needed)
+// @access  Trainer, SPOC Admin, SuperAdmin
+router.get(
+  "/trainer",
+  authenticate,
+  authorize(["Trainer", "SPOCAdmin", "SuperAdmin"]),
+  trainerScheduleHandler
+);
+
 // @route   GET /api/schedules/trainer/:trainerId
-// @desc    Get all schedules for a trainer
-// @access  SPOC Admin, Trainer
-router.get("/trainer/:trainerId", trainerSchedulesController);
+// @desc    Get schedules for a specific trainer by ID
+// @access  Trainer, SPOC Admin, SuperAdmin
+router.get(
+  "/trainer/:trainerId",
+  authenticate,
+  authorize(["Trainer", "SPOCAdmin", "SuperAdmin"]),
+  trainerScheduleHandler
+);
+
 
 // @route   GET /api/schedules/:id
 // @desc    Get a single schedule by ID

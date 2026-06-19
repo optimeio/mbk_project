@@ -37,6 +37,7 @@ const adminTrainerRoutes = require("./adminTrainerRoutes.js");
 const trainerDirectoryV1Routes = require("../modules/trainers/trainers.routes.js");
 const attendanceV1Routes = require("../modules/attendance/attendance.routes.js");
 const teacherWorkflowRoutes = require("./teacherWorkflowRoutes.js");
+const trainerPortalRoutes = require("./trainerPortalRoutes.js");
 const batchRoutes = require("./batchRoutes.js");
 
 import simpleAuth from "./simpleAuth.mjs";
@@ -91,6 +92,7 @@ router.use("/web", webRoutes);
 router.use("/complaints", complaintRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/company-portal", companyPortalRoutes);
+router.use("/trainer-portal", trainerPortalRoutes);
 router.use("/departments", departmentRoutes);
 router.use("/drive-hierarchy", driveRoutes);
 router.use("/training-platform", trainingPlatformRoutes);

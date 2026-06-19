@@ -63,21 +63,21 @@ function SidebarRail({
         </Button>
       ) : null}
 
-      <div className="flex-1" />
-
-      {compact ? (
+      {handleLogout ? (
         <Button
           type="button"
           size="icon"
           variant="ghost"
           onClick={handleLogout}
-          className="mb-1 h-8 w-8 rounded-md text-[#ffd8df] transition hover:bg-white/10 hover:text-white"
+          className={railLinkClass(false)}
           aria-label="Logout"
           title="Logout"
         >
           <LogOut className="h-4 w-4" />
         </Button>
       ) : null}
+
+      <div className="flex-1" />
     </div>
   );
 }

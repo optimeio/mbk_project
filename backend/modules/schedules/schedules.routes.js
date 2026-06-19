@@ -44,7 +44,16 @@ router.get(
 );
 
 router.get(
+  "/trainer",
+  authenticate,
+  authorize(["Trainer", "SPOCAdmin", "SuperAdmin"]),
+  trainerSchedulesController,
+);
+
+router.get(
   "/trainer/:trainerId",
+  authenticate,
+  authorize(["Trainer", "SPOCAdmin", "SuperAdmin"]),
   trainerSchedulesController,
 );
 

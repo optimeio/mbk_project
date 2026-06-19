@@ -12,12 +12,12 @@ export default function LogoutPage() {
     const performLogout = async () => {
       try {
         await logout();
-        // After successful logout, redirect to login page
-        router.replace('/login');
+        // After successful logout, redirect to home page
+        router.replace('/');
       } catch (err) {
         console.error('Logout failed:', err);
-        // Still navigate to login to avoid stuck state
-        router.replace('/login');
+        // Still navigate home to avoid stuck state
+        router.replace('/');
       }
     };
     performLogout();
