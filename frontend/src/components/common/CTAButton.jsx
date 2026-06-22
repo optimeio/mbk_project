@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useCallback, useRef, useState, forwardRef } from 'react';
+import notify from '@/lib/toast';
+import getErrorMessage from '@/lib/getErrorMessage';
 import './CTAButton.css';
 
 const EXTERNAL_HREF_PATTERN = /^(https?:|mailto:|tel:|\/\/)/i;
@@ -77,6 +79,8 @@ const CTAButton = forwardRef(function CTAButton({
   const [asyncLoading, setAsyncLoading] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const lastClickRef = useRef(0);
+  const propsRef = useRef();
+  propsRef.current = { children, ariaLabel, id: props.id };
 
   const isLoading = loading || asyncLoading;
   const isDisabled = disabled || isLoading;
@@ -93,19 +97,47 @@ const CTAButton = forwardRef(function CTAButton({
 
   const handleClick = useCallback(
     (event) => {
+      const startTime = performance.now();
       const now = Date.now();
       if (now - lastClickRef.current < debounceMs) return;
       lastClickRef.current = now;
 
       if (isDisabled || !onClick) return;
 
+      const { children: currentChildren, ariaLabel: currentAriaLabel, id: currentId } = propsRef.current || {};
+      const getButtonLabel = () => {
+        if (typeof currentChildren === 'string') return currentChildren;
+        if (currentAriaLabel) return currentAriaLabel;
+        if (currentId) return `#${currentId}`;
+        return 'button';
+      };
+      const label = getButtonLabel();
+
       const result = onClick(event);
       if (result && typeof result.then === 'function') {
         setAsyncLoading(true);
-        result.finally(() => {
-          setAsyncLoading(false);
-          setIsPressed(false);
-        });
+        result
+          .catch((err) => {
+            console.error(`CTAButton [${label}] onClick error:`, err);
+            notify.error(getErrorMessage(err));
+          })
+          .finally(() => {
+            const duration = performance.now() - startTime;
+            if (duration > 100) {
+              console.warn(`[Perf Warning] CTAButton [${label}] click handler (async) took ${duration.toFixed(2)}ms (target <100ms)`);
+            } else {
+              console.log(`[Perf] CTAButton [${label}] click handler (async) took ${duration.toFixed(2)}ms`);
+            }
+            setAsyncLoading(false);
+            setIsPressed(false);
+          });
+      } else {
+        const duration = performance.now() - startTime;
+        if (duration > 100) {
+          console.warn(`[Perf Warning] CTAButton [${label}] click handler (sync) took ${duration.toFixed(2)}ms (target <100ms)`);
+        } else {
+          console.log(`[Perf] CTAButton [${label}] click handler (sync) took ${duration.toFixed(2)}ms`);
+        }
       }
     },
     [onClick, debounceMs, isDisabled],

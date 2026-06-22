@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 48px;
+  min-height: 48px;
   border: none;
   border-radius: 10px;
   position: relative;
@@ -12,16 +12,18 @@
   color: inherit;
   font: inherit;
   font-weight: 600;
+  letter-spacing: 0.01em;
   text-decoration: none;
   cursor: pointer;
   user-select: none;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  will-change: transform;
   transition:
-    background var(--motion-base, 120ms) var(--ease-snap, ease),
-    transform var(--motion-press, 50ms) var(--ease-snap, ease),
-    box-shadow var(--motion-base, 120ms) ease,
-    opacity var(--motion-fast, 80ms) ease;
+    background 80ms ease,
+    transform 40ms ease,
+    box-shadow 80ms ease,
+    opacity 60ms ease;
 }
 
 .cta-btn:focus-visible {
@@ -43,11 +45,11 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
-.cta-btn--xs { min-height: 32px; padding: 0 0.65rem; border-radius: 7px; font-size: 0.7rem; }
-.cta-btn--sm { min-height: 40px; padding: 0 0.9rem; border-radius: 8px; font-size: 0.8rem; }
-.cta-btn--md { min-height: 44px; padding: 0 1.25rem; font-size: 0.875rem; }
-.cta-btn--lg { min-height: 52px; padding: 0 1.6rem; border-radius: 12px; font-size: 1rem; }
-.cta-btn--xl { min-height: 60px; padding: 0 2rem; border-radius: 14px; font-size: 1.1rem; }
+.cta-btn--xs { min-height: 36px; padding: 0 0.75rem; border-radius: 7px; font-size: 0.75rem; }
+.cta-btn--sm { min-height: 44px; padding: 0 1rem; border-radius: 8px; font-size: 0.8125rem; }
+.cta-btn--md { min-height: 50px; padding: 0 1.5rem; font-size: 0.9375rem; }
+.cta-btn--lg { min-height: 58px; padding: 0 1.8rem; border-radius: 12px; font-size: 1.0625rem; }
+.cta-btn--xl { min-height: 68px; padding: 0 2.25rem; border-radius: 14px; font-size: 1.15rem; }
 
 .cta-btn--full {
   width: 100%;
@@ -56,13 +58,13 @@
 .cta-btn--primary {
   background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4), 0 1px 3px rgba(0,0,0,0.12);
 }
 
 .cta-btn--brand {
   background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%);
   color: #fff;
-  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.28);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.35), 0 1px 3px rgba(0,0,0,0.12);
 }
 
 .cta-btn--brand:hover:not(.cta-btn--disabled) {
@@ -74,7 +76,7 @@
 .cta-btn--company {
   background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
   color: #fff;
-  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.28);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35), 0 1px 3px rgba(0,0,0,0.12);
 }
 
 .cta-btn--company:hover:not(.cta-btn--disabled) {
@@ -96,8 +98,8 @@
 
 .cta-btn:active:not(.cta-btn--disabled),
 .cta-btn--pressed:not(.cta-btn--disabled) {
-  transform: scale(0.97);
-  transition-duration: var(--motion-press, 50ms);
+  transform: scale(0.96);
+  transition-duration: 30ms;
 }
 
 .cta-btn--secondary {

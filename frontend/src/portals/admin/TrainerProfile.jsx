@@ -115,7 +115,7 @@ const DocPreview = ({ doc, label, handleVerifyDoc }) => (
          {doc ? (
              <div className="w-full flex-1 flex flex-col items-center">
                  {['image/jpeg', 'image/png', 'image/jpg'].includes(doc.mimeType) ? (
-                     <img 
+                     <img loading="lazy" 
                          src={getDocumentUrl(doc.filePath)} 
                          alt="Doc" 
                          className="h-32 object-contain rounded shadow-sm"
@@ -835,7 +835,7 @@ const TrainerProfile = () => {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center">
                             {trainer.profilePicture ? (
-                                <img
+                                <img loading="lazy"
                                     src={getProfilePictureUrl(trainer.profilePicture)}
                                     alt={trainer.name}
                                     className="h-12 w-12 rounded-full object-cover border-2 border-gray-200"

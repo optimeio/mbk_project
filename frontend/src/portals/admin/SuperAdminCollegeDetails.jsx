@@ -5,18 +5,14 @@ import { useRouter, useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import DayDetailsModal from '@/components/modals/DayDetailsModal';
+import dynamic from 'next/dynamic';
+const DayDetailsModal = dynamic(() => import('@/components/modals/DayDetailsModal'));
 import HierarchyBreadcrumb from '@/components/common/HierarchyBreadcrumb';
 import CollegeInfoCards from '@/components/college/CollegeInfoCards';
 import TrainingProgress from '@/components/college/TrainingProgress';
 import DaysGrid from '@/components/college/DaysGrid';
 import { api } from '@/services/api';
 import { notify } from '@/lib/toast';
-import {
-    clearTrainerDashboardScheduleSummaryCache,
-    clearTrainerDashboardSnapshot,
-    signalTrainerDashboardRefresh,
-} from '@/portals/trainer/dashboard/dashboardUtils';
 import {
     clearTrainerDashboardScheduleSummaryCache,
     clearTrainerDashboardSnapshot,

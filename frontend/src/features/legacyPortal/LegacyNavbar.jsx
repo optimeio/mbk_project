@@ -65,7 +65,7 @@ function LegacyNavbar() {
       <nav id="navbar">
         <div className="container nav-content">
           <Link href="/" className="logo" onClick={(event) => handleNavClick(event, 'home')}>
-            <img src="/training.png" alt="MBK Logo" className="logo-img" />
+            <img loading="lazy" src="/training.png" alt="MBK Logo" className="logo-img" />
             <div className="logo-text">
               <span>MBK TECHNOLOGY</span>
               <div className="tagline">Skills to Success</div>

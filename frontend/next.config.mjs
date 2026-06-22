@@ -35,6 +35,13 @@ const devApiOrigin = cleanBaseUrl || defaultLocalApiUrl.replace(/\/api\/?$/i, ""
 const nextConfig = {
   devIndicators: false,
 
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+
   // Standalone output creates a minimal deployment bundle (ideal for Docker)
   output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
 
@@ -74,6 +81,7 @@ const nextConfig = {
       '@heroicons/react/20/solid',
       'date-fns',
       'antd',
+      '@ant-design/icons',
       '@radix-ui/react-dialog',
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-select',

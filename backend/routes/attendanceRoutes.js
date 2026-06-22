@@ -2220,14 +2220,36 @@ const checkInHandler = async (req, res) => {
             }
         }
 
+        // Parse check-in image
+        const checkInImageFile = req.files?.check_in_image ? req.files.check_in_image[0] : null;
+        let checkInImageUrl = null;
+        if (checkInImageFile) {
+            checkInImageUrl = `/uploads/attendance/images/${checkInImageFile.filename}`;
+        }
+
         // Check for existing attendance (e.g. for re-check-in after rejection)
         checkInStage = 'loading attendance record';
         let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
 
+        console.log("=== [DEBUG] Check-In Request Payload ===");
+        console.log({
+            trainerId,
+            collegeId,
+            scheduleId,
+            dayNumber,
+            checkInTime,
+            latitude,
+            longitude,
+            checkInLocation,
+            checkInImageUrl
+        });
+
         if (attendance) {
             checkInStage = 'updating existing attendance';
             // Update existing record
-            attendance.checkInTime = checkInTime || new Date().toTimeString().split(' ')[0];
+            if (!attendance.checkInTime) {
+                attendance.checkInTime = checkInTime || new Date().toTimeString().split(' ')[0];
+            }
             if (attendancePdfUrl) attendance.attendancePdfUrl = attendancePdfUrl;
             if (attendanceExcelUrl) attendance.attendanceExcelUrl = attendanceExcelUrl;
             if (latitude) attendance.latitude = latitude;
@@ -2239,6 +2261,12 @@ const checkInHandler = async (req, res) => {
                     time: new Date(),
                     location: checkInLocation
                 };
+                attendance.checkInLocation = checkInLocation;
+            }
+
+            if (checkInImageUrl) {
+                attendance.checkInImage = checkInImageUrl;
+                attendance.imageUrl = checkInImageUrl; // Legacy compatibility
             }
 
             attendance.studentsPresent = studentsPresent || 0;
@@ -2295,10 +2323,13 @@ const checkInHandler = async (req, res) => {
                     time: new Date(),
                     location: checkInLocation
                 } : undefined,
+                checkInLocation: checkInLocation || null,
+                checkInImage: checkInImageUrl || null,
+                imageUrl: checkInImageUrl || null, // legacy compatibility
                 attendancePdfUrl,
                 attendanceExcelUrl,
-                latitude: latitude || null,
-                longitude: longitude || null,
+                latitude: latitude || (checkInLocation?.lat || null),
+                longitude: longitude || (checkInLocation?.lng || null),
                 uploadedBy: 'trainer',
                 isManualEntry: false,
                 status: 'Pending',
@@ -2314,6 +2345,9 @@ const checkInHandler = async (req, res) => {
         }
 
         await attendance.save();
+        console.log("=== [DEBUG] Saved MongoDB Attendance Document ===");
+        console.log(attendance);
+
         const driveSyncQueued = queueStoredAttendanceDriveSync({
             attendanceId: attendance._id,
             contextLabel: 'check-in',
@@ -2373,7 +2407,7 @@ const checkInHandler = async (req, res) => {
             });
         }
 
-        res.status(201).json({
+        const apiResponse = {
             success: true,
             message: driveSyncQueued
                 ? 'Check-in successful. Drive sync queued.'
@@ -2384,7 +2418,10 @@ const checkInHandler = async (req, res) => {
                 error: null
             },
             data: attendance
-        });
+        };
+        console.log("=== [DEBUG] Attendance Check-In API Response ===");
+        console.log(apiResponse);
+        res.status(201).json(apiResponse);
     } catch (error) {
         logAttendanceAsyncTelemetry('error', {
             correlationId: checkInCorrelationId,
@@ -2394,6 +2431,7 @@ const checkInHandler = async (req, res) => {
             reason: error?.message || 'Unknown error',
             contextLabel: checkInStage,
         });
+        console.error("=== [DEBUG] Check-In Error ===", error);
         res.status(500).json({
             success: false,
             message: 'Failed to check in',
@@ -2741,6 +2779,20 @@ const checkOutHandler = async (req, res) => {
         const { scheduleId, trainerId, collegeId, dayNumber, checkOutTime, latitude, longitude, location } = req.body;
         let checkOutLocation = req.body.checkOutLocation;
 
+        console.log("=== [DEBUG] Check-Out Request Payload ===");
+        console.log({
+            scheduleId,
+            trainerId,
+            collegeId,
+            dayNumber,
+            checkOutTime,
+            latitude,
+            longitude,
+            location,
+            checkOutLocation,
+            files: req.files ? Object.keys(req.files) : []
+        });
+
         // Parse checkInLocation if it's a string (from FormData)
         if (typeof checkOutLocation === 'string') {
             checkOutStage = 'parsing check-out location';
@@ -2879,7 +2931,11 @@ const checkOutHandler = async (req, res) => {
 
         // Get file paths
         checkOutStage = 'processing uploaded geo evidence';
-        const photoFiles = [...(req.files?.photo || []), ...(req.files?.checkOutGeoImage || [])].slice(0, 3);
+        const photoFiles = [
+            ...(req.files?.photo || []),
+            ...(req.files?.checkOutGeoImage || []),
+            ...(req.files?.check_out_image || [])
+        ].slice(0, 3);
         let photoPaths = photoFiles.map(file => file.path);
         let imageGeoValidations = [];
 
@@ -3020,8 +3076,10 @@ const checkOutHandler = async (req, res) => {
         attendance.checkOutTime = checkOutTime || new Date().toTimeString().split(' ')[0];
         
         if (photoPaths.length > 0) {
-            attendance.checkOutGeoImageUrl = photoPaths[0];
-            attendance.checkOutGeoImageUrls = photoPaths;
+            const checkOutImageUrl = `/uploads/attendance/images/${path.basename(photoPaths[0])}`;
+            attendance.checkOutImage = checkOutImageUrl;
+            attendance.checkOutGeoImageUrl = checkOutImageUrl;
+            attendance.checkOutGeoImageUrls = photoPaths.map(p => `/uploads/attendance/images/${path.basename(p)}`);
         }
 
 
@@ -3050,32 +3108,36 @@ const checkOutHandler = async (req, res) => {
                 ? currentDistanceMeters
                 : null;
 
+        const resolvedCheckOutLocation = checkOutLocation || {
+            lat: Number.isFinite(checkOutVerificationResult.latitude)
+                ? checkOutVerificationResult.latitude
+                : Number.isFinite(firstImageWithLocation?.latitude)
+                ? firstImageWithLocation.latitude
+                : (Number.isFinite(parsedCurrentLat) ? parsedCurrentLat : null),
+            lng: Number.isFinite(checkOutVerificationResult.longitude)
+                ? checkOutVerificationResult.longitude
+                : Number.isFinite(firstImageWithLocation?.longitude)
+                ? firstImageWithLocation.longitude
+                : (Number.isFinite(parsedCurrentLng) ? parsedCurrentLng : null),
+            accuracy: Number.isFinite(firstImageWithLocation?.latitude) && Number.isFinite(firstImageWithLocation?.longitude)
+                ? null
+                : (req.body.accuracy || checkOutLocation?.accuracy),
+            address: Number.isFinite(firstImageWithLocation?.latitude) && Number.isFinite(firstImageWithLocation?.longitude)
+                ? "Geo-tag image location"
+                : (req.body.address || checkOutLocation?.address || "College Campus"),
+            distanceFromCollege: summaryDistanceMeters
+        };
+
+        attendance.checkOutLocation = resolvedCheckOutLocation;
+
         // Structured Geo-Tag (ANTI-FAKE)
         attendance.checkOut = {
             time: new Date(),
             finalStatus: normalizeAttendanceFinalStatus(attendance.finalStatus, 'PENDING'),
-            location: {
-                lat: Number.isFinite(checkOutVerificationResult.latitude)
-                    ? checkOutVerificationResult.latitude
-                    : Number.isFinite(firstImageWithLocation?.latitude)
-                    ? firstImageWithLocation.latitude
-                    : (Number.isFinite(parsedCurrentLat) ? parsedCurrentLat : null),
-                lng: Number.isFinite(checkOutVerificationResult.longitude)
-                    ? checkOutVerificationResult.longitude
-                    : Number.isFinite(firstImageWithLocation?.longitude)
-                    ? firstImageWithLocation.longitude
-                    : (Number.isFinite(parsedCurrentLng) ? parsedCurrentLng : null),
-                accuracy: Number.isFinite(firstImageWithLocation?.latitude) && Number.isFinite(firstImageWithLocation?.longitude)
-                    ? null
-                    : (req.body.accuracy || checkOutLocation?.accuracy),
-                address: Number.isFinite(firstImageWithLocation?.latitude) && Number.isFinite(firstImageWithLocation?.longitude)
-                    ? "Geo-tag image location"
-                    : (req.body.address || checkOutLocation?.address || "College Campus"),
-                distanceFromCollege: summaryDistanceMeters
-            },
+            location: resolvedCheckOutLocation,
             images: normalizedCheckOutImages,
             photos: imageGeoValidations.map((item) => ({
-                url: item.filePath,
+                url: item.filePath ? `/uploads/attendance/images/${path.basename(item.filePath)}` : null,
                 uploadedAt: new Date(),
                 validationStatus: item.status === 'COMPLETED' ? 'verified' : 'pending',
                 validationReason: item.status === 'COMPLETED' ? null : item.reason,
@@ -3096,6 +3158,8 @@ const checkOutHandler = async (req, res) => {
 
         checkOutStage = 'saving attendance record';
         await attendance.save();
+        console.log("=== [DEBUG] Saved MongoDB Attendance Document at Check-Out ===");
+        console.log(attendance);
         checkOutStage = 'queueing persisted attendance files for Google Drive sync';
         const driveSyncQueued = queueStoredAttendanceDriveSync({
             attendanceId: attendance._id,
@@ -3155,7 +3219,7 @@ const checkOutHandler = async (req, res) => {
             });
         }
 
-        res.json({
+        const apiResponse = {
             success: true,
             message: `${checkOutAutoApproved ? 'Check-out auto-verified' : 'Check-out saved'}${driveSyncQueued ? '. Drive sync queued.' : '.'} Verification status: ${attendance.checkOutVerificationStatus || 'PENDING_CHECKOUT'}`,
             driveSync: {
@@ -3203,7 +3267,10 @@ const checkOutHandler = async (req, res) => {
                 driveSyncStatus: attendance.driveSyncStatus || 'PENDING',
             },
             data: attendance
-        });
+        };
+        console.log("=== [DEBUG] Attendance Check-Out API Response ===");
+        console.log(apiResponse);
+        res.json(apiResponse);
     } catch (error) {
         logAttendanceAsyncTelemetry('error', {
             correlationId: checkOutCorrelationId,
@@ -3213,6 +3280,7 @@ const checkOutHandler = async (req, res) => {
             reason: error?.message || 'Unknown error',
             contextLabel: checkOutStage,
         });
+        console.error("=== [DEBUG] Check-Out Error ===", error);
         res.status(500).json({
             success: false,
             message: `Failed to check out during ${checkOutStage}`,

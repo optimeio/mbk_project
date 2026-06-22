@@ -641,7 +641,7 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                         <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-3 border border-gray-100 shadow-sm">
                                                             <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
                                                                 {day.trainerProfilePhoto && !imageError ? (
-                                                                    <img
+                                                                    <img loading="lazy"
                                                                         src={day.trainerProfilePhoto.startsWith('http') ? day.trainerProfilePhoto : `${FILE_BASE_URL}/${day.trainerProfilePhoto.replace(/^\//, '').replace(/\\/g, '/')}`}
                                                                         alt="Trainer"
                                                                         className="h-10 w-10 rounded-lg object-cover"
@@ -927,7 +927,7 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                                         {/* Attendance Image */}
                                                                         {day.attendanceImage && (
                                                                             <div className="relative flex-none w-48 group">
-                                                                                <img
+                                                                                <img loading="lazy"
                                                                                     src={toImageSrcUrl(day.attendanceImage)}
                                                                                     alt="Attendance"
                                                                                     className="h-32 w-full object-cover rounded-lg border border-gray-200"
@@ -961,7 +961,7 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                                         {(day.checkOutGeoImageUrls && day.checkOutGeoImageUrls.length > 0) &&
                                                                             day.checkOutGeoImageUrls.map((url, index) => (
                                                                                 <div key={`img-${index}`} className="relative flex-none w-48 group">
-                                                                                    <img
+                                                                                    <img loading="lazy"
                                                                                         src={toImageSrcUrl(url)}
                                                                                         alt={`Geo Tag ${index + 1}`}
                                                                                         className="h-32 w-full object-cover rounded-lg border border-gray-200"

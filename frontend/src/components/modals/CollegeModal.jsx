@@ -59,7 +59,7 @@ const isGoogleMapsUrl = (value) => {
     }
 };
 
-const CollegeModal = ({ open, onClose, onSave, initialData, courses, defaultCourseId }) => {
+const CollegeModal = ({ open, onClose, onSave, initialData, courses = [], companies = [], defaultCourseId, isGlobalMode }) => {
     const [isMapModalOpen, setIsMapModalOpen] = useState(false);
     const [pickerLocation, setPickerLocation] = useState(null);
     const [mapUrlStatus, setMapUrlStatus] = useState('');
@@ -73,6 +73,8 @@ const CollegeModal = ({ open, onClose, onSave, initialData, courses, defaultCour
         longitude: '',
         spocName: '',
         spocPhone: '',
+        companyId: '',
+        courseId: '',
     });
 
 
@@ -90,6 +92,8 @@ const CollegeModal = ({ open, onClose, onSave, initialData, courses, defaultCour
                 longitude: initialData.longitude ?? initialData.location?.lng ?? '',
                 spocName: initialData.spocName || initialData.principalName || '',
                 spocPhone: initialData.spocPhone || initialData.phone || '',
+                companyId: initialData.companyId?._id || initialData.companyId || '',
+                courseId: initialData.courseId?._id || initialData.courseId || '',
             });
         } else {
             setFormData({
@@ -102,10 +106,11 @@ const CollegeModal = ({ open, onClose, onSave, initialData, courses, defaultCour
                 longitude: '',
                 spocName: '',
                 spocPhone: '',
+                companyId: companies && companies.length === 1 ? companies[0]._id : '',
                 courseId: defaultCourseId || '',
             });
         }
-    }, [initialData, open, defaultCourseId]);
+    }, [initialData, open, defaultCourseId, companies]);
 
     const parsedLat = Number.parseFloat(formData.latitude);
     const parsedLng = Number.parseFloat(formData.longitude);
@@ -203,6 +208,8 @@ const CollegeModal = ({ open, onClose, onSave, initialData, courses, defaultCour
             // Backward compatibility fields
             principalName: formData.spocName,
             phone: formData.spocPhone,
+            companyId: formData.companyId,
+            courseId: formData.courseId || null,
         };
 
         onSave(submissionData);
@@ -269,6 +276,52 @@ const CollegeModal = ({ open, onClose, onSave, initialData, courses, defaultCour
                                                         placeholder="Enter college name"
                                                     />
                                                 </div>
+
+                                                {isGlobalMode && !initialData && (
+                                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                                        <div>
+                                                            <label htmlFor="companyId" className="block text-sm font-medium text-gray-700">
+                                                                Company <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                name="companyId"
+                                                                id="companyId"
+                                                                required
+                                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+                                                                value={formData.companyId}
+                                                                onChange={handleChange}
+                                                            >
+                                                                <option value="" disabled>Select Company</option>
+                                                                {companies.map((company) => (
+                                                                    <option key={company._id} value={company._id}>
+                                                                        {company.name}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label htmlFor="courseId" className="block text-sm font-medium text-gray-700">
+                                                                Course (Optional)
+                                                            </label>
+                                                            <select
+                                                                name="courseId"
+                                                                id="courseId"
+                                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+                                                                value={formData.courseId}
+                                                                onChange={handleChange}
+                                                            >
+                                                                <option value="">No Course (Global College)</option>
+                                                                {courses
+                                                                    .filter(c => !formData.companyId || c.companyId === formData.companyId || c.companyId?._id === formData.companyId)
+                                                                    .map((course) => (
+                                                                        <option key={course._id || course.id} value={course._id || course.id}>
+                                                                            {course.title || course.name}
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 <div>
                                                     <label htmlFor="department" className="block text-sm font-medium text-gray-700">

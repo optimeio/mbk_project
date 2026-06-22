@@ -23,11 +23,36 @@ const formatDate = (dateStr) => {
   try {
     return new Date(dateStr).toLocaleString(undefined, {
       dateStyle: "medium",
-      timeStyle: "short",
     });
   } catch {
     return dateStr;
   }
+};
+
+const resolveImageUrl = (path) => {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  
+  // Try to use NEXT_PUBLIC_API_URL
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/api$/, "");
+  
+  // Ensure the path has /uploads/ prefix if it's just a filename
+  let processedPath = path;
+  if (!processedPath.startsWith("/") && !processedPath.startsWith("uploads/")) {
+    processedPath = `/uploads/${processedPath}`;
+  } else if (processedPath.startsWith("uploads/")) {
+    processedPath = `/${processedPath}`;
+  } else if (processedPath.startsWith("/") && !processedPath.startsWith("/uploads/")) {
+    // It's an absolute path but might not have uploads
+    // Assuming all local images should be from /uploads/
+    processedPath = `/uploads${processedPath}`;
+  }
+
+  if (apiBase) {
+    return `${apiBase}${processedPath}`;
+  }
+  
+  return processedPath;
 };
 
 const STATUS_STYLE = {
@@ -142,27 +167,21 @@ function TrainerAttendanceHistory() {
 
         {/* list */}
         {!loading && !error && records.length > 0 && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {records.map((record, idx) => {
               const status = record.attendanceStatus || record.status || "pending";
               const statusStyle = STATUS_STYLE[status] || STATUS_STYLE.pending;
-              const hasLocation =
-                record.latitude != null || record.longitude != null;
 
               return (
                 <div
                   key={record._id || record.id || idx}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 transition hover:border-slate-200 hover:bg-white sm:px-5"
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    {/* date + badge */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-slate-800">
-                        {formatDate(
-                          record.assignedDate ||
-                            record.capturedAt ||
-                            record.createdAt,
-                        )}
+                  {/* Card Header: Date & Status */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-800">
+                        {formatDate(record.date || record.assignedDate || record.createdAt)}
                       </span>
                       <span
                         className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusStyle}`}
@@ -177,48 +196,109 @@ function TrainerAttendanceHistory() {
                         {status}
                       </span>
                     </div>
-
-                    {/* verification badge */}
                     {record.verificationStatus && (
                       <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 capitalize">
-                        {record.verificationStatus}
+                        Verification: {record.verificationStatus}
                       </span>
                     )}
                   </div>
 
-                  {/* location row */}
-                  {hasLocation && (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                      <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                      <span className="font-mono">
-                        {formatCoord(record.latitude)},{" "}
-                        {formatCoord(record.longitude)}
-                      </span>
-                      {record.accuracy != null && (
-                        <span className="text-slate-400">
-                          ±{Math.round(record.accuracy)} m
-                        </span>
+                  {/* Card Body: Check-In vs Check-Out Grid */}
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    {/* Check-In Column */}
+                    <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#0f3f5c]">Check-In Details</h4>
+                        <div className="mt-2 space-y-1.5 text-xs text-slate-600">
+                          <div>
+                            <span className="font-semibold text-slate-500">Time:</span>{" "}
+                            <span className="font-medium text-slate-950">{record.checkInTime || "—"}</span>
+                          </div>
+                          {/* Coordinates */}
+                          <div>
+                            <span className="font-semibold text-slate-500">Location:</span>{" "}
+                            <span className="font-mono text-slate-800">
+                              {record.latitude != null || record.longitude != null 
+                                ? `${formatCoord(record.latitude)}, ${formatCoord(record.longitude)}`
+                                : record.checkInLocation?.lat != null 
+                                  ? `${formatCoord(record.checkInLocation.lat)}, ${formatCoord(record.checkInLocation.lng)}`
+                                  : "—"}
+                            </span>
+                          </div>
+                          {/* Address */}
+                          {(record.checkInLocation?.address || record.checkIn?.location?.address) && (
+                            <div className="flex items-start gap-1">
+                              <span className="font-semibold text-slate-500 shrink-0">Address:</span>
+                              <span className="text-slate-800 line-clamp-2">
+                                {record.checkInLocation?.address || record.checkIn?.location?.address}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Check-In Image */}
+                      {(record.checkInImage || record.imageUrl) && (
+                        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <img loading="lazy"
+                            src={resolveImageUrl(record.checkInImage || record.imageUrl)}
+                            alt="Check-In GeoTag"
+                            className="h-28 w-full object-cover transition hover:scale-105"
+                          />
+                        </div>
                       )}
                     </div>
-                  )}
 
-                  {/* attendance image */}
-                  {record.imageUrl && (
-                    <div className="mt-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={record.imageUrl}
-                        alt="Attendance"
-                        className="h-28 w-full rounded-xl object-cover border border-slate-200 sm:h-36"
-                      />
+                    {/* Check-Out Column */}
+                    <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 flex flex-col justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#1a6b9e]">Check-Out Details</h4>
+                        <div className="mt-2 space-y-1.5 text-xs text-slate-600">
+                          <div>
+                            <span className="font-semibold text-slate-500">Time:</span>{" "}
+                            <span className="font-medium text-slate-950">{record.checkOutTime || "—"}</span>
+                          </div>
+                          {/* Coordinates */}
+                          <div>
+                            <span className="font-semibold text-slate-500">Location:</span>{" "}
+                            <span className="font-mono text-slate-800">
+                              {record.checkOutLatitude != null || record.checkOutLongitude != null 
+                                ? `${formatCoord(record.checkOutLatitude)}, ${formatCoord(record.checkOutLongitude)}`
+                                : record.checkOutLocation?.lat != null 
+                                  ? `${formatCoord(record.checkOutLocation.lat)}, ${formatCoord(record.checkOutLocation.lng)}`
+                                  : "—"}
+                            </span>
+                          </div>
+                          {/* Address */}
+                          {(record.checkOutLocation?.address || record.checkOut?.location?.address) && (
+                            <div className="flex items-start gap-1">
+                              <span className="font-semibold text-slate-500 shrink-0">Address:</span>
+                              <span className="text-slate-800 line-clamp-2">
+                                {record.checkOutLocation?.address || record.checkOut?.location?.address}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Check-Out Image */}
+                      {(record.checkOutImage || record.checkOutGeoImageUrl) && (
+                        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <img loading="lazy"
+                            src={resolveImageUrl(record.checkOutImage || record.checkOutGeoImageUrl)}
+                            alt="Check-Out GeoTag"
+                            className="h-28 w-full object-cover transition hover:scale-105"
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* note */}
-                  {record.notes && (
-                    <p className="mt-2 text-xs text-slate-500 italic">
-                      {record.notes}
-                    </p>
+                  {/* Notes */}
+                  {record.remarks && (
+                    <div className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-500 italic">
+                      Remarks: {record.remarks}
+                    </div>
                   )}
                 </div>
               );

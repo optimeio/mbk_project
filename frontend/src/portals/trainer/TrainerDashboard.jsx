@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock3,
   GraduationCap,
+  Users,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -179,11 +180,11 @@ function TrainerDashboard() {
           "bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 text-white shadow-emerald-500/25",
       },
       {
-        label: "Pending",
-        value: dashboardStats.pending,
-        icon: Clock3,
+        label: "Department",
+        value: (currentUser && currentUser.department && currentUser.department.name) || "N/A",
+        icon: Users,
         className:
-          "bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 text-white shadow-amber-500/25",
+          "bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 text-white shadow-indigo-500/25",
       },
       {
         label: "Colleges",
@@ -193,7 +194,7 @@ function TrainerDashboard() {
           "bg-gradient-to-br from-fuchsia-500 via-purple-500 to-violet-600 text-white shadow-violet-500/25",
       },
     ],
-    [dashboardStats],
+    [dashboardStats, currentUser]
   );
 
   return (

@@ -138,7 +138,7 @@ function LegacyCoursesPage() {
                   <div className="card reveal" style={{ transitionDelay: `${(index % 4) * 0.1}s` }} key={course._id}>
                     {course.image && (
                       <div style={{ margin: '-2rem -2rem 1.5rem -2rem', borderRadius: '1rem 1rem 0 0', overflow: 'hidden', height: '200px' }}>
-                        <img src={course.image} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img loading="lazy" src={course.image} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
                     )}
                     <h3>{course.title}</h3>

@@ -1,8 +1,10 @@
-"use client";
-
 import dynamic from "next/dynamic";
-
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'Student Courses',
+  description: 'Browse and access your enrolled training programs and course materials on MBK Carrierz.',
+};
 
 const StudentCourses = dynamic(() => import("@/portals/student/StudentCourses"), {
   loading: () => (

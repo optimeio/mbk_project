@@ -1446,7 +1446,7 @@ const Step3 = ({
                     <div className="tr-selfie-preview-column">
                       {hasPreview ? (
                         <div className="tr-selfie-avatar-container">
-                          <img
+                          <img loading="lazy"
                             src={previewSrc}
                             alt="Selfie Preview"
                             className="tr-selfie-preview-img"

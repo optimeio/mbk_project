@@ -17,6 +17,7 @@ const getDashboardRoute = (role) => {
   return routes[String(role || '').toLowerCase()] || '/dashboard';
 };
 
+
 export const signup = async (req, res) => {
   try {
     const {
@@ -118,26 +119,45 @@ export const signup = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
+    // 1. Explicitly disable rate limiter inside the controller for debugging
+    process.env.DISABLE_RATE_LIMITER = '1';
+
     const { email, password, rememberMe = false, expectedRole } = req.body;
+  console.debug('[AUTH DEBUG] Endpoint: /api/auth/login (User collection)');
+  console.debug(`[AUTH DEBUG] Payload received - email: ${email}, expectedRole: ${expectedRole || 'None'}`);
+
+    console.log(`\n--- [AUTH DEBUG] LOGIN ATTEMPT ---`);
+    console.log(`Email Received: ${email}`);
+    console.log(`Expected Role: ${expectedRole || 'None'}`);
 
     if (!email || !password) {
+      console.log(`[AUTH DEBUG] Failed: Missing email or password.`);
       return res.status(400).json({
         success: false,
         message: 'Please provide email and password',
       });
     }
 
+    // 2. Look up user by email
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+  if (user) {
+    console.debug('[AUTH DEBUG] User found in User collection with role:', user.role);
+  } else {
+    console.debug('[AUTH DEBUG] No user found in User collection for email:', email);
+  }
 
     if (!user) {
+      console.log(`[AUTH DEBUG] Failed: User with email ${email} NOT FOUND in User collection.`);
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message: 'User not found',
       });
     }
 
+    console.log(`[AUTH DEBUG] Success: User found in DB. Role: ${user.role}, ID: ${user._id}`);
 
     if (!user.isActive) {
+      console.log(`[AUTH DEBUG] Failed: Account is deactivated.`);
       return res.status(403).json({
         success: false,
         message: 'Account has been deactivated',
@@ -145,16 +165,23 @@ export const login = async (req, res) => {
       });
     }
 
+    // 3. Verify password using bcrypt.compare
+    console.log(`[AUTH DEBUG] Verifying password using bcrypt.compare()...`);
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
+      console.log(`[AUTH DEBUG] Failed: Password does NOT match stored hash.`);
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
       });
     }
 
+    console.log(`[AUTH DEBUG] Success: Password matches!`);
+
+    // 4. Validate role
     if (expectedRole && !roleMatchesExpected(user.role, expectedRole)) {
+      console.log(`[AUTH DEBUG] Failed: Role mismatch. Expected ${expectedRole}, got ${user.role}.`);
       return res.status(403).json({
         success: false,
         message: 'This email is not registered for the selected account type',
@@ -166,6 +193,7 @@ export const login = async (req, res) => {
     if (normalizedRole === 'trainer') {
       const emailVerified = Boolean(user.isEmailVerified || user.emailVerified);
       if (!emailVerified) {
+        console.log(`[AUTH DEBUG] Failed: Trainer email not verified.`);
         return res.status(403).json({
           success: false,
           message: 'Please verify your email with OTP before signing in.',
@@ -174,6 +202,7 @@ export const login = async (req, res) => {
       }
 
       if (user.accountStatus && user.accountStatus !== 'active') {
+        console.log(`[AUTH DEBUG] Failed: Trainer account pending approval.`);
         return res.status(403).json({
           success: false,
           message: 'Your trainer account is waiting for admin approval.',
@@ -193,9 +222,13 @@ export const login = async (req, res) => {
     };
     await user.save();
 
+    // 5. Generate JWT tokens
+    console.log(`[AUTH DEBUG] Generating JWT tokens...`);
     const { accessToken, refreshToken } = generateTokens(user._id, user.email, user.role);
+    console.log(`[AUTH DEBUG] Tokens generated successfully! Login Complete.`);
+    console.log(`----------------------------------\n`);
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
@@ -207,7 +240,7 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[AUTH DEBUG] Server Error:', error);
     res.status(500).json({
       success: false,
       message: 'Login failed',

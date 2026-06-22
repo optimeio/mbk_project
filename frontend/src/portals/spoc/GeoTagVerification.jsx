@@ -309,7 +309,7 @@ const GeoTagVerification = () => {
         >
           <DialogTitle className="sr-only">Geo evidence preview</DialogTitle>
           {selectedImage ? (
-            <img
+            <img loading="lazy"
               src={selectedImage}
               alt="Selected evidence"
               className="max-h-[85vh] w-full rounded-2xl object-contain shadow-2xl"

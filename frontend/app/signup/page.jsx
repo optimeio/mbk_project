@@ -1,7 +1,12 @@
-"use client";
-
 import { Suspense } from 'react';
-import SignUp from '@/features/auth/pages/SignUp';
+import dynamic from 'next/dynamic';
+
+export const metadata = {
+  title: 'Sign Up',
+  description: 'Create your MBK Carrierz account to start your professional training journey. Register as a student, trainer, or company partner.',
+};
+
+const SignUpClient = dynamic(() => import('@/features/auth/pages/SignUp'), { });
 
 export default function SignUpPage() {
   return (
@@ -13,7 +18,7 @@ export default function SignUpPage() {
         </div>
       </div>
     }>
-      <SignUp />
+      <SignUpClient />
     </Suspense>
   );
 }

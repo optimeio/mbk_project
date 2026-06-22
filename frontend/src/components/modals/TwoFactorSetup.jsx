@@ -140,7 +140,7 @@ const TwoFactorSetup = ({ userId, onComplete }) => {
             {step === 1 && qrCodeUrl && (
                 <div className="space-y-6">
                     <div className="flex justify-center">
-                        <img src={qrCodeUrl} alt="2FA QR Code" className="border p-2 rounded" />
+                        <img loading="lazy" src={qrCodeUrl} alt="2FA QR Code" className="border p-2 rounded" />
                     </div>
                     <div className="text-center">
                         <p className="text-sm text-gray-500 mb-2">Scan this QR code with your Authenticator App (Google Auth, Authy, etc.)</p>

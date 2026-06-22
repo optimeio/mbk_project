@@ -446,7 +446,7 @@ const CompanyDetails = () => {
                                         {/* Image Area */}
                                         <div className="relative h-44 bg-gradient-to-br from-indigo-50 to-blue-50 flex items-center justify-center overflow-hidden">
                                             {imageUrl ? (
-                                                <img
+                                                <img loading="lazy"
                                                     src={imageUrl}
                                                     alt={course.title}
                                                     className="w-full h-full object-cover"

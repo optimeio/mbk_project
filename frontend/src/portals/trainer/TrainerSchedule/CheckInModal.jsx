@@ -45,6 +45,28 @@ const optimizeImage = (file) =>
     };
   });
 
+const StudentRow = memo(({ student, isChecked, onCheck }) => {
+  return (
+    <tr className="hover:bg-indigo-50 transition-colors">
+      <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600 font-mono">
+        {student.rollNo}
+      </td>
+      <td className="px-2 py-1.5 whitespace-nowrap text-[10px] text-gray-400 font-mono">
+        {student.registerNo}
+      </td>
+      <td className="px-2 py-1.5 text-xs text-gray-900 font-medium">{student.name}</td>
+      <td className="px-2 py-1.5 whitespace-nowrap text-center">
+        <input
+          type="checkbox"
+          checked={isChecked}
+          onChange={() => onCheck(student._id)}
+          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+        />
+      </td>
+    </tr>
+  );
+});
+
 const CheckInModal = ({
   attendanceData,
   fetchingStudents,
@@ -263,23 +285,12 @@ const CheckInModal = ({
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-100">
                     {students.map((student) => (
-                      <tr key={student._id} className="hover:bg-indigo-50 transition-colors">
-                        <td className="px-2 py-1.5 whitespace-nowrap text-xs text-gray-600 font-mono">
-                          {student.rollNo}
-                        </td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-[10px] text-gray-400 font-mono">
-                          {student.registerNo}
-                        </td>
-                        <td className="px-2 py-1.5 text-xs text-gray-900 font-medium">{student.name}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-center">
-                          <input
-                            type="checkbox"
-                            checked={!!studentAttendance[student._id]}
-                            onChange={() => handleStudentCheck(student._id)}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                          />
-                        </td>
-                      </tr>
+                      <StudentRow
+                        key={student._id}
+                        student={student}
+                        isChecked={!!studentAttendance[student._id]}
+                        onCheck={handleStudentCheck}
+                      />
                     ))}
                   </tbody>
                 </table>

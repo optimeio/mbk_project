@@ -63,7 +63,7 @@ function LegacyCourseDetailsPage() {
           <div style={{ background: 'var(--card-gradient)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
             {course.image && (
               <div style={{ width: '100%', backgroundColor: 'rgba(0,0,0,0.2)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <img src={course.image} alt={course.title} style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', display: 'block' }} />
+                <img loading="lazy" src={course.image} alt={course.title} style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', display: 'block' }} />
               </div>
             )}
             

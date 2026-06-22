@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import MainLayout from '@/app/layouts/MainLayout';
 import { api } from '@/services/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -20,11 +19,11 @@ import {
   ChevronRight,
   UserCheck,
   AlertTriangle,
-  FileCheck
+  FileCheck,
+  X
 } from 'lucide-react';
 import { Upload, Button, message } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-
 const getApiErrorMessage = (err, fallback = 'Something went wrong.') => {
   return err?.response?.message || err?.data?.message || err?.message || fallback;
 };
@@ -37,6 +36,51 @@ const formatTime = (value) => {
     hour12: true,
   });
 };
+
+const compressImage = async (imageFile) => {
+  const options = {
+    maxSizeMB: 1, // Target size under 1MB
+    maxWidthOrHeight: 1280, // Web-optimized dimensions
+    useWebWorker: true,
+  };
+  try {
+    const imageCompression = (await import('browser-image-compression')).default;
+    const compressedBlob = await imageCompression(imageFile, options);
+    return new File([compressedBlob], imageFile.name, {
+      type: imageFile.type,
+      lastModified: Date.now(),
+    });
+  } catch (error) {
+    console.warn("Client-side compression failed, using original file:", error);
+    return imageFile;
+  }
+};
+
+const StudentCard = React.memo(({ student, index, onToggle }) => {
+  const isPresent = student.status === 'Present';
+  return (
+    <div
+      onClick={() => onToggle(index)}
+      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition select-none ${
+        isPresent
+          ? "bg-emerald-50/55 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
+          : "bg-card border-border text-slate-600 dark:text-slate-400 shadow-sm"
+      }`}
+    >
+      <div>
+        <p className="text-xs font-mono font-bold text-slate-400 dark:text-slate-500">{student.rollNo}</p>
+        <p className="text-base font-bold text-slate-800 dark:text-slate-200">{student.name}</p>
+      </div>
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+        isPresent
+          ? "bg-emerald-100 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
+          : "bg-muted dark:bg-slate-900 border-border text-slate-500 dark:text-slate-400"
+      }`}>
+        {student.status}
+      </span>
+    </div>
+  );
+});
 
 export default function TrainerActivities() {
   const { currentUser } = useAuth();
@@ -353,7 +397,33 @@ export default function TrainerActivities() {
       message.error('Image must be ≤5MB!');
       return Upload.LIST_IGNORE;
     }
-    return false; // prevent auto upload
+
+    // Run compression asynchronously
+    const compressPromise = new Promise(async (resolve) => {
+      try {
+        message.loading({ content: 'Optimizing image...', key: 'compress', duration: 0 });
+        const compressedFile = await compressImage(file);
+        message.success({ content: 'Image optimized successfully!', key: 'compress', duration: 2 });
+        
+        // Update the file list manually with the compressed file
+        const fileObj = {
+          uid: file.uid,
+          name: file.name,
+          status: 'done',
+          originFileObj: compressedFile,
+          size: compressedFile.size
+        };
+        setUploadedFile([fileObj]);
+        const url = URL.createObjectURL(compressedFile);
+        setPreviewUrl(url);
+        resolve(false);
+      } catch (err) {
+        message.destroy('compress');
+        resolve(false);
+      }
+    });
+
+    return compressPromise;
   };
 
   useEffect(() => {
@@ -485,14 +555,14 @@ export default function TrainerActivities() {
     }
   };
 
-  const toggleStudent = (index) => {
+  const toggleStudent = useCallback((index) => {
     setStudents(prev => prev.map((s, idx) => {
       if (idx === index) {
         return { ...s, status: s.status === 'Present' ? 'Absent' : 'Present' };
       }
       return s;
     }));
-  };
+  }, []);
 
   const handleLiveSubmit = async () => {
     const canvas = canvasRef.current;
@@ -530,18 +600,81 @@ export default function TrainerActivities() {
   };
 
   // --- Activity Log Submissions ---
-  const handleActivityFileChange = (e) => {
+  const handleActivityFileChange = async (e) => {
     const files = Array.from(e.target.files);
+    
+    // Validate total count
     if (activityImages.length + files.length > 5) {
       toast.error("You can upload a maximum of 5 activity images");
       return;
     }
 
-    setActivityImages(prev => [...prev, ...files]);
+    // Validate size and compress images
+    const compressedFiles = [];
+    const thumbnailUrls = [];
 
-    // Create previews
-    const previews = files.map(file => URL.createObjectURL(file));
-    setActivityPreviews(prev => [...prev, ...previews]);
+    const compToastId = toast.loading("Optimizing activity photos...");
+
+    try {
+      for (const file of files) {
+        // Size validation
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`File ${file.name} exceeds 5MB size limit!`, { id: compToastId });
+          continue;
+        }
+
+        // Compress
+        const compressed = await compressImage(file);
+        compressedFiles.push(compressed);
+
+        // Generate canvas thumbnail
+        const thumbUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              const maxThumbSize = 150;
+              let width = img.width;
+              let height = img.height;
+              if (width > height) {
+                if (width > maxThumbSize) {
+                  height = Math.round((height * maxThumbSize) / width);
+                  width = maxThumbSize;
+                }
+              } else {
+                if (height > maxThumbSize) {
+                  width = Math.round((width * maxThumbSize) / height);
+                  height = maxThumbSize;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              ctx.drawImage(img, 0, 0, width, height);
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  resolve(URL.createObjectURL(blob));
+                } else {
+                  resolve(event.target.result);
+                }
+              }, "image/jpeg", 0.7);
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+        
+        thumbnailUrls.push(thumbUrl);
+      }
+      
+      setActivityImages(prev => [...prev, ...compressedFiles]);
+      setActivityPreviews(prev => [...prev, ...thumbnailUrls]);
+      toast.success("Photos optimized successfully!", { id: compToastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Error optimizing photos", { id: compToastId });
+    }
   };
 
   const removeActivityImage = (idx) => {
@@ -624,85 +757,82 @@ export default function TrainerActivities() {
 
   if (!assignment && !loading) {
     return (
-      <MainLayout>
-        <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 text-slate-100">
-          <div className="rounded-3xl border border-rose-500/40 bg-slate-950/90 p-8 text-center shadow-xl shadow-rose-500/10">
-            <h1 className="text-3xl font-extrabold tracking-tight text-rose-100">Assignment Required</h1>
-            <p className="mt-4 text-sm leading-6 text-slate-300">
-              {assignmentError || 'Unable to load your current assignment. Please contact your administrator.'}
-            </p>
-            <button
-              type="button"
-              onClick={fetchCurrentAssignment}
-              className="mt-6 inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-            >
-              Retry Assignment
-            </button>
-          </div>
-        </section>
-      </MainLayout>
+      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
+        <div className="rounded-3xl border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900/50 p-8 text-center shadow-sm">
+          <h1 className="text-3xl font-extrabold tracking-tight text-rose-950 dark:text-rose-200">Assignment Required</h1>
+          <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            {assignmentError || 'Unable to load your current assignment. Please contact your administrator.'}
+          </p>
+          <button
+            type="button"
+            onClick={fetchCurrentAssignment}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-600"
+          >
+            Retry Assignment
+          </button>
+        </div>
+      </section>
     );
   }
 
   return (
-    <MainLayout>
-      <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 text-slate-100">
+    <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
 
-        {/* Header Title */}
-        <div className="mb-8 border-b border-slate-800 pb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#0F172A' }}>
-              Trainer Activities Workflow
-            </h1>
-            <p className="mt-2 text-sm" style={{ color: '#64748B' }}>
-              Manage check-in, attendance, activity logging, and check-out for your assigned college visit.
-            </p>
-          </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0f3f5c] border border-[#1a547a]/50 text-emerald-400">
-            <Building className="h-6 w-6" />
-          </div>
+      {/* Header Title */}
+      <div className="mb-8 border-b border-border pb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            Trainer Activities Workflow
+          </h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            Manage check-in, attendance, activity logging, and check-out for your assigned college visit.
+          </p>
         </div>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0f3f5c]/10 border border-[#1a547a]/20 text-[#0f3f5c] dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
+          <Building className="h-6 w-6" />
+        </div>
+      </div>
 
-        {/* Global Progress Stepper */}
-        <div className="mb-10 rounded-2xl bg-slate-900/60 border border-slate-800 p-5 backdrop-blur-sm">
-          <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#0F172A' }}>Daily Step Progress</p>
-          <div className="flex items-center justify-between gap-2">
-            {[
-              { num: 2, label: "Clock-In" },
-              { num: 3, label: "Attendance" },
-              { num: 4, label: "Activities" },
-              { num: 5, label: "Clock-Out" },
-              { num: 6, label: "Summary" }
-            ].map((s, idx) => (
-              <React.Fragment key={s.num}>
-                <div className="flex flex-col items-center flex-1">
-                  <div className={`h-8 w-8 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === s.num
-                      ? "bg-gradient-to-br from-emerald-500 to-cyan-500 border-emerald-400 text-white scale-110 shadow-lg shadow-emerald-500/20"
-                      : step > s.num
-                        ? "bg-emerald-950/80 border-emerald-500/50 text-emerald-400"
-                        : "bg-slate-950 border-slate-800 text-slate-500"
-                    }`}>
-                    {step > s.num ? <CheckCircle2 className="h-4 w-4" /> : (idx + 1)}
-                  </div>
-                  <span className={`text-[10px] mt-1 text-center font-semibold hidden sm:inline`} style={{ color: step === s.num ? '#14B8A6' : '#334155' }}>
-                    {s.label}
-                  </span>
+      {/* Global Progress Stepper */}
+      <div className="mb-10 rounded-2xl bg-card border border-border p-5 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-wider mb-3 text-slate-900 dark:text-white">Daily Step Progress</p>
+        <div className="flex items-center justify-between gap-2">
+          {[
+            { num: 2, label: "Clock-In" },
+            { num: 3, label: "Attendance" },
+            { num: 4, label: "Activities" },
+            { num: 5, label: "Clock-Out" },
+            { num: 6, label: "Summary" }
+          ].map((s, idx) => (
+            <React.Fragment key={s.num}>
+              <div className="flex flex-col items-center flex-1">
+                <div className={`h-8 w-8 rounded-full border flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === s.num
+                    ? "bg-gradient-to-br from-emerald-500 to-cyan-500 border-emerald-400 text-white scale-110 shadow-lg shadow-emerald-500/20"
+                    : step > s.num
+                      ? "bg-emerald-100 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
+                      : "bg-muted border-border text-slate-500 dark:text-slate-400"
+                  }`}>
+                  {step > s.num ? <CheckCircle2 className="h-4 w-4" /> : (idx + 1)}
                 </div>
-                {s.num < 6 && (
-                  <div className={`h-[2px] flex-1 bg-slate-800 ${step > s.num ? "bg-emerald-500/40" : ""}`} />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
+                <span className={`text-xs mt-1 text-center font-semibold hidden sm:inline ${step === s.num ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {s.label}
+                </span>
+              </div>
+              {s.num < 6 && (
+                <div className={`h-[2px] flex-1 bg-border ${step > s.num ? "bg-emerald-400" : ""}`} />
+              )}
+            </React.Fragment>
+          ))}
         </div>
+      </div>
 
 
         {/* --- STEP 2: CLOCK-IN SCREEN --- */}
         {step === 2 && (
-          <div className="rounded-2xl bg-slate-900/40 border border-slate-800 p-6 space-y-6">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-xl font-bold text-white">Perform Clock-In</h2>
-              <p className="text-xs text-slate-400">Capture a geotagged selfie inside college perimeter. Gallery uploads are blocked.</p>
+          <div className="rounded-2xl bg-card border border-border p-6 space-y-6 shadow-sm">
+            <div className="border-b border-border pb-4">
+              <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Perform Clock-In</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Capture a geotagged selfie inside college perimeter. Gallery uploads are blocked.</p>
             </div>
 
             <div className="flex flex-col items-center space-y-4">
@@ -722,17 +852,17 @@ export default function TrainerActivities() {
               </Upload>
               {previewUrl && uploadedFile.length > 0 && (
                 <div className="mt-4 flex flex-col items-center gap-2">
-                  <img src={previewUrl} alt="Preview" className="max-w-xs max-h-48 object-cover rounded" />
+                  <img loading="lazy" src={previewUrl} alt="Preview" className="max-w-xs max-h-48 object-cover rounded-xl border border-border" />
                   {uploadedFile[0]?.size && (
-                    <p className="text-xs text-slate-400">{(uploadedFile[0].size / 1024 / 1024).toFixed(2)} MB</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{(uploadedFile[0].size / 1024 / 1024).toFixed(2)} MB</p>
                   )}
                 </div>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-3 mt-4 text-[11px] text-slate-400 w-full">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">GPS status</p>
-                  <p className={`mt-2 font-semibold ${locationStatus === 'ready' ? 'text-emerald-300' : locationStatus === 'locating' ? 'text-amber-300' : 'text-rose-300'}`}>
+              <div className="grid gap-3 sm:grid-cols-3 mt-4 text-xs text-slate-600 dark:text-slate-300 w-full">
+                <div className="rounded-2xl border border-border bg-muted/30 dark:bg-slate-900 p-3 text-center shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">GPS status</p>
+                  <p className={`mt-2 font-bold text-sm ${locationStatus === 'ready' ? 'text-emerald-600 dark:text-emerald-400' : locationStatus === 'locating' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-450'}`}>
                     {locationStatus === 'ready'
                       ? 'Ready inside college perimeter'
                       : locationStatus === 'locating'
@@ -740,15 +870,15 @@ export default function TrainerActivities() {
                         : 'Location unavailable'}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Geo coordinates</p>
-                  <p className="mt-2 font-semibold text-slate-200">
+                <div className="rounded-2xl border border-border bg-muted/30 dark:bg-slate-900 p-3 text-center shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Geo coordinates</p>
+                  <p className="mt-2 font-bold text-sm text-slate-800 dark:text-slate-200">
                     {coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'Waiting for GPS'}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500">Distance</p>
-                  <p className="mt-2 font-semibold text-slate-200">
+                <div className="rounded-2xl border border-border bg-muted/30 dark:bg-slate-900 p-3 text-center shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Distance</p>
+                  <p className="mt-2 font-bold text-sm text-slate-800 dark:text-slate-200">
                     {distance != null ? `${distance.toFixed(0)}m ${isInside ? 'inside' : 'outside'}` : 'Checking…'}
                   </p>
                 </div>
@@ -771,39 +901,39 @@ export default function TrainerActivities() {
 
         {/* --- STEP 3: STUDENT ATTENDANCE OPTIONS --- */}
         {step === 3 && (
-          <div className="rounded-2xl bg-slate-900/40 border border-slate-800 p-6 space-y-6">
-            <div className="border-b border-slate-800 pb-4 flex justify-between items-center">
+          <div className="rounded-2xl bg-card border border-border p-6 space-y-6 shadow-sm">
+            <div className="border-b border-border pb-4 flex justify-between items-start gap-4">
               <div>
-                <h2 className="text-xl font-bold text-white">Log Student Attendance</h2>
-                <p className="text-xs text-slate-400">Choose to upload an Excel sheet or mark live attendance with signatures</p>
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Log Student Attendance</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Choose to upload an Excel sheet or mark live attendance with signatures</p>
               </div>
-              <span className="inline-flex items-center rounded-full bg-emerald-950/80 border border-emerald-500/20 px-3 py-1 text-xs text-emerald-400">
+              <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
                 Clocked-In Today
               </span>
             </div>
 
             {/* Tabs Selector */}
-            <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+            <div className="flex rounded-xl bg-muted dark:bg-slate-900 p-1 border border-border">
               <button
                 type="button"
                 onClick={() => setAttendanceMode("excel")}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition ${attendanceMode === "excel"
-                    ? "bg-slate-900 border border-slate-800 text-white"
-                    : "text-slate-500 hover:text-slate-300"
+                    ? "bg-card border border-border text-slate-850 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-350"
                   }`}
               >
-                <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
                 Excel Upload
               </button>
               <button
                 type="button"
                 onClick={() => setAttendanceMode("live")}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition ${attendanceMode === "live"
-                    ? "bg-slate-900 border border-slate-800 text-white"
-                    : "text-slate-500 hover:text-slate-300"
+                    ? "bg-card border border-border text-slate-850 dark:text-white shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-350"
                   }`}
               >
-                <Users className="h-4 w-4 text-cyan-400" />
+                <Users className="h-4 w-4 text-cyan-500" />
                 Live Attendance
               </button>
             </div>
@@ -811,21 +941,21 @@ export default function TrainerActivities() {
             {/* Option A: Excel Upload Form */}
             {attendanceMode === "excel" && (
               <form onSubmit={handleExcelSubmit} className="space-y-6">
-                <div className="border-2 border-dashed border-slate-800 hover:border-slate-700 transition rounded-2xl p-8 text-center bg-slate-950/20 cursor-pointer relative">
+                <div className="border-2 border-dashed border-border hover:border-slate-400 transition rounded-2xl p-8 text-center bg-card cursor-pointer relative shadow-sm">
                   <input
                     type="file"
                     accept=".xlsx,.xls"
                     onChange={(e) => setExcelFile(e.target.files[0])}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
-                  <FileSpreadsheet className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-slate-200">
+                  <FileSpreadsheet className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-slate-750 dark:text-slate-200">
                     {excelFile ? excelFile.name : "Drag and drop or browse Excel sheet"}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">Accepts master Excel files (.xlsx, .xls) up to 10MB</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Accepts master Excel files (.xlsx, .xls) up to 10MB</p>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                <div className="flex justify-end gap-3 pt-4 border-t border-border">
                   <button
                     type="submit"
                     disabled={loading || !excelFile}
@@ -843,37 +973,24 @@ export default function TrainerActivities() {
               <div className="space-y-6">
                 {/* Student list grid */}
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold text-slate-400 uppercase">Class Student Roll</p>
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Class Student Roll</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {students.map((student, idx) => (
-                      <div
+                      <StudentCard
                         key={student.rollNo}
-                        onClick={() => toggleStudent(idx)}
-                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition select-none ${student.status === 'Present'
-                            ? "bg-emerald-950/10 border-emerald-500/30 text-emerald-400"
-                            : "bg-slate-950/20 border-slate-800 text-slate-400"
-                          }`}
-                      >
-                        <div>
-                          <p className="text-xs font-mono font-bold text-slate-500">{student.rollNo}</p>
-                          <p className="text-sm font-semibold text-slate-200">{student.name}</p>
-                        </div>
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${student.status === 'Present'
-                            ? "bg-emerald-950 border-emerald-800/40 text-emerald-400"
-                            : "bg-slate-950 border-slate-800 text-slate-500"
-                          }`}>
-                          {student.status}
-                        </span>
-                      </div>
+                        student={student}
+                        index={idx}
+                        onToggle={toggleStudent}
+                      />
                     ))}
                   </div>
                 </div>
 
                 {/* Signature canvas */}
-                <div className="space-y-3 pt-4 border-t border-slate-800">
+                <div className="space-y-3 pt-4 border-t border-border">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-200">Representative Digital Signature</h3>
-                    <p className="text-xs text-slate-500">Class representative or SPOC must sign on touch canvas to confirm live session details</p>
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Representative Digital Signature</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Class representative or SPOC must sign on touch canvas to confirm live session details</p>
                   </div>
 
                   <div className="flex flex-col items-center gap-3">
@@ -888,18 +1005,18 @@ export default function TrainerActivities() {
                       onTouchStart={startDrawingSig}
                       onTouchMove={drawSig}
                       onTouchEnd={stopDrawingSig}
-                      className="bg-slate-950 border border-slate-800 rounded-xl cursor-crosshair max-w-full touch-none"
+                      className="bg-white border border-border rounded-xl cursor-crosshair max-w-full touch-none shadow-sm"
                     />
                     <button
                       onClick={clearSignature}
-                      className="text-xs font-semibold text-slate-400 hover:text-white transition"
+                      className="text-sm font-semibold text-slate-500 dark:text-slate-450 hover:text-slate-800 dark:hover:text-slate-200 transition"
                     >
                       Clear Drawing Signature
                     </button>
                   </div>
                 </div>
 
-                <div className="flex justify-center gap-3 pt-4 border-t border-slate-800">
+                <div className="flex justify-center gap-3 pt-4 border-t border-border">
                   <button
                     onClick={handleLiveSubmit}
                     disabled={loading}
@@ -916,57 +1033,58 @@ export default function TrainerActivities() {
 
         {/* --- STEP 4: STUDENT ACTIVITIES LOGGING --- */}
         {step === 4 && (
-          <form onSubmit={handleActivitySubmit} className="rounded-2xl bg-slate-900/40 border border-slate-800 p-6 space-y-6">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-xl font-bold text-white">Submit Student Activities</h2>
-              <p className="text-xs text-slate-400">Record syllabus progress, workshop events, and upload verification photos.</p>
+          <form onSubmit={handleActivitySubmit} className="rounded-2xl bg-card border border-border p-6 space-y-6 shadow-sm">
+            <div className="border-b border-border pb-4">
+              <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Submit Student Activities</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Record syllabus progress, workshop events, and upload verification photos.</p>
             </div>
 
             <div className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-xs font-semibold uppercase text-slate-400">Activity Title</label>
+                <label className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Activity Title</label>
                 <input
                   type="text"
                   placeholder="e.g. Python OOP Workshop Day 3"
                   value={activityTitle}
                   onChange={(e) => setActivityTitle(e.target.value)}
-                  className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none"
+                  className="rounded-xl border border-border bg-muted/10 dark:bg-slate-950/20 px-4 py-3 text-base text-slate-800 dark:text-white focus:border-emerald-500 dark:focus:border-emerald-600 focus:outline-none shadow-sm"
                 />
               </div>
 
               <div className="grid gap-2">
-                <label className="text-xs font-semibold uppercase text-slate-400">Description / Syllabus details</label>
+                <label className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Description / Syllabus details</label>
                 <textarea
                   placeholder="Summarize teaching topics, student exercises, outcomes..."
                   rows={4}
                   value={activityDesc}
                   onChange={(e) => setActivityDesc(e.target.value)}
-                  className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-200 focus:border-emerald-500 focus:outline-none"
+                  className="rounded-xl border border-border bg-muted/10 dark:bg-slate-950/20 px-4 py-3 text-base text-slate-800 dark:text-white focus:border-emerald-500 dark:focus:border-emerald-600 focus:outline-none shadow-sm"
                 />
               </div>
 
               <div className="space-y-3 pt-3">
-                <label className="text-xs font-semibold uppercase text-slate-400">Activity Verification Photos</label>
+                <label className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Activity Verification Photos</label>
 
                 {/* Previews grid */}
                 {activityPreviews.length > 0 && (
                   <div className="grid gap-3 grid-cols-5">
                     {activityPreviews.map((p, idx) => (
-                      <div key={p} className="relative aspect-square rounded-lg bg-slate-950 border border-slate-800 overflow-hidden group">
-                        <img src={p} className="w-full h-full object-cover" />
+                      <div key={p} className="relative aspect-square rounded-xl bg-card border border-border overflow-hidden shadow-sm">
+                        <img loading="lazy" src={p} className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() => removeActivityImage(idx)}
-                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-bold text-rose-400 transition"
+                          className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-md transition active:scale-90"
+                          aria-label="Remove photo"
                         >
-                          Remove
+                          <X className="h-4 w-4" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
 
-                <div className="border-2 border-dashed border-slate-800 hover:border-slate-700 transition rounded-xl p-6 text-center bg-slate-950/20 cursor-pointer relative">
+                <div className="border-2 border-dashed border-border hover:border-slate-400 transition rounded-xl p-6 text-center bg-card cursor-pointer relative shadow-sm">
                   <input
                     type="file"
                     multiple
@@ -974,14 +1092,14 @@ export default function TrainerActivities() {
                     onChange={handleActivityFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
-                  <ImageIcon className="h-8 w-8 text-cyan-400 mx-auto mb-2" />
-                  <p className="text-xs text-slate-300">Click to upload photos from today's exercises</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Maximum 5 images, up to 10MB each</p>
+                  <ImageIcon className="h-8 w-8 text-cyan-500 mx-auto mb-2" />
+                  <p className="text-sm text-slate-600 dark:text-slate-300 font-semibold">Click to upload photos from today's exercises</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Maximum 5 images, up to 10MB each</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-center gap-3 pt-4 border-t border-slate-800">
+            <div className="flex justify-center gap-3 pt-4 border-t border-border">
               <button
                 type="submit"
                 disabled={loading}
@@ -993,13 +1111,12 @@ export default function TrainerActivities() {
             </div>
           </form>
         )}
-
         {/* --- STEP 5: CLOCK-OUT SCREEN --- */}
         {step === 5 && (
-          <div className="rounded-2xl bg-slate-900/40 border border-slate-800 p-6 space-y-6">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-xl font-bold text-white">Record Clock-Out</h2>
-              <p className="text-xs text-slate-400">Confirm you are leaving the college perimeter. Capture check-out geotagged photo.</p>
+          <div className="rounded-2xl bg-card border border-border p-6 space-y-6 shadow-sm">
+            <div className="border-b border-border pb-4">
+              <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Record Clock-Out</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Confirm you are leaving the college perimeter. Capture check-out geotagged photo.</p>
             </div>
 
             <div className="flex flex-col items-center justify-center space-y-4">
@@ -1020,9 +1137,9 @@ export default function TrainerActivities() {
                 </Upload>
                 {previewUrl && uploadedFile.length > 0 && (
                   <div className="mt-4 flex flex-col items-center gap-2">
-                    <img src={previewUrl} alt="Preview" className="max-w-xs max-h-48 object-cover rounded" />
+                    <img loading="lazy" src={previewUrl} alt="Preview" className="max-w-xs max-h-48 object-cover rounded-xl border border-border" />
                     {uploadedFile[0]?.size && (
-                      <p className="text-xs text-slate-400">{(uploadedFile[0].size / 1024 / 1024).toFixed(2)} MB</p>
+                      <p className="text-sm text-slate-550 dark:text-slate-400">{(uploadedFile[0].size / 1024 / 1024).toFixed(2)} MB</p>
                     )}
                   </div>
                 )}
@@ -1031,7 +1148,7 @@ export default function TrainerActivities() {
 
             {/* Confirm Clock-Out */}
             {uploadedFile.length > 0 && (
-              <div className="pt-4 border-t border-slate-800 flex justify-center">
+              <div className="pt-4 border-t border-border flex justify-center">
                 <button
                   onClick={handleClockOut}
                   disabled={loading}
@@ -1047,26 +1164,26 @@ export default function TrainerActivities() {
 
         {/* --- STEP 6: SESSION SUMMARY STATS --- */}
         {step === 6 && (
-          <div className="rounded-2xl bg-gradient-to-br from-emerald-950/10 to-slate-900 border border-emerald-500/20 p-8 text-center space-y-6 shadow-2xl">
-            <div className="h-16 w-16 bg-emerald-500/10 border border-emerald-400/30 rounded-full flex items-center justify-center mx-auto text-emerald-400">
+          <div className="rounded-2xl bg-card border border-emerald-200 dark:border-emerald-900 p-8 text-center space-y-6 shadow-sm">
+            <div className="h-16 w-16 bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full flex items-center justify-center mx-auto text-emerald-600 dark:text-emerald-400">
               <FileCheck className="h-8 w-8" />
             </div>
 
             <div>
-              <h2 className="text-2xl font-black text-white">Daily Visit Completed</h2>
-              <p className="text-xs text-slate-400 mt-1">Check-in, attendance submission, activities, and check-out has been registered</p>
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white">Daily Visit Completed</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Check-in, attendance submission, activities, and check-out has been registered</p>
             </div>
 
             <div className="max-w-md mx-auto grid grid-cols-2 gap-4 pt-4">
-              <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800 text-center">
-                <Clock className="h-5 w-5 text-cyan-400 mx-auto mb-1" />
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Working Duration</p>
-                <p className="text-lg font-bold text-slate-200 mt-1">{summaryData?.duration || 0} mins</p>
+              <div className="p-4 rounded-xl bg-muted/10 dark:bg-slate-950/20 border border-border text-center shadow-sm">
+                <Clock className="h-5 w-5 text-cyan-600 dark:text-cyan-400 mx-auto mb-1" />
+                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Working Duration</p>
+                <p className="text-xl font-extrabold text-slate-800 dark:text-slate-200 mt-1">{summaryData?.duration || 0} mins</p>
               </div>
-              <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800 text-center">
-                <UserCheck className="h-5 w-5 text-emerald-400 mx-auto mb-1" />
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Clock-Out Recorded</p>
-                <p className="text-sm font-bold text-slate-200 mt-1.5">
+              <div className="p-4 rounded-xl bg-muted/10 dark:bg-slate-950/20 border border-border text-center shadow-sm">
+                <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1" />
+                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Clock-Out Recorded</p>
+                <p className="text-base font-bold text-slate-800 dark:text-slate-200 mt-1.5">
                   {summaryData?.clockOutTime ? formatTime(summaryData.clockOutTime) : 'Done'}
                 </p>
               </div>
@@ -1088,7 +1205,7 @@ export default function TrainerActivities() {
                   setActivityImages([]);
                   setActivityPreviews([]);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950 px-5 py-3 text-xs font-semibold text-slate-300 hover:text-white transition hover:bg-slate-900"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition hover:bg-muted shadow-sm"
               >
                 Start New Visit Checklist
               </button>
@@ -1097,6 +1214,5 @@ export default function TrainerActivities() {
         )}
 
       </section>
-    </MainLayout>
   );
 }

@@ -14,7 +14,7 @@ const UserAvatar = ({ profilePicture, name, className = "h-10 w-10", showInitial
 
     if (profilePicture && !imgError) {
         return (
-            <img 
+            <img loading="lazy" 
                 className={`${className} rounded-full object-cover`}
                 src={getProfilePictureUrl(profilePicture)} 
                 alt={name || 'User'}

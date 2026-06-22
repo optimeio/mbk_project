@@ -192,7 +192,7 @@ const CompanyModal = ({ open, onClose, onSave, initialData }) => {
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Company Logo</label>
                                                     <div className="flex items-center space-x-4">
                                                         {logoPreview ? (
-                                                            <img src={logoPreview} alt="Logo preview" className="h-20 w-20 object-contain border border-gray-300 rounded-lg" />
+                                                            <img loading="lazy" src={logoPreview} alt="Logo preview" className="h-20 w-20 object-contain border border-gray-300 rounded-lg" />
                                                         ) : (
                                                             <div className="h-20 w-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
                                                                 <PhotoIcon className="h-8 w-8 text-gray-400" />

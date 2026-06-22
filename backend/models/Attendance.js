@@ -279,6 +279,22 @@ const attendanceSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    checkInLocation: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+    },
+    checkOutLocation: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+    },
+    checkInImage: {
+        type: String,
+        default: null,
+    },
+    checkOutImage: {
+        type: String,
+        default: null,
+    },
     // New fields for Student Attendance System
     students: [{
         studentId: {

@@ -22,7 +22,8 @@ import { api } from '@/services/api';
 import { notify } from '@/lib/toast';
 import { getTrainers } from '@/services/trainerService';
 import HierarchyBreadcrumb from '@/components/common/HierarchyBreadcrumb';
-import DayDetailsModal from '@/components/modals/DayDetailsModal';
+import dynamic from 'next/dynamic';
+const DayDetailsModal = dynamic(() => import('@/components/modals/DayDetailsModal'));
 
 const BatchManagement = () => {
     const router = useRouter();

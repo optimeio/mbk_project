@@ -95,7 +95,7 @@ export default function FileUploadCard({
             {preview ? (
               <div className="relative mb-3 h-32 w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="preview" className="h-full w-full object-cover" />
+                <img loading="lazy" src={preview} alt="preview" className="h-full w-full object-cover" />
               </div>
             ) : (
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">

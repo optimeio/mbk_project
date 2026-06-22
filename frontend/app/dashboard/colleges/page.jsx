@@ -1,7 +1,10 @@
-"use client";
-
 import dynamic from "next/dynamic";
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'College Management',
+  description: 'Manage colleges, departments, and course mappings on the MBK Carrierz admin dashboard.',
+};
 
 const CourseColleges = dynamic(() => import("@/portals/admin/CourseColleges"), {
   loading: () => (

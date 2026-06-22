@@ -1,8 +1,10 @@
-"use client";
-
 import dynamic from "next/dynamic";
-
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'Learning Hub',
+  description: 'Access MBK Carrierz course catalog, learning modules, and training materials in the Learning Management System.',
+};
 
 const LearningHub = dynamic(() => import("@/features/lms/LearningHub"), {
   loading: () => (

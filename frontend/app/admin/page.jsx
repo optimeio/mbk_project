@@ -5,8 +5,8 @@ export const metadata = {
   title: 'Admin Dashboard | MBK Technology',
   description: 'Legacy MBK admin dashboard page.',
   robots: {
-    index: false,
-    follow: false,
+    index: true,
+    follow: true,
   },
 };
 

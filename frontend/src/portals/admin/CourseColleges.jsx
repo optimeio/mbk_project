@@ -22,9 +22,10 @@ import {
 import { api, FILE_BASE_URL } from '@/services/api';
 import { notify } from '@/lib/toast';
 import HierarchyBreadcrumb from '@/components/common/HierarchyBreadcrumb';
-import CollegeModal from '@/components/modals/CollegeModal';
-import CourseModal from '@/components/modals/CourseModal';
-import PasswordConfirmationModal from '@/components/modals/PasswordConfirmationModal';
+import dynamic from 'next/dynamic';
+const CollegeModal = dynamic(() => import('@/components/modals/CollegeModal'));
+const CourseModal = dynamic(() => import('@/components/modals/CourseModal'));
+const PasswordConfirmationModal = dynamic(() => import('@/components/modals/PasswordConfirmationModal'));
 import useDebouncedValue from '@/hooks/useDebouncedValue';
 
 const getDepartmentCount = (departmentValue) => {
@@ -472,6 +473,14 @@ const CourseColleges = () => {
     () => courseCollegesQuery.data?.colleges || [],
     [courseCollegesQuery.data]
   );
+  const companiesList = useMemo(
+    () => courseCollegesQuery.data?.companies || [],
+    [courseCollegesQuery.data]
+  );
+  const coursesList = useMemo(
+    () => courseCollegesQuery.data?.courses || [],
+    [courseCollegesQuery.data]
+  );
 
   const refetchCourseColleges = useCallback(async () => {
     await queryClient.invalidateQueries({
@@ -627,7 +636,11 @@ const CourseColleges = () => {
       if (editingCollege) {
         await api.put(`/colleges/${editingCollege._id}`, collegeData);
       } else {
-        const payload = { ...collegeData, companyId, courseId };
+        const payload = { 
+          ...collegeData, 
+          companyId: collegeData.companyId || companyId, 
+          courseId: collegeData.courseId || courseId 
+        };
         const savedCollege = await api.post('/colleges', payload);
 
         if (studentAttendanceExcel) {
@@ -829,16 +842,14 @@ const CourseColleges = () => {
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
             </div>
-            {isCourseFiltered && (
-              <button
-                type="button"
-                onClick={handleAddCollege}
-                className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm w-full sm:w-auto"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Add College
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleAddCollege}
+              className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm w-full sm:w-auto"
+            >
+              <PlusIcon className="h-5 w-5 mr-2" />
+              Add College
+            </button>
           </div>
         </div>
 
@@ -879,7 +890,7 @@ const CourseColleges = () => {
                 ? 'Try adjusting your search term'
                 : 'Add your first college to this course'}
             </p>
-            {!searchTerm && isCourseFiltered && (
+            {!searchTerm && (
               <button
                 onClick={handleAddCollege}
                 className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -898,8 +909,10 @@ const CourseColleges = () => {
         onClose={() => setIsCollegeModalOpen(false)}
         onSave={handleSaveCollege}
         initialData={editingCollege}
-        courses={course ? [course] : []}
+        courses={isCourseFiltered ? (course ? [course] : []) : coursesList}
+        companies={companiesList}
         defaultCourseId={courseId}
+        isGlobalMode={!isCourseFiltered}
       />
 
       {/* Course Modal */}

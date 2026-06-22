@@ -245,7 +245,7 @@ function LegacyAdminDashboardPage() {
                     style={{...inputStyle, padding: '7px', background: 'rgba(255,255,255,0.02)'}} 
                   />
                   {courseForm.image && (
-                    <img src={courseForm.image} alt="Preview" style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border)' }} />
+                    <img loading="lazy" src={courseForm.image} alt="Preview" style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border)' }} />
                   )}
                 </div>                
                 <label style={{ display: 'none' }} htmlFor="course-price">Price</label>

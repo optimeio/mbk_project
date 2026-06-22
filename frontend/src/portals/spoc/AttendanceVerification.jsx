@@ -1134,7 +1134,7 @@ const AttendanceVerification = () => {
 
                                                     return (
                                                         <div key={index} className="group relative h-24 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                                                            <img
+                                                            <img loading="lazy"
                                                                 src={fileUrl}
                                                                 alt={`Geo evidence ${index + 1}`}
                                                                 className="h-full w-full cursor-zoom-in object-cover transition-transform duration-500 group-hover:scale-110"

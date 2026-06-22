@@ -168,7 +168,7 @@ export default function SelfieCapture({
         </div>
       ) : (
         <div className="relative">
-          <img
+          <img loading="lazy"
             src={img}
             alt="Captured selfie"
             className="w-[200px] h-[200px] rounded-full object-cover border-4 border-emerald-500 shadow-2xl"

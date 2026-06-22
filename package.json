@@ -6,7 +6,9 @@
   "scripts": {
     "lint": "echo \"No lint configured\"",
     "install:all": "npm install --prefix frontend && npm install --prefix backend",
+    "build": "npm run build --prefix frontend",
     "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
+    "dev:clean": "node frontend/scripts/clean-next-cache.mjs && npm run dev",
     "start": "concurrently \"npm run start --prefix frontend\" \"npm run start --prefix backend\""
   },
   "dependencies": {

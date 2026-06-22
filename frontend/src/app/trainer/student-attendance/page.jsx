@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import MainLayout from '@/app/layouts/MainLayout';
 import FileUploadCard from '@/app/trainer/student-attendance/components/FileUploadCard';
 import { api } from '@/services/api';
 import { toast } from 'react-hot-toast';
@@ -76,6 +75,7 @@ export default function StudentAttendancePage() {
     formData.append('trainer_id', String(trainerId));
     formData.append('attendance_date', new Date().toISOString().split('T')[0]);
     formData.append('status', 'Present');
+    formData.append('checkInTime', new Date().toTimeString().slice(0, 5));
 
     if (locationStatus === "ready" && location) {
       formData.append(
@@ -118,6 +118,7 @@ export default function StudentAttendancePage() {
     formData.append('trainer_id', String(trainerId));
     formData.append('attendance_date', new Date().toISOString().split('T')[0]);
     formData.append('status', 'Present');
+    formData.append('checkInTime', new Date().toTimeString().slice(0, 5));
     formData.append(
       'location',
       JSON.stringify({
@@ -139,15 +140,15 @@ export default function StudentAttendancePage() {
   };
 
   return (
-    <MainLayout>
-      <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="w-full">
+      <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
         {/* Header Section */}
-        <div className="mb-8 md:flex md:items-center md:justify-between border-b border-slate-100 pb-6">
+        <div className="mb-8 md:flex md:items-center md:justify-between border-b border-border pb-6">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-slate-900 sm:truncate sm:text-3xl tracking-tight">
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Student Attendance Records
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               Submit daily student attendance logs using Excel sheets or take a live geo-tagged picture/PDF of the class.
             </p>
           </div>
@@ -156,33 +157,33 @@ export default function StudentAttendancePage() {
         {/* GPS Location Banner */}
         <div className={`mb-8 flex flex-col justify-between gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center ${
           locationStatus === "ready" 
-            ? "bg-emerald-50/50 border-emerald-100" 
+            ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900" 
             : locationStatus === "error" 
-              ? "bg-rose-50/50 border-rose-100" 
-              : "bg-slate-50 border-slate-100"
+              ? "bg-rose-50/50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900" 
+              : "bg-muted border-border"
         }`}>
           <div className="flex items-start gap-3">
             <MapPin className={`h-5 w-5 shrink-0 ${
               locationStatus === "ready" 
-                ? "text-emerald-600" 
+                ? "text-emerald-600 dark:text-emerald-455" 
                 : locationStatus === "error" 
-                  ? "text-rose-500" 
+                  ? "text-rose-500 dark:text-rose-455" 
                   : "text-slate-400 animate-pulse"
             }`} />
             <div>
-              <p className="text-sm font-semibold text-slate-800">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                 GPS Location Geotagging
               </p>
               {locationStatus === "ready" && location ? (
-                <p className="text-xs text-emerald-800 font-mono mt-0.5">
+                <p className="text-sm text-emerald-800 dark:text-emerald-400 font-mono mt-0.5">
                   Latitude: {location.lat.toFixed(6)} | Longitude: {location.lng.toFixed(6)} (Acc: ±{Math.round(location.accuracy)}m)
                 </p>
               ) : locationStatus === "error" ? (
-                <p className="text-xs text-rose-700 mt-0.5">
+                <p className="text-sm text-rose-700 dark:text-rose-400 mt-0.5">
                   {locationError}
                 </p>
               ) : (
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                   Acquiring satellites coordinates for verification...
                 </p>
               )}
@@ -193,12 +194,12 @@ export default function StudentAttendancePage() {
             type="button"
             onClick={captureLocation}
             disabled={locationStatus === "locating"}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 transition hover:border-slate-350 hover:bg-muted disabled:opacity-60 shrink-0 self-start sm:self-auto"
           >
             {locationStatus === "locating" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
             ) : (
-              <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+              <RefreshCw className="h-3.5 w-3.5 text-slate-550 dark:text-slate-400" />
             )}
             Refresh Coordinates
           </button>
@@ -228,6 +229,6 @@ export default function StudentAttendancePage() {
           />
         </div>
       </section>
-    </MainLayout>
+    </div>
   );
 }

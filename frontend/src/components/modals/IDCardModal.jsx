@@ -87,7 +87,7 @@ const IDCardModal = ({ isOpen, onClose, user = {} }) => {
             </style>
           </head>
           <body>
-            <img src="${image}" alt="Trainer ID Card" />
+            <img loading="lazy" src="${image}" alt="Trainer ID Card" />
           </body>
         </html>
       `);

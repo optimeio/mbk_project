@@ -419,7 +419,7 @@ const getStatusTag = (status) => {
           <div className="flex w-full flex-1 flex-col">
             {showImagePreview ? (
               <div className="relative flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <img
+                <img loading="lazy"
                   src={activePreviewUrl}
                   alt="Doc"
                   className="h-full max-h-[180px] w-full cursor-pointer object-contain p-3"
@@ -1543,7 +1543,7 @@ const TrainerDocuments = () => {
                   className="h-[70vh] w-full rounded-lg border-0 bg-white"
                 />
               ) : previewState.isImage && previewState.imageSrc ? (
-                <img
+                <img loading="lazy"
                   src={previewState.imageSrc}
                   alt={previewState.title}
                   className="max-h-[70vh] w-full rounded-lg object-contain bg-white"

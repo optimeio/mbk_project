@@ -905,7 +905,7 @@ const TrainerOverallAttendance = () => {
                                 }}
                             >
                                 {evidenceEntries.map((entry, index) => (
-                                    <Card key={entry.key} size="small" bodyStyle={{ padding: 12 }}>
+                                    <Card key={entry.key} size="small" styles={{ body: { padding: 12 } }}>
                                         <div
                                             style={{
                                                 aspectRatio: '4 / 3',
@@ -915,7 +915,7 @@ const TrainerOverallAttendance = () => {
                                                 background: '#f8fafc',
                                             }}
                                         >
-                                            <img
+                                            <img loading="lazy"
                                                 src={entry.previewUrl}
                                                 alt={`Check-out evidence ${index + 1}`}
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}

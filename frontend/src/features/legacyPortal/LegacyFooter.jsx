@@ -10,7 +10,7 @@ function LegacyFooter() {
         <div className="footer-grid">
           <div className="footer-brand">
             <Link href="/" className="logo">
-              <img src="/training.png" alt="MBK Logo" className="logo-img" style={{ height: '40px' }} />
+              <img loading="lazy" src="/training.png" alt="MBK Logo" className="logo-img" style={{ height: '40px' }} />
               <div className="logo-text">
                 <span>MBK TECHNOLOGY</span>
                 <div className="tagline">Skills to Success</div>

@@ -243,96 +243,101 @@ const createResolveScheduleFolderFields = ({
       return defaultFields;
     }
 
-    const [company, course, college, department] = await Promise.all([
-      loadCompanyById({ companyId }),
-      loadCourseById({ courseId }),
-      loadCollegeById({ collegeId }),
-      loadDepartmentById({
-        departmentId,
-        select: "_id name companyId courseId collegeId driveFolderId driveFolderName driveFolderLink dayFolders",
-      }),
-    ]);
+    try {
+      const [company, course, college, department] = await Promise.all([
+        loadCompanyById({ companyId }),
+        loadCourseById({ courseId }),
+        loadCollegeById({ collegeId }),
+        loadDepartmentById({
+          departmentId,
+          select: "_id name companyId courseId collegeId driveFolderId driveFolderName driveFolderLink dayFolders",
+        }),
+      ]);
 
-    if (!college) {
-      return defaultFields;
-    }
-
-    let ensuredDayEntry = null;
-    if (department?._id) {
-      const companyRef = company || (
-        department.companyId || college.companyId
-          ? {
-            _id: department.companyId || college.companyId,
-            name: `Company_${department.companyId || college.companyId}`,
-          }
-          : null
-      );
-      const courseRef = course || null;
-
-      if (!companyRef?._id) {
+      if (!college) {
         return defaultFields;
       }
 
-      const departmentHierarchy = await ensureDepartmentHierarchyLoader({
-        company: companyRef,
-        course: courseRef,
-        college,
-        department,
-        totalDays: Math.max(12, normalizedDayNumber),
-      });
+      let ensuredDayEntry = null;
+      if (department?._id) {
+        const companyRef = company || (
+          department.companyId || college.companyId
+            ? {
+              _id: department.companyId || college.companyId,
+              name: `Company_${department.companyId || college.companyId}`,
+            }
+            : null
+        );
+        const courseRef = course || null;
 
-      await syncDriveHierarchyMetadataLoader({
-        company,
-        course,
-        college,
-        department,
-        correlationId: resolveCorrelationId,
-        departmentHierarchy,
-      });
+        if (!companyRef?._id) {
+          return defaultFields;
+        }
 
-      const ensuredDay = departmentHierarchy?.dayFoldersByDayNumber?.[normalizedDayNumber];
-      if (ensuredDay?.id) {
-        ensuredDayEntry = {
-          folderId: ensuredDay.id,
-          folderName: ensuredDay.name || null,
-          folderLink: ensuredDay.link || null,
-          attendanceFolderId: ensuredDay.attendanceFolder?.id || null,
-          attendanceFolderName: ensuredDay.attendanceFolder?.name || null,
-          attendanceFolderLink: ensuredDay.attendanceFolder?.link || null,
-          geoTagFolderId: ensuredDay.geoTagFolder?.id || null,
-          geoTagFolderName: ensuredDay.geoTagFolder?.name || null,
-          geoTagFolderLink: ensuredDay.geoTagFolder?.link || null,
-        };
+        const departmentHierarchy = await ensureDepartmentHierarchyLoader({
+          company: companyRef,
+          course: courseRef,
+          college,
+          department,
+          totalDays: Math.max(12, normalizedDayNumber),
+        });
+
+        await syncDriveHierarchyMetadataLoader({
+          company,
+          course,
+          college,
+          department,
+          correlationId: resolveCorrelationId,
+          departmentHierarchy,
+        });
+
+        const ensuredDay = departmentHierarchy?.dayFoldersByDayNumber?.[normalizedDayNumber];
+        if (ensuredDay?.id) {
+          ensuredDayEntry = {
+            folderId: ensuredDay.id,
+            folderName: ensuredDay.name || null,
+            folderLink: ensuredDay.link || null,
+            attendanceFolderId: ensuredDay.attendanceFolder?.id || null,
+            attendanceFolderName: ensuredDay.attendanceFolder?.name || null,
+            attendanceFolderLink: ensuredDay.attendanceFolder?.link || null,
+            geoTagFolderId: ensuredDay.geoTagFolder?.id || null,
+            geoTagFolderName: ensuredDay.geoTagFolder?.name || null,
+            geoTagFolderLink: ensuredDay.geoTagFolder?.link || null,
+          };
+        }
+      } else if ((company || college.companyId) && normalizedDayNumber) {
+        const companyRef = company || { _id: college.companyId, name: `Company_${college.companyId}` };
+        const collegeHierarchy = await ensureCollegeHierarchyLoader({
+          company: companyRef,
+          course: course || null,
+          college,
+        });
+
+        await syncDriveHierarchyMetadataLoader({
+          company,
+          course,
+          college,
+          correlationId: resolveCorrelationId,
+          collegeHierarchy,
+        });
       }
-    } else if ((company || college.companyId) && normalizedDayNumber) {
-      const companyRef = company || { _id: college.companyId, name: `Company_${college.companyId}` };
-      const collegeHierarchy = await ensureCollegeHierarchyLoader({
-        company: companyRef,
-        course: course || null,
-        college,
-      });
 
-      await syncDriveHierarchyMetadataLoader({
-        company,
-        course,
-        college,
-        correlationId: resolveCorrelationId,
-        collegeHierarchy,
+      return buildScheduleFolderFields({
+        dayEntry: ensuredDayEntry || dayEntry,
+        fallbackDayFolderId: defaultFields.dayFolderId,
+        fallbackDayFolderName: defaultFields.dayFolderName,
+        fallbackDayFolderLink: defaultFields.dayFolderLink,
+        fallbackAttendanceFolderId: defaultFields.attendanceFolderId,
+        fallbackAttendanceFolderName: defaultFields.attendanceFolderName,
+        fallbackAttendanceFolderLink: defaultFields.attendanceFolderLink,
+        fallbackGeoTagFolderId: defaultFields.geoTagFolderId,
+        fallbackGeoTagFolderName: defaultFields.geoTagFolderName,
+        fallbackGeoTagFolderLink: defaultFields.geoTagFolderLink,
       });
+    } catch (error) {
+      console.warn("[GOOGLE-DRIVE] Folder resolution failed, proceeding with fallbacks:", error.message);
+      return defaultFields;
     }
-
-    return buildScheduleFolderFields({
-      dayEntry: ensuredDayEntry || dayEntry,
-      fallbackDayFolderId: defaultFields.dayFolderId,
-      fallbackDayFolderName: defaultFields.dayFolderName,
-      fallbackDayFolderLink: defaultFields.dayFolderLink,
-      fallbackAttendanceFolderId: defaultFields.attendanceFolderId,
-      fallbackAttendanceFolderName: defaultFields.attendanceFolderName,
-      fallbackAttendanceFolderLink: defaultFields.attendanceFolderLink,
-      fallbackGeoTagFolderId: defaultFields.geoTagFolderId,
-      fallbackGeoTagFolderName: defaultFields.geoTagFolderName,
-      fallbackGeoTagFolderLink: defaultFields.geoTagFolderLink,
-    });
   };
 
 const resolveScheduleFolderFields = createResolveScheduleFolderFields();

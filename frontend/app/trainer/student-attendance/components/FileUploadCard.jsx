@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useTransition } from "react";
 import { Loader2, X, CheckCircle2, AlertCircle, CloudUpload, FileSpreadsheet, FileText } from "lucide-react";
 
 export default function FileUploadCard({
   title = "Upload File",
   accept = "*/*",
-  maxSizeMb = 10,
+  maxSizeMb = 5, // Default to 5MB according to requirements
   file,
   setFile,
   onSubmit,
@@ -14,8 +14,11 @@ export default function FileUploadCard({
   description = "",
 }) {
   const [preview, setPreview] = useState(null);
-  const [status, setStatus] = useState("idle"); // idle|uploading|success|error
+  const [status, setStatus] = useState("idle"); // idle|compressing|uploading|success|error
   const [error, setError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [compressionRatio, setCompressionRatio] = useState(null);
+  const [isPending, startTransition] = useTransition();
 
   // Clean up preview URL on unmount
   useEffect(() => {
@@ -26,46 +29,142 @@ export default function FileUploadCard({
     };
   }, [preview]);
 
-  const handleFileChange = (e) => {
+  // Generate a thumbnail on the client to avoid loading large images in full resolution
+  const generateThumbnail = useCallback((imageFile) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          const maxThumbSize = 150;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxThumbSize) {
+              height = Math.round((height * maxThumbSize) / width);
+              width = maxThumbSize;
+            }
+          } else {
+            if (height > maxThumbSize) {
+              width = Math.round((width * maxThumbSize) / height);
+              height = maxThumbSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(URL.createObjectURL(blob));
+            } else {
+              resolve(event.target.result);
+            }
+          }, "image/jpeg", 0.7);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(imageFile);
+    });
+  }, []);
+
+  const handleFileChange = useCallback(async (e) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
 
-    // Validation: File size
-    if (selected.size > maxSizeMb * 1024 * 1024) {
-      setError(`File size exceeds the limit of ${maxSizeMb}MB`);
+    // Strict validation: File type check (based on accept string)
+    const fileExtension = "." + selected.name.split(".").pop().toLowerCase();
+    const allowedExtensions = accept !== "*/*" 
+      ? new Set(accept.toLowerCase().split(",").map(ext => ext.trim())) 
+      : null;
+
+    if (allowedExtensions && !allowedExtensions.has(fileExtension)) {
+      setError(`Invalid file type. Allowed formats: ${accept.replace(/\./g, " ")}`);
       setStatus("error");
       setFile(null);
       setPreview(null);
+      setCompressionRatio(null);
       return;
     }
 
-    setFile(selected);
+    // Strict validation: 5MB size limit on frontend
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (selected.size > maxSizeBytes) {
+      setError("File size exceeds the maximum limit of 5MB");
+      setStatus("error");
+      setFile(null);
+      setPreview(null);
+      setCompressionRatio(null);
+      return;
+    }
+
     setError("");
     setStatus("idle");
+    setCompressionRatio(null);
 
-    // Preview for images
+    // If it is an image, compress and resize it on the client side
     if (selected.type.startsWith("image/")) {
-      const objectUrl = URL.createObjectURL(selected);
-      setPreview(objectUrl);
+      setStatus("compressing");
+      
+      // Generate canvas thumbnail preview instantly
+      const thumbUrl = await generateThumbnail(selected);
+      setPreview(thumbUrl);
+
+      const compressionOptions = {
+        maxSizeMB: 1, // Target web-optimized size under 1MB
+        maxWidthOrHeight: 1280, // Web-optimized dimensions
+        useWebWorker: true,
+      };
+
+      try {
+        const imageCompression = (await import("browser-image-compression")).default;
+        const compressedBlob = await imageCompression(selected, compressionOptions);
+        const compressedFile = new File([compressedBlob], selected.name, {
+          type: selected.type,
+          lastModified: Date.now(),
+        });
+
+        // Calculate compression stats
+        const ratio = ((1 - (compressedFile.size / selected.size)) * 100).toFixed(0);
+        setCompressionRatio(ratio > 0 ? ratio : null);
+        
+        setFile(compressedFile);
+        setStatus("idle");
+      } catch (err) {
+        console.warn("Client compression failed, using original file:", err);
+        setFile(selected);
+        setStatus("idle");
+      }
     } else {
+      setFile(selected);
       setPreview(null);
     }
-  };
+  }, [accept, generateThumbnail, setFile]);
 
-  const handleUpload = async () => {
+  const handleUpload = useCallback(async () => {
     if (!file) return;
     setStatus("uploading");
+    setUploadProgress(0);
     setError("");
-    try {
-      await onSubmit(file);
-      setStatus("success");
-    } catch (err) {
-      setError(err?.message || "Upload error");
-      setStatus("error");
-    }
-  };
 
-  const reset = () => {
+    startTransition(async () => {
+      try {
+        // Run the onSubmit upload and pass the progress tracking callback
+        await onSubmit(file, (progress) => {
+          setUploadProgress(progress);
+        });
+        setStatus("success");
+      } catch (err) {
+        setError(err?.message || "Upload error");
+        setStatus("error");
+      }
+    });
+  }, [file, onSubmit]);
+
+  const reset = useCallback(() => {
     setFile(null);
     if (preview && preview.startsWith("blob:")) {
       URL.revokeObjectURL(preview);
@@ -73,7 +172,9 @@ export default function FileUploadCard({
     setPreview(null);
     setStatus("idle");
     setError("");
-  };
+    setUploadProgress(0);
+    setCompressionRatio(null);
+  }, [preview, setFile]);
 
   // Determine file icon
   const isExcel = file?.name?.endsWith(".xlsx") || file?.name?.endsWith(".xls") || file?.type?.includes("spreadsheet");
@@ -93,9 +194,9 @@ export default function FileUploadCard({
         {file ? (
           <div className="relative flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-6">
             {preview ? (
-              <div className="relative mb-3 h-32 w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="relative mb-3 h-32 w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-white flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="preview" className="h-full w-full object-cover" />
+                <img src={preview} alt="preview thumbnail" className="max-h-full max-w-full object-contain" loading="lazy" />
               </div>
             ) : (
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
@@ -111,7 +212,12 @@ export default function FileUploadCard({
 
             <div className="text-center max-w-full">
               <p className="truncate text-sm font-semibold text-slate-700 px-4">{file.name}</p>
-              <p className="text-xs text-slate-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              <p className="text-xs text-slate-400">
+                {(file.size / 1024 / 1024).toFixed(2)} MB 
+                {compressionRatio && (
+                  <span className="text-emerald-600 font-medium ml-1">(-{compressionRatio}% compressed)</span>
+                )}
+              </p>
             </div>
 
             {status !== "uploading" && status !== "success" && (
@@ -139,15 +245,32 @@ export default function FileUploadCard({
               Drag & drop or click to upload
             </p>
             <p className="mt-1 text-xs text-slate-400 text-center">
-              Supported files: {accept.replace(/\./g, " ")} (max {maxSizeMb}MB)
+              Supported files: {accept.replace(/\./g, " ")} (max 5MB)
             </p>
           </div>
         )}
       </div>
 
+      {status === "compressing" && (
+        <div className="mt-4 flex items-center justify-center text-sm font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-xl py-2 animate-pulse">
+          <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" /> Web-optimizing & compressing image…
+        </div>
+      )}
+
       {status === "uploading" && (
-        <div className="mt-4 flex items-center justify-center text-sm font-medium text-blue-600 bg-blue-50 rounded-xl py-2 animate-pulse">
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading files to server…
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-blue-600">
+            <span className="flex items-center">
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Uploading to server…
+            </span>
+            <span>{uploadProgress}%</span>
+          </div>
+          <div className="w-full bg-blue-100 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out" 
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -170,11 +293,12 @@ export default function FileUploadCard({
         </div>
       )}
 
-      {file && status !== "success" && status !== "uploading" && (
+      {file && status !== "success" && status !== "uploading" && status !== "compressing" && (
         <button
           type="button"
           onClick={handleUpload}
-          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-[#0f3f5c] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1a6b9e] shadow-sm transition active:scale-[0.98]"
+          disabled={isPending}
+          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-[#0f3f5c] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1a6b9e] shadow-sm transition active:scale-[0.98] disabled:opacity-50"
         >
           Confirm and Upload
         </button>

@@ -263,10 +263,12 @@ function AttendanceUploadSection() {
       formData.append("check_in_image", checkInImageFile);
       if (attendanceStatus === "Present" && checkOutImageFile) {
         formData.append("check_out_image", checkOutImageFile);
+        formData.append("checkOutTime", new Date().toTimeString().slice(0, 5));
       }
       formData.append("trainer_id", String(trainerId || ""));
       formData.append("attendance_date", new Date().toISOString().split("T")[0]);
       formData.append("status", attendanceStatus.toLowerCase());
+      formData.append("checkInTime", new Date().toTimeString().slice(0, 5));
 
       /* attach location JSON string */
       formData.append(
@@ -602,7 +604,7 @@ function AttendanceUploadSection() {
               ) : (
                 <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <img loading="lazy"
                     src={checkInImagePreview}
                     alt="Check-in preview"
                     className="h-48 w-full object-cover"
@@ -689,7 +691,7 @@ function AttendanceUploadSection() {
                 ) : (
                   <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <img loading="lazy"
                       src={checkOutImagePreview}
                       alt="Check-out preview"
                       className="h-48 w-full object-cover"

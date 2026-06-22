@@ -1,8 +1,10 @@
-"use client";
-
 import dynamic from "next/dynamic";
-
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'City Management',
+  description: 'Manage city assignments, trainer coverage areas, and location-based scheduling on MBK Carrierz.',
+};
 
 const CityManagement = dynamic(() => import("@/portals/admin/CityManagement"), {
   loading: () => (

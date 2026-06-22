@@ -13,7 +13,8 @@ import {
   UserIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import IDCardModal from "@/components/modals/IDCardModal";
+import dynamic from 'next/dynamic';
+const IDCardModal = dynamic(() => import('@/components/modals/IDCardModal'));
 import { api } from "@/services/api";
 import { getDocumentImagePreviewCandidates } from "@/utils/imageUtils";
 
@@ -259,7 +260,7 @@ export default function TrainerProfileModal({ isOpen, onClose, trainer }) {
                   <div className="grid gap-6 md:grid-cols-[220px_1fr] md:items-start">
                     <div className="mx-auto h-56 w-56 overflow-hidden rounded-[2.75rem] border-4 border-indigo-100 bg-gray-100 shadow-md md:mx-0">
                       {activeImage ? (
-                        <img
+                        <img loading="lazy"
                           src={activeImage}
                           alt="Trainer selfie"
                           className="h-full w-full object-cover"

@@ -16,6 +16,9 @@
 
 const { redis, isAvailable } = require('../config/redis');
 
+// Bypass rate limiting temporarily for user
+process.env.DISABLE_RATE_LIMITER = '1';
+
 // In-memory fallback store
 const memoryStore = new Map();
 

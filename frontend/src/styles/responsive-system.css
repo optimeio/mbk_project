@@ -12,9 +12,9 @@
   --touch-min: 44px;
   --touch-gap: clamp(0.5rem, 2vw, 1rem);
 
-  --text-body: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
-  --text-lead: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
-  --text-title: clamp(1.5rem, 1.25rem + 1.2vw, 2.25rem);
+  --text-body: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lead: clamp(1.125rem, 1.05rem + 0.4vw, 1.375rem);
+  --text-title: clamp(1.625rem, 1.35rem + 1.5vw, 2.5rem);
 
   --motion-fast: 80ms;
   --motion-base: 120ms;

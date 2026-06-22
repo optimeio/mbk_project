@@ -789,11 +789,6 @@ const TrainerProfile = () => {
                 ))}
               </div>
             </div>
-
-              type="info"
-              showIcon={false}
-              className="bg-indigo-50 border-indigo-100 rounded-2xl p-4 text-left"
-            />
           </div>
 
           <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

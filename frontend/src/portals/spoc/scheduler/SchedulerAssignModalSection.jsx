@@ -43,6 +43,36 @@ const SchedulerAssignModalSection = ({
                 </option>
               ))}
             </select>
+            {/* Secondary Trainer (Both‑Member Assignment) */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Secondary Trainer (optional)</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                value={assignData.secondaryTrainerId || ''}
+                onChange={(e) => onTrainerChange && onTrainerChange({ target: { name: 'secondaryTrainerId', value: e.target.value } })}
+              >
+                <option value="">None</option>
+                {trainers.map((trainer) => (
+                  <option
+                    key={"sec-" + (trainer.id || trainer._id)}
+                    value={trainer.id || trainer._id}
+                  >
+                    {trainer.userId?.name || trainer.name || "Unknown"} ({trainer.specialization || "General"})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Next Company Handover */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Next Company (optional)</label>
+              <input
+                type="text"
+                placeholder="Company ID or Name"
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                value={assignData.nextCompany || ''}
+                onChange={(e) => onTrainerChange && onTrainerChange({ target: { name: 'nextCompany', value: e.target.value } })}
+              />
+            </div>
           </div>
 
           <div>

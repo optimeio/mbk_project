@@ -75,7 +75,6 @@ const batchSchema = new mongoose.Schema({
 });
 
 batchSchema.index({ courseId: 1, collegeId: 1 });
-batchSchema.index({ batchCode: 1 }, { unique: true });
 
 // Pre-validate hook to generate batchCode if not provided
 batchSchema.pre('validate', async function (next) {

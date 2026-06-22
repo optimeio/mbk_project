@@ -70,6 +70,10 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
     const statusRaw = req.body.status || req.body.attendance_status || req.body.attendanceStatus || null;
     const normalizedStatus = normalizeAttendanceStatus(statusRaw);
 
+    // Parse check-in and check-out times
+    const checkInTime = req.body.checkInTime || req.body.check_in_time || new Date().toTimeString().slice(0, 5);
+    const checkOutTime = req.body.checkOutTime || req.body.check_out_time || null;
+
     // Parse optional location if provided
     let location = req.body.location || req.body.locationData || req.body.geoLocation || null;
     if (typeof location === 'string') {
@@ -144,6 +148,8 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
       attendanceDate,
       status: normalizedStatus,
       date: new Date(attendanceDate || Date.now()),
+      checkInTime,
+      checkOutTime,
       attendanceExcelUrl,
       studentsPhotoUrl,
       attendancePdfUrl,

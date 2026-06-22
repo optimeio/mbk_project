@@ -128,14 +128,14 @@ const TrainerIDCard = forwardRef(({ trainer = {} }, ref) => {
 
         <div className="trainer-id-card__header">
           <div className="trainer-id-card__logo-shell">
-            <img
+            <img loading="lazy"
               src="/n3.webp"
               alt="Naan Mudhalvan"
               className="trainer-id-card__logo"
             />
           </div>
           <div className="trainer-id-card__logo-shell">
-            <img
+            <img loading="lazy"
               src="/logos/tamil.png"
               alt="Government of Tamil Nadu"
               className="trainer-id-card__logo"
@@ -152,7 +152,7 @@ const TrainerIDCard = forwardRef(({ trainer = {} }, ref) => {
           <div className="trainer-id-card__photo-band" aria-hidden="true" />
           <div className="trainer-id-card__photo-frame">
             {currentPhoto ? (
-              <img
+              <img loading="lazy"
                 src={currentPhoto}
                 alt={trainerName}
                 className="trainer-id-card__photo"

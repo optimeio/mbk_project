@@ -155,7 +155,7 @@ export default function CompanyOnboarding() {
             <div className="flex items-center gap-4">
               <div className="h-20 w-20 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
                 {logoPreview ? (
-                  <img src={logoPreview} alt="Logo preview" className="h-full w-full object-cover" />
+                  <img loading="lazy" src={logoPreview} alt="Logo preview" className="h-full w-full object-cover" />
                 ) : (
                   <span className="text-xs text-slate-400">Preview</span>
                 )}

@@ -1,8 +1,10 @@
-"use client";
-
 import dynamic from "next/dynamic";
-
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'Complaints Management',
+  description: 'Review and manage complaint submissions, escalations, and resolution status on MBK Carrierz.',
+};
 
 const ComplaintList = dynamic(() => import("@/portals/admin/ComplaintList"), {
   loading: () => (

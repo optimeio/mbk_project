@@ -1,9 +1,11 @@
-"use client";
-
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
-
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'SPOC Dashboard',
+  description: 'Single Point of Contact dashboard — monitor attendance, schedules, and trainer analytics on MBK Carrierz.',
+};
 
 const SpocDashboard = dynamic(() => import("@/portals/spoc/SpocDashboard"), {
   loading: () => (
@@ -12,7 +14,6 @@ const SpocDashboard = dynamic(() => import("@/portals/spoc/SpocDashboard"), {
       description="Preparing attendance and schedule insights."
     />
   ),
-  ssr: false,
 });
 
 export default function SpocDashboardPage() {

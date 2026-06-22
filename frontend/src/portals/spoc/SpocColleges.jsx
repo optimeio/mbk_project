@@ -5,8 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 
 import { PlusIcon, LinkIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
-import CollegeModal from '@/components/modals/CollegeModal';
-import AssignTrainersModal from '@/components/modals/AssignTrainersModal';
+import dynamic from 'next/dynamic';
+const CollegeModal = dynamic(() => import('@/components/modals/CollegeModal'));
+const AssignTrainersModal = dynamic(() => import('@/components/modals/AssignTrainersModal'));
 import { getColleges, createCollege, updateCollege, assignTrainers } from '@/services/collegeService';
 import { getTrainers } from '@/services/trainerService';
 import { getCourses } from '@/services/courseService';

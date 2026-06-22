@@ -21,17 +21,21 @@ const GEO_IMAGE_FIELDS = new Set([
 ]);
 const GEO_VIDEO_FIELDS = new Set(['activityVideos']);
 
-const PDF_EXTENSIONS = new Set(['.pdf']);
+const PDF_EXTENSIONS = new Set(['.pdf', '.doc', '.docx']);
 const EXCEL_EXTENSIONS = new Set(['.xls', '.xlsx']);
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const VIDEO_EXTENSIONS = new Set(['.mp4']);
 
-const PDF_MIME_TYPES = new Set(['application/pdf']);
+const PDF_MIME_TYPES = new Set([
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+]);
 const EXCEL_MIME_TYPES = new Set([
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel'
 ]);
-const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VIDEO_MIME_TYPES = new Set(['video/mp4']);
 
 const parseEnvPositiveInt = (value, fallback) => {
@@ -175,8 +179,8 @@ const fileFilter = (req, file, cb) => {
     );
 };
 
-// Upload middleware for attendance with image and signature (LEGACY)
-const uploadAttendance = multer({
+// Upload fields definition for attendance with image and signature (LEGACY)
+const uploadFields = multer({
     storage: multiStorage,
     fileFilter: (req, file, cb) => {
         // Diagnostic logging
@@ -184,7 +188,7 @@ const uploadAttendance = multer({
         fileFilter(req, file, cb);
     },
     limits: {
-        fileSize: 500 * 1024 * 1024 // 500MB max file size (to accommodate high-quality videos)
+        fileSize: 5 * 1024 * 1024 // Strict 5MB limit
     }
 }).fields([
     { name: 'attendancePdf', maxCount: 1 },
@@ -205,12 +209,47 @@ const uploadAttendance = multer({
     { name: 'clock_out_image', maxCount: 1 }
 ]);
 
+// Wrapped middleware to handle Multer errors and return proper HTTP codes (413/400)
+const uploadAttendance = (req, res, next) => {
+    uploadFields(req, res, (err) => {
+        if (err) {
+            console.error(`[MULTER-ERROR] ${new Date().toISOString()} Upload error at ${req.originalUrl}:`, err);
+            
+            if (err instanceof multer.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(413).json({
+                        success: false,
+                        message: 'File size exceeds the maximum limit of 5MB'
+                    });
+                }
+                return res.status(400).json({
+                    success: false,
+                    message: `File upload limit error: ${err.message}`
+                });
+            }
+            
+            if (err.message && (err.message.includes('only allows') || err.message.includes('Unsupported upload field'))) {
+                return res.status(400).json({
+                    success: false,
+                    message: err.message
+                });
+            }
+            
+            return res.status(500).json({
+                success: false,
+                message: err.message || 'Internal server error during file upload'
+            });
+        }
+        next();
+    });
+};
+
 // Upload middleware for manual attendance (optional image)
 const uploadManual = multer({
     storage: imageStorage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: toBytesFromMb(MANUAL_IMAGE_MAX_SIZE_MB)
+        fileSize: 5 * 1024 * 1024 // Strict 5MB limit
     }
 }).single('image');
 
@@ -219,7 +258,7 @@ const uploadGeoImage = multer({
     storage: imageStorage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: toBytesFromMb(GEO_IMAGE_MAX_SIZE_MB)
+        fileSize: 5 * 1024 * 1024 // Strict 5MB limit
     }
 }).single('image');
 
@@ -227,5 +266,5 @@ module.exports = {
     uploadAttendance,
     uploadManual,
     uploadGeoImage,
-    GEO_IMAGE_MAX_SIZE_MB,
+    GEO_IMAGE_MAX_SIZE_MB: 5,
 };

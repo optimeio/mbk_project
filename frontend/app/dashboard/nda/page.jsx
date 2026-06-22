@@ -1,8 +1,10 @@
-"use client";
-
 import dynamic from "next/dynamic";
-
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+
+export const metadata = {
+  title: 'NDA Management',
+  description: 'Manage non-disclosure agreements, track signing status, and generate NDA documents on MBK Carrierz.',
+};
 
 const NdaManagement = dynamic(() => import("@/portals/admin/NdaManagement"), {
   loading: () => (

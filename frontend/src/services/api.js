@@ -929,6 +929,58 @@ export const api = {
     return response;
   },
 
+  uploadWithProgress: (endpoint, formData, onProgress) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      let url;
+      if (endpoint.startsWith("/api/")) {
+        url = `${FILE_BASE_URL || ""}${endpoint}`;
+      } else {
+        url = `${API_BASE_URL || "/api"}${endpoint}`;
+      }
+      
+      xhr.open("POST", url, true);
+      
+      const token = getStoredAccessToken();
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
+      
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percentCompleted = Math.round((event.loaded * 100) / event.total);
+          onProgress(percentCompleted);
+        }
+      };
+      
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            resolve(response);
+          } catch {
+            resolve(xhr.responseText);
+          }
+        } else {
+          let errorMsg = `HTTP Error ${xhr.status}`;
+          try {
+            const response = JSON.parse(xhr.responseText);
+            errorMsg = response.message || errorMsg;
+          } catch {}
+          const error = new Error(errorMsg);
+          error.status = xhr.status;
+          reject(error);
+        }
+      };
+      
+      xhr.onerror = () => {
+        reject(new Error("Network error during upload"));
+      };
+      
+      xhr.send(formData);
+    });
+  },
+
   primeCache: primeApiCache,
   clearCache: clearApiCache,
 };

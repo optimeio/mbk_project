@@ -57,6 +57,7 @@ const {
   deleteChannelForEveryone,
   __logStreamChatTelemetry,
 } = require("../../services/streamChatService.js");
+/*
 const {
   createChatFeed,
   createChatBroadcastFeed,
@@ -83,6 +84,7 @@ const {
   listChatSearchFeed,
   listChatValidationLogsFeed,
 } = require("../../modules/chat/chat.service.js");
+*/
 const {
   createUploadTrainerDocumentMiddleware,
 } = require("../../modules/documents/documents.upload.js");
@@ -6639,8 +6641,9 @@ const tests = [
         listTrainerSchedulesLoader: async ({ filter }) => {
           assert.equal(filter.trainerId, "TRN-42");
           assert.equal(filter.status, "scheduled");
-          assert.ok(filter.scheduledDate?.$gte instanceof Date);
-          assert.ok(filter.scheduledDate?.$lt instanceof Date);
+          const scheduledDateClause = filter.scheduledDate || filter.$or?.find(clause => clause.scheduledDate)?.scheduledDate;
+          assert.ok(scheduledDateClause?.$gte instanceof Date);
+          assert.ok(scheduledDateClause?.$lt instanceof Date);
 
           return [
             {

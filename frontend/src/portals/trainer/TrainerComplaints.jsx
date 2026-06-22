@@ -182,7 +182,7 @@ const TrainerComplaints = () => {
                                     </Upload>
                                     {fileList.length > 0 && (
                                       <div className="mt-2 flex items-center space-x-4">
-                                        <img
+                                        <img loading="lazy"
                                           src={URL.createObjectURL(fileList[0].originFileObj)}
                                           alt="preview"
                                           className="h-16 w-16 object-cover rounded"
