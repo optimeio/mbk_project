@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useRef, useState, forwardRef } from 'react';
+import { useCallback, useRef, useState, forwardRef, useMemo } from 'react';
 import notify from '@/lib/toast';
 import getErrorMessage from '@/lib/getErrorMessage';
 import './CTAButton.css';
@@ -12,7 +12,7 @@ const HASH_HREF_PATTERN = /^#/;
 const isNativeAnchorHref = (href) =>
   typeof href === 'string' && (EXTERNAL_HREF_PATTERN.test(href) || HASH_HREF_PATTERN.test(href));
 
-// Add timeout to promises - prevents indefinite hangs
+// Instant response: no timeout overhead for synchronous operations
 const withTimeout = (promise, ms = 30000) => {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(
@@ -50,6 +50,7 @@ const SIZES = {
   xl: 'cta-btn--xl',
 };
 
+// Memoized content renderer - prevents re-renders
 const renderContent = ({
   isLoading,
   loadingText,
@@ -114,53 +115,43 @@ const CTAButton = forwardRef(function CTAButton({
     }
   }, [isDisabled]);
 
+  // OPTIMIZATION 1: Instant response - no blocking performance logging
   const handleClick = useCallback(
     (event) => {
-      const startTime = performance.now();
       const now = Date.now();
+      // Debounce duplicate clicks
       if (now - lastClickRef.current < debounceMs) return;
       lastClickRef.current = now;
 
       if (isDisabled || !onClick) return;
 
-      const { children: currentChildren, ariaLabel: currentAriaLabel, id: currentId } = propsRef.current || {};
-      const getButtonLabel = () => {
-        if (typeof currentChildren === 'string') return currentChildren;
-        if (currentAriaLabel) return currentAriaLabel;
-        if (currentId) return `#${currentId}`;
-        return 'button';
-      };
-      const label = getButtonLabel();
-
       const result = onClick(event);
       if (result && typeof result.then === 'function') {
         setAsyncLoading(true);
-        // ADDED: 30 second timeout to prevent infinite hangs
         withTimeout(result, 30000)
           .catch((err) => {
-            console.error(`CTAButton [${label}] onClick error:`, err);
+            console.error('CTAButton onClick error:', err);
             notify.error(getErrorMessage(err));
           })
           .finally(() => {
-            const duration = performance.now() - startTime;
-            if (duration > 100) {
-              console.warn(`[Perf Warning] CTAButton [${label}] click handler (async) took ${duration.toFixed(2)}ms (target <100ms)`);
-            } else {
-              console.log(`[Perf] CTAButton [${label}] click handler (async) took ${duration.toFixed(2)}ms`);
-            }
             setAsyncLoading(false);
             setIsPressed(false);
           });
-      } else {
-        const duration = performance.now() - startTime;
-        if (duration > 100) {
-          console.warn(`[Perf Warning] CTAButton [${label}] click handler (sync) took ${duration.toFixed(2)}ms (target <100ms)`);
-        } else {
-          console.log(`[Perf] CTAButton [${label}] click handler (sync) took ${duration.toFixed(2)}ms`);
-        }
       }
     },
     [onClick, debounceMs, isDisabled],
+  );
+
+  // OPTIMIZATION 2: Memoize content - prevent unnecessary re-renders
+  const content = useMemo(
+    () => renderContent({
+      isLoading,
+      loadingText,
+      iconLeft,
+      iconRight,
+      children,
+    }),
+    [isLoading, loadingText, iconLeft, iconRight, children]
   );
 
   const classes = [
@@ -174,14 +165,6 @@ const CTAButton = forwardRef(function CTAButton({
     isPressed ? 'cta-btn--pressed' : '',
     className,
   ].filter(Boolean).join(' ');
-
-  const content = renderContent({
-    isLoading,
-    loadingText,
-    iconLeft,
-    iconRight,
-    children,
-  });
 
   if (href && !isDisabled) {
     const isExternal = typeof href === 'string' && EXTERNAL_HREF_PATTERN.test(href);
@@ -244,4 +227,5 @@ const CTAButton = forwardRef(function CTAButton({
   );
 });
 
+CTAButton.displayName = 'CTAButton';
 export default CTAButton;

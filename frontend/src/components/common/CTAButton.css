@@ -20,10 +20,10 @@
   -webkit-tap-highlight-color: transparent;
   will-change: transform;
   transition:
-    background 80ms ease,
-    transform 40ms ease,
-    box-shadow 80ms ease,
-    opacity 60ms ease;
+    background 50ms ease,
+    transform 20ms ease-out,
+    box-shadow 50ms ease,
+    opacity 40ms ease;
 }
 
 .cta-btn:focus-visible {
@@ -36,7 +36,7 @@
   position: absolute;
   inset: 0;
   background: rgba(255, 255, 255, 0);
-  transition: background var(--motion-press, 50ms) ease;
+  transition: background 30ms ease-out;
   pointer-events: none;
 }
 
@@ -177,6 +177,7 @@
   border-radius: 50%;
   flex-shrink: 0;
   animation: cta-spin 0.5s linear infinite;
+  will-change: transform;
 }
 
 @keyframes cta-spin {
