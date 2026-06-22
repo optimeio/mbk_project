@@ -2,10 +2,12 @@ const mongoose = require('mongoose');
 
 const trainerAssignmentSchema = new mongoose.Schema({
   trainerName: { type: String, required: false },
+  trainer_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Trainer', required: false },
   collegeName: { type: String, required: false },
   batchName: { type: String, required: false },
   active: { type: Boolean, default: true },
   assignedAt: { type: Date, default: Date.now },
+  driveFolderId: { type: String, required: false },
   
   collegename: { type: String, required: false },
   trainername: { type: String, required: false },

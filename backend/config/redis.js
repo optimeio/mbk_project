@@ -34,7 +34,7 @@ const redis = shouldDisableRedis
     on: () => {},
   }
   : new Redis(redisUrl, {
-    maxRetriesPerRequest: 1, // Fail fast if no Redis
+    maxRetriesPerRequest: 3,  // INCREASED from 1 to 3 for better resilience
     connectTimeout: 10000,
     retryStrategy: (times) => {
       reconnectAttempt = times;

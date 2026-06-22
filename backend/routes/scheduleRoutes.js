@@ -135,13 +135,13 @@ router.put("/:id/assign", authenticate, authorize(["SPOCAdmin"]), assignSchedule
 
 // @route   PUT /api/schedules/:id
 // @desc    Update a schedule
-// @access  SPOC Admin
-router.put("/:id", updateScheduleController);
+// @access  SPOC Admin, Super Admin, Company
+router.put("/:id", authenticate, authorize(["SPOCAdmin", "SuperAdmin", "company", "Company", "companyadmin", "CompanyAdmin"]), updateScheduleController);
 
 // @route   DELETE /api/schedules/:id
 // @desc    Delete a schedule
-// @access  SPOC Admin
-router.delete("/:id", authenticate, authorize(["SPOCAdmin", "SuperAdmin"]), deleteScheduleController);
+// @access  SPOC Admin, Super Admin, Company
+router.delete("/:id", authenticate, authorize(["SPOCAdmin", "SuperAdmin", "company", "Company", "companyadmin", "CompanyAdmin"]), deleteScheduleController);
 
 // @route   GET /api/schedules/associations
 // @desc    Get all companies, courses, and colleges for dropdown associations

@@ -83,7 +83,7 @@ export const getSchedulerTrainersQueryOptions = ({
 } = {}) => ({
   queryKey: buildSchedulerTrainersQueryKey({ search }),
   enabled,
-  staleTime: QUERY_STALE_TIMES.HIGH_CHURN_LIST,
+  staleTime: 5000, // Fetch freshly registered trainers quickly
   gcTime: QUERY_GC_TIMES.STANDARD,
   refetchOnWindowFocus: false,
   queryFn: () =>

@@ -12,6 +12,25 @@ const HASH_HREF_PATTERN = /^#/;
 const isNativeAnchorHref = (href) =>
   typeof href === 'string' && (EXTERNAL_HREF_PATTERN.test(href) || HASH_HREF_PATTERN.test(href));
 
+// Add timeout to promises - prevents indefinite hangs
+const withTimeout = (promise, ms = 30000) => {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`Operation timed out after ${ms}ms`)),
+      ms
+    );
+    promise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+};
+
 const VARIANTS = {
   primary: 'cta-btn--primary',
   brand: 'cta-btn--brand',
@@ -116,7 +135,8 @@ const CTAButton = forwardRef(function CTAButton({
       const result = onClick(event);
       if (result && typeof result.then === 'function') {
         setAsyncLoading(true);
-        result
+        // ADDED: 30 second timeout to prevent infinite hangs
+        withTimeout(result, 30000)
           .catch((err) => {
             console.error(`CTAButton [${label}] onClick error:`, err);
             notify.error(getErrorMessage(err));

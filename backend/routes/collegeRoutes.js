@@ -10,6 +10,7 @@ const {
     ensureDepartmentHierarchy,
     isTrainingDriveEnabled,
     toDepartmentDayFolders,
+    ensureTrainerCollegeHierarchy,
 } = require('../modules/drive/driveGateway');
 const {
     normalizeRole,
@@ -1272,6 +1273,7 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                 ? `${trainer.firstName} ${trainer.lastName}`
                 : (trainer.userId?.name || "");
 
+            let assignment = null;
             if (trainerName) {
                 // Deactivate any existing active assignments for this trainer
                 await TrainerAssignment.updateMany(
@@ -1280,8 +1282,9 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                 );
 
                 // Create new assignment
-                await TrainerAssignment.create({
+                assignment = await TrainerAssignment.create({
                     trainerName,
+                    trainer_id: trainer._id,
                     trainerid: String(trainer._id),
                     trainername: trainerName,
                     collegeName: college.name,
@@ -1289,6 +1292,46 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                     batchName: trainerData.batchName || "",
                     active: true
                 });
+            }
+
+            // -------------------------------------------------
+            // AUTO-CREATE Google Drive folder hierarchy for this
+            // trainer under NM Trainers/{TrainerCode}/{CollegeName}/day_1..12/{attendance,geo_tag,excel_sheet}
+            // -------------------------------------------------
+            if (isTrainingDriveEnabled()) {
+                try {
+                    const trainerDoc = await Trainer.findById(trainer._id);
+                    if (trainerDoc) {
+                        const collegeHierarchy = await ensureTrainerCollegeHierarchy({
+                            trainer: trainerDoc,
+                            collegeName: college.name,
+                            totalDays: 12,
+                        });
+                        console.log(
+                            `[GOOGLE-DRIVE] Created college folder hierarchy for trainer ${trainerDoc.trainerId || trainer._id} → college "${college.name}"`
+                        );
+
+                        // Persist the college-level drive folder ID on the trainer record
+                        if (collegeHierarchy?.collegeFolder?.id) {
+                            trainerDoc.collegeDriveFolderId = collegeHierarchy.collegeFolder.id;
+                            trainerDoc.collegeDriveFolderName = college.name;
+                            await trainerDoc.save();
+
+                            // Also save folder ID in TrainerAssignment
+                            if (assignment) {
+                                await TrainerAssignment.findByIdAndUpdate(assignment._id, {
+                                    driveFolderId: collegeHierarchy.collegeFolder.id
+                                });
+                            }
+                        }
+                    }
+                } catch (driveError) {
+                    console.error(
+                        `[GOOGLE-DRIVE] Failed to create college folder hierarchy for trainer ${trainer._id}:`,
+                        driveError.message
+                    );
+                    // Non-blocking: don't fail the assignment because of Drive errors
+                }
             }
 
             // Create schedules if provided

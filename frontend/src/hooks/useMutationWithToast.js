@@ -11,6 +11,25 @@ const resolveToastMessage = (value, ...args) =>
 const asQueryKeys = (queryKeys = []) =>
   Array.isArray(queryKeys) ? queryKeys.filter(Boolean) : [];
 
+// Add timeout to promises - prevents indefinite hangs
+const withTimeout = (promise, ms = 30000) => {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`Operation timed out after ${ms}ms`)),
+      ms
+    );
+    promise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+};
+
 export default function useMutationWithToast({
   mutationFn,
   queryKeys = [],
@@ -54,7 +73,8 @@ export default function useMutationWithToast({
   const mutateWithToast = async (variables, toastOverrides = {}) => {
     const toastConfig = { ...toast, ...toastOverrides };
 
-    return notify.promise(mutation.mutateAsync(variables), {
+    // ADDED: 30 second timeout to prevent infinite hangs
+    return notify.promise(withTimeout(mutation.mutateAsync(variables), 30000), {
       loading:
         resolveToastMessage(toastConfig.loading, variables) || "Processing...",
       success: (data) =>

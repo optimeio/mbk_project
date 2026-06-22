@@ -104,6 +104,7 @@ const ensureTrainerDocumentHierarchy = async ({
   }
 
   const trainerCode = await ensureTrainerCode(trainer);
+  const trainerName = [trainer.firstName, trainer.lastName].filter(Boolean).join(" ").trim() || trainer.name || trainer.email?.split("@")[0] || trainerCode;
 
   const registrationFolder = await ensureDriveFolder({
     parentFolderId: DEFAULT_TRAINER_DOCUMENTS_FOLDER_ID,
@@ -124,28 +125,28 @@ const ensureTrainerDocumentHierarchy = async ({
   if (isDocumentsFolderReference(trainer)) {
     existingDocumentsFolderId = trainer.driveFolderId || null;
     const existingTrainerFolder = await findDriveFolder({
-      folderName: trainerCode,
+      folderName: trainerName,
       parentFolderId: registrationFolder.id,
     });
     existingTrainerFolderId = existingTrainerFolder?.id || null;
 
     if (!existingTrainerFolderId && legacyTrainersFolder?.id) {
       const existingLegacyTrainerFolder = await findDriveFolder({
-        folderName: trainerCode,
+        folderName: trainerName,
         parentFolderId: legacyTrainersFolder.id,
       });
       existingTrainerFolderId = existingLegacyTrainerFolder?.id || null;
     }
   } else {
     const existingTrainerFolder = await findDriveFolder({
-      folderName: trainerCode,
+      folderName: trainerName,
       parentFolderId: registrationFolder.id,
     });
     existingTrainerFolderId = existingTrainerFolder?.id || null;
 
     if (!existingTrainerFolderId && legacyTrainersFolder?.id) {
       const existingLegacyTrainerFolder = await findDriveFolder({
-        folderName: trainerCode,
+        folderName: trainerName,
         parentFolderId: legacyTrainersFolder.id,
       });
       existingTrainerFolderId = existingLegacyTrainerFolder?.id || null;
@@ -160,7 +161,7 @@ const ensureTrainerDocumentHierarchy = async ({
 
   const trainerFolder = await syncDriveFolder({
     folderId: existingTrainerFolderId,
-    folderName: trainerCode,
+    folderName: trainerName,
     parentFolderId: registrationFolder.id,
   });
 
@@ -203,8 +204,79 @@ const ensureTrainerDocumentHierarchy = async ({
   };
 };
 
+const ensureTrainerCollegeHierarchy = async ({
+  trainer,
+  collegeName,
+  totalDays = 12,
+} = {}) => {
+  if (!DEFAULT_TRAINER_DOCUMENTS_FOLDER_ID) {
+    throw new Error("Google Drive folder ID is required.");
+  }
+
+  if (!trainer || !collegeName) {
+    throw new Error("Trainer and college name are required.");
+  }
+
+  // First ensure the trainer's own folder exists
+  const trainerHierarchy = await ensureTrainerDocumentHierarchy({
+    trainer,
+    persistTrainer: true,
+  });
+
+  const trainerFolder = trainerHierarchy.trainerFolder;
+  if (!trainerFolder?.id) {
+    throw new Error("Could not resolve trainer Drive folder.");
+  }
+
+  // Create the college folder inside the trainer's folder
+  const collegeFolder = await ensureDriveFolder({
+    folderName: String(collegeName).trim(),
+    parentFolderId: trainerFolder.id,
+  });
+
+  // Create day_1 to day_N folders, each with attendance, geo_tag, and excel_sheet subfolders
+  const dayFoldersByDayNumber = {};
+  const safeDays = Math.max(1, Number(totalDays) || 12);
+
+  for (let dayNumber = 1; dayNumber <= safeDays; dayNumber += 1) {
+    const dayFolder = await ensureDriveFolder({
+      folderName: `day_${dayNumber}`,
+      parentFolderId: collegeFolder.id,
+    });
+
+    const attendanceFolder = await ensureDriveFolder({
+      folderName: "attendance",
+      parentFolderId: dayFolder.id,
+    });
+
+    const geoTagFolder = await ensureDriveFolder({
+      folderName: "geo_tag",
+      parentFolderId: dayFolder.id,
+    });
+
+    const excelSheetFolder = await ensureDriveFolder({
+      folderName: "excel_sheet",
+      parentFolderId: dayFolder.id,
+    });
+
+    dayFoldersByDayNumber[dayNumber] = {
+      ...toFolderPayload(dayFolder),
+      attendanceFolder: toFolderPayload(attendanceFolder),
+      geoTagFolder: toFolderPayload(geoTagFolder),
+      excelSheetFolder: toFolderPayload(excelSheetFolder),
+    };
+  }
+
+  return {
+    ...trainerHierarchy,
+    collegeFolder: toFolderPayload(collegeFolder),
+    dayFoldersByDayNumber,
+  };
+};
+
 module.exports = {
   TRAINER_REGISTRATION_FOLDER_NAME,
   TRAINER_DOCUMENTS_SUBFOLDER_NAME,
   ensureTrainerDocumentHierarchy,
+  ensureTrainerCollegeHierarchy,
 };

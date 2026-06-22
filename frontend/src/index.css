@@ -168,37 +168,61 @@ a:focus-visible {
 
 :root {
   --radius: 0.625rem;
-  --background: #f8f3ed;
-  --foreground: #1f2937;
+  --background: #f5f3ff;
+  --foreground: #1e1b4b;
   --card: #ffffff;
-  --card-foreground: #1f2937;
+  --card-foreground: #1e1b4b;
   --popover: #ffffff;
-  --popover-foreground: #1f2937;
-  --primary: #f97316;
+  --popover-foreground: #1e1b4b;
+  --primary: #6366f1;
   --primary-foreground: #ffffff;
-  --secondary: #6b7280;
+  --secondary: #8b5cf6;
   --secondary-foreground: #ffffff;
-  --muted: #f3f4f6;
-  --muted-foreground: #52525b;
-  --accent: #fb923c;
+  --muted: #eef2ff;
+  --muted-foreground: #4338ca;
+  --accent: #818cf8;
   --accent-foreground: #ffffff;
-  --destructive: #dc2626;
-  --border: #d1d5db;
-  --input: #e5e7eb;
-  --ring: #f97316;
-  --chart-1: oklch(0.646 0.222 41.116);
+  --destructive: #ef4444;
+  --border: #c7d2fe;
+  --input: #e0e7ff;
+  --ring: #6366f1;
+  --chart-1: oklch(0.646 0.222 264.376);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #fefefe;
+  --sidebar-foreground: #1e1b4b;
+  --sidebar-primary: #4338ca;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2ff;
+  --sidebar-accent-foreground: #312e81;
+  --sidebar-border: #e0e7ff;
+  --sidebar-ring: #6366f1;
+}
+
+/* Dropdown slide-down animation for ScheduleFilterPanel */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Subtle fade-in for cards */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dark {

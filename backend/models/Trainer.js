@@ -218,6 +218,14 @@ const trainerSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    collegeDriveFolderId: {
+      type: String,
+      default: null,
+    },
+    collegeDriveFolderName: {
+      type: String,
+      default: null,
+    },
     profilePicture: {
       type: String, // Maps from selfiePhoto on approval
       default: null,

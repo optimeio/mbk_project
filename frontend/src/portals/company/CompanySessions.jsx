@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 import PortalLoadingState from "@/components/common/PortalLoadingState";
 import { usePortalRoleGuard } from "@/hooks/usePortalRoleGuard";
 import { companyPortalService } from "@/services/companyPortalService";
+import { getTrainingColleges } from "@/services/trainingCollegeService";
+import { getTrainingCourses } from "@/services/courseService";
+import ScheduleFilterPanel from "@/components/common/ScheduleFilterPanel";
 import {
   clearTrainerDashboardScheduleSummaryCache,
   clearTrainerDashboardSnapshot,
@@ -25,6 +28,12 @@ export default function CompanySessions() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [processingScheduleId, setProcessingScheduleId] = useState(null);
+
+  // Filter states
+  const [filters, setFilters] = useState({ trainer: "", college: "", course: "" });
+  const [trainers, setTrainers] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [courses, setCourses] = useState([]);
 
   useEffect(() => {
     if (!allowed) return undefined;
@@ -52,6 +61,121 @@ export default function CompanySessions() {
       cancelled = true;
     };
   }, [allowed]);
+
+  useEffect(() => {
+    if (!allowed) return undefined;
+
+    let cancelled = false;
+    const loadFiltersData = async () => {
+      try {
+        const [trainersRes, collegesRes, coursesRes, staticCollegesData, staticCoursesData] = await Promise.all([
+          companyPortalService.getTrainers().catch(() => ({ success: false, data: [] })),
+          companyPortalService.getColleges().catch(() => ({ success: false, data: [] })),
+          companyPortalService.getCourses().catch(() => ({ success: false, data: [] })),
+          getTrainingColleges().catch(() => []),
+          getTrainingCourses().catch(() => [])
+        ]);
+
+        if (cancelled) return;
+
+        const dbTrainers = trainersRes.success ? (trainersRes.data || []) : [];
+        const dbColleges = collegesRes.success ? (collegesRes.data || []) : [];
+        const dbCourses = coursesRes.success ? (coursesRes.data || []) : [];
+
+        // Map trainers
+        const mappedTrainers = dbTrainers.map((t) => ({
+          id: t._id || t.id,
+          _id: t._id || t.id,
+          name: t.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Unknown',
+          firstName: t.firstName || '',
+          lastName: t.lastName || '',
+          specialization: t.specialization || '',
+        }));
+        setTrainers(mappedTrainers);
+
+        // Merge colleges
+        const seenColleges = new Set();
+        const mergedColleges = [];
+        dbColleges.forEach((c) => {
+          const nameKey = String(c.name || '').trim().toLowerCase();
+          if (nameKey) {
+            seenColleges.add(nameKey);
+            mergedColleges.push({
+              id: c._id || c.id,
+              _id: c._id || c.id,
+              name: c.name,
+              city: c.city || '',
+              state: c.state || 'Tamil Nadu'
+            });
+          }
+        });
+        (staticCollegesData || []).forEach((c) => {
+          const nameKey = String(c.name || '').trim().toLowerCase();
+          if (!seenColleges.has(nameKey)) {
+            seenColleges.add(nameKey);
+            mergedColleges.push(c);
+          }
+        });
+        setColleges(mergedColleges);
+
+        // Merge courses
+        const seenCourses = new Set();
+        const mergedCourses = [];
+        dbCourses.forEach((c) => {
+          const nameKey = String(c.name || c.title || '').trim().toLowerCase();
+          if (nameKey) {
+            seenCourses.add(nameKey);
+            mergedCourses.push({
+              id: c._id || c.id,
+              _id: c._id || c.id,
+              name: c.name || c.title,
+              category: c.category || ''
+            });
+          }
+        });
+        (staticCoursesData || []).forEach((c) => {
+          const nameKey = String(c.name || '').trim().toLowerCase();
+          if (!seenCourses.has(nameKey)) {
+            seenCourses.add(nameKey);
+            mergedCourses.push(c);
+          }
+        });
+        setCourses(mergedCourses);
+
+      } catch (err) {
+        console.error("Failed to load company portal filters data:", err);
+      }
+    };
+
+    loadFiltersData();
+    return () => {
+      cancelled = true;
+    };
+  }, [allowed]);
+
+  // Apply filters to sessions
+  const filteredSessions = useMemo(() => {
+    let result = sessions;
+    if (filters.trainer) {
+      result = result.filter((s) => {
+        const trainerId = s.trainerId?._id || s.trainerId?.id || s.trainerId || '';
+        return String(trainerId) === String(filters.trainer);
+      });
+    }
+    if (filters.college) {
+      result = result.filter((s) => {
+        const collegeId = s.collegeId?._id || s.collegeId?.id || s.collegeId || '';
+        return String(collegeId) === String(filters.college);
+      });
+    }
+    if (filters.course) {
+      result = result.filter((s) => {
+        const courseId = s.courseId?._id || s.courseId?.id || s.courseId || '';
+        return String(courseId) === String(filters.course);
+      });
+    }
+    return result;
+  }, [sessions, filters]);
 
   const handleDeleteSchedule = async (session) => {
     const scheduleId = session?._id;
@@ -168,6 +292,14 @@ export default function CompanySessions() {
         <p className="mt-1 text-slate-600">All scheduled and completed training sessions for your company.</p>
       </div>
 
+      <ScheduleFilterPanel
+        trainers={trainers}
+        colleges={colleges}
+        courses={courses}
+        onFilterChange={setFilters}
+        isOpen={true}
+      />
+
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       ) : null}
@@ -191,7 +323,7 @@ export default function CompanySessions() {
               </tr>
             </thead>
             <tbody>
-              {sessions.map((session) => (
+              {filteredSessions.map((session) => (
                 <tr key={session._id} className="border-t border-slate-100">
                   <td className="px-4 py-3">{formatDate(session.scheduledDate)}</td>
                   <td className="px-4 py-3">{session.collegeId?.name || "—"}</td>
@@ -233,7 +365,7 @@ export default function CompanySessions() {
             </tbody>
           </table>
         </div>
-        {!loading && sessions.length === 0 ? (
+        {!loading && filteredSessions.length === 0 ? (
           <p className="p-6 text-center text-sm text-slate-500">No training sessions found.</p>
         ) : null}
       </div>

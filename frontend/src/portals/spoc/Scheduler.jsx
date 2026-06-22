@@ -7,6 +7,9 @@ import { useSchedulerData } from '@/modules/schedules';
 import { notify } from '@/lib/toast';
 import { runOnIdle } from '@/shared/lib/mainThread';
 import { clearTrainerDashboardScheduleSummaryCache, clearTrainerDashboardSnapshot, signalTrainerDashboardRefresh } from '@/portals/trainer/dashboard/dashboardUtils';
+import ScheduleFilterPanel from '@/components/common/ScheduleFilterPanel';
+import { getTrainingColleges } from '@/services/trainingCollegeService';
+import { getTrainingCourses } from '@/services/courseService';
 import SchedulerAssignModalSection from './scheduler/SchedulerAssignModalSection';
 import SchedulerHeaderActions from './scheduler/SchedulerHeaderActions';
 import SchedulerCalendarSection from './scheduler/SchedulerCalendarSection';
@@ -82,12 +85,20 @@ const Scheduler = () => {
         endTime: '17:00',
             rescheduleReason: ''
     });
+
+    // Schedule filter state
+    const [scheduleFilters, setScheduleFilters] = useState({ trainer: '', college: '', course: '' });
+    const [staticColleges, setStaticColleges] = useState([]);
+    const [staticCourses, setStaticCourses] = useState([]);
+
     const shouldLoadInteractiveData = viewMode !== 'dashboard' || assignModal.show;
     const {
         schedulesQuery,
         schedules,
         schedulesPagination,
         trainers,
+        colleges: dbColleges,
+        courses: dbCourses,
         liveSchedules,
         lastUpdated,
         loading,
@@ -100,6 +111,142 @@ const Scheduler = () => {
         trainerSearch,
         shouldLoadInteractiveData,
     });
+
+    // Fetch Tamil Nadu colleges and training courses for filter panel
+    React.useEffect(() => {
+        let cancelled = false;
+        const loadFilterData = async () => {
+            try {
+                const [collegesData, coursesData] = await Promise.all([
+                    getTrainingColleges(),
+                    getTrainingCourses(),
+                ]);
+                if (!cancelled) {
+                    setStaticColleges(collegesData || []);
+                    setStaticCourses(coursesData || []);
+                }
+            } catch (err) {
+                console.error('Failed to load filter data:', err);
+            }
+        };
+        loadFilterData();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Merge database colleges with static Tamil Nadu colleges to ensure complete listing
+    const filterColleges = useMemo(() => {
+        const dbList = dbColleges || [];
+        const staticList = staticColleges || [];
+        const seen = new Set();
+        const result = [];
+        
+        dbList.forEach(c => {
+            const nameKey = String(c.name || '').trim().toLowerCase();
+            if (nameKey) {
+                seen.add(nameKey);
+                result.push({
+                    id: c.id || c._id,
+                    _id: c.id || c._id,
+                    name: c.name,
+                    city: c.city || '',
+                    state: c.state || 'Tamil Nadu'
+                });
+            }
+        });
+        
+        staticList.forEach(c => {
+            const nameKey = String(c.name || '').trim().toLowerCase();
+            if (!seen.has(nameKey)) {
+                seen.add(nameKey);
+                result.push({
+                    id: c.id || c._id,
+                    _id: c.id || c._id,
+                    name: c.name,
+                    city: c.city || '',
+                    state: c.state || 'Tamil Nadu'
+                });
+            }
+        });
+        
+        return result;
+    }, [dbColleges, staticColleges]);
+
+    // Merge database courses with static courses
+    const filterCourses = useMemo(() => {
+        const dbList = dbCourses || [];
+        const staticList = staticCourses || [];
+        const seen = new Set();
+        const result = [];
+        
+        dbList.forEach(c => {
+            const nameKey = String(c.name || c.title || '').trim().toLowerCase();
+            if (nameKey) {
+                seen.add(nameKey);
+                result.push({
+                    id: c.id || c._id,
+                    _id: c.id || c._id,
+                    name: c.name || c.title,
+                    category: c.category || ''
+                });
+            }
+        });
+        
+        staticList.forEach(c => {
+            const nameKey = String(c.name || '').trim().toLowerCase();
+            if (!seen.has(nameKey)) {
+                seen.add(nameKey);
+                result.push({
+                    id: c.id || c._id,
+                    _id: c.id || c._id,
+                    name: c.name,
+                    category: c.category || ''
+                });
+            }
+        });
+        
+        return result;
+    }, [dbCourses, staticCourses]);
+
+    // Map trainers for filter dropdown format
+    const filterTrainers = useMemo(() => {
+        if (!Array.isArray(trainers)) return [];
+        return trainers.map((t) => ({
+            id: t._id || t.id,
+            _id: t._id || t.id,
+            name: t.userId?.name || t.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Unknown',
+            firstName: t.firstName || '',
+            lastName: t.lastName || '',
+            specialization: t.specialization || '',
+        }));
+    }, [trainers]);
+
+    // Apply filters to schedules
+    const filteredSchedules = useMemo(() => {
+        let result = schedules;
+        if (scheduleFilters.trainer) {
+            result = result.filter((s) => {
+                const trainerId = s.trainerId?._id || s.trainerId?.id || s.trainerId || '';
+                return String(trainerId) === String(scheduleFilters.trainer);
+            });
+        }
+        if (scheduleFilters.college) {
+            result = result.filter((s) => {
+                const collegeId = s.collegeId?._id || s.collegeId?.id || s.collegeId || '';
+                return String(collegeId) === String(scheduleFilters.college);
+            });
+        }
+        if (scheduleFilters.course) {
+            result = result.filter((s) => {
+                const courseId = s.courseId?._id || s.courseId?.id || s.courseId || '';
+                return String(courseId) === String(scheduleFilters.course);
+            });
+        }
+        return result;
+    }, [schedules, scheduleFilters]);
+
+    const handleScheduleFilterChange = useCallback((newFilters) => {
+        setScheduleFilters(newFilters);
+    }, []);
 
     const handleAssign = useCallback(async (e) => {
         e.preventDefault();
@@ -160,9 +307,9 @@ const Scheduler = () => {
     }, []);
 
 
-    // ✅ Memoized — only recomputed when schedules changes
+    // ✅ Memoized — only recomputed when filteredSchedules changes
     const calendarEvents = useMemo(() =>
-        schedules
+        filteredSchedules
             .filter(s => s.scheduledDate)
             .map(s => ({
                 id: s.id || s._id,
@@ -173,7 +320,7 @@ const Scheduler = () => {
                 borderColor: 'transparent',
                 extendedProps: s
             }))
-    , [schedules]);
+    , [filteredSchedules]);
 
     const exportDateSuffix = useMemo(
         () => new Date().toLocaleDateString('en-GB').replace(/\//g, '-'),
@@ -209,7 +356,7 @@ const Scheduler = () => {
     }, [exportDateSuffix, liveSchedules, transformLivePdf]);
 
     const handleExportListExcel = useCallback(async () => {
-        const exportRows = await transformListExcel(schedules);
+        const exportRows = await transformListExcel(filteredSchedules);
         const XLSX = await getXlsx();
         const ws = XLSX.utils.json_to_sheet(exportRows);
         const wb = XLSX.utils.book_new();
@@ -217,14 +364,14 @@ const Scheduler = () => {
         runOnIdle(() => {
             XLSX.writeFile(wb, `Training_Itinerary_${exportDateSuffix}.xlsx`);
         });
-    }, [exportDateSuffix, schedules, transformListExcel]);
+    }, [exportDateSuffix, filteredSchedules, transformListExcel]);
 
     const handleExportListPdf = useCallback(async () => {
-        const tableRows = await transformListPdf(schedules);
+        const tableRows = await transformListPdf(filteredSchedules);
         const { jsPDF, autoTable } = await getPdfTools();
         const doc = new jsPDF();
         doc.text('Training Itinerary', 14, 15);
-        doc.text(`Total Sessions: ${schedules.length}`, 14, 22);
+        doc.text(`Total Sessions: ${filteredSchedules.length}`, 14, 22);
 
         const tableColumn = ['College', 'Course', 'Date', 'Time', 'Trainer', 'Trainer ID', 'Status'];
         autoTable(doc, {
@@ -235,7 +382,7 @@ const Scheduler = () => {
         runOnIdle(() => {
             doc.save(`Training_Itinerary_${exportDateSuffix}.pdf`);
         });
-    }, [exportDateSuffix, schedules, transformListPdf]);
+    }, [exportDateSuffix, filteredSchedules, transformListPdf]);
 
     const openBulkModal = useCallback(() => {
         setBulkModal(true);
@@ -279,6 +426,16 @@ const Scheduler = () => {
             <SchedulerHeaderActions onOpenBulkModal={openBulkModal} />
 
             <div className="mt-8">
+                {/* Schedule Filter Panel - visible on list and calendar views */}
+                {viewMode !== 'dashboard' && (
+                    <ScheduleFilterPanel
+                        trainers={filterTrainers}
+                        colleges={filterColleges}
+                        courses={filterCourses}
+                        onFilterChange={handleScheduleFilterChange}
+                        isOpen={true}
+                    />
+                )}
 
                 <div className="w-full">
                     {loading ? (
@@ -286,7 +443,7 @@ const Scheduler = () => {
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
                             <p className="mt-4 text-gray-500">Loading schedules...</p>
                         </div>
-                    ) : (viewMode === 'dashboard' ? true : schedules.length > 0) ? (
+                    ) : (viewMode === 'dashboard' ? true : filteredSchedules.length > 0) ? (
                         <>
                             {viewMode === 'dashboard' ? (
                                 <SchedulerDashboardSection
@@ -297,7 +454,7 @@ const Scheduler = () => {
                                 />
                             ) : viewMode === 'list' ? (
                                 <SchedulerListSection
-                                    schedules={schedules}
+                                    schedules={filteredSchedules}
                                     schedulesPagination={schedulesPagination}
                                     hasNextPage={schedulesQuery.hasNextPage}
                                     isFetchingNextPage={schedulesQuery.isFetchingNextPage}
@@ -320,9 +477,14 @@ const Scheduler = () => {
                             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
                                 <CalendarIcon className="w-10 h-10 text-slate-300" />
                             </div>
-                            <h3 className="text-xl font-bold text-gray-900">No Schedules Found</h3>
+                            <h3 className="text-xl font-bold text-gray-900">
+                                {schedules.length > 0 ? 'No Schedules Match Filters' : 'No Schedules Found'}
+                            </h3>
                             <p className="text-gray-500 max-w-sm mx-auto mt-2 italic">
-                                There are currently no training schedules assigned in the system. Use the "Add Activity" or "Bulk Assign" buttons to get started.
+                                {schedules.length > 0
+                                    ? 'Try adjusting the filter criteria above to see more schedules.'
+                                    : 'There are currently no training schedules assigned in the system. Use the "Add Activity" or "Bulk Assign" buttons to get started.'
+                                }
                             </p>
                         </div>
                     )}

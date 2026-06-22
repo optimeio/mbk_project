@@ -42,7 +42,7 @@ const getFolderLink = (folderId) =>
 
 const sanitizeFileName = (value = "document") =>
   String(value)
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .replace(/[^a-zA-Z0-9._\s-]+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "") || "document";
 

@@ -45,7 +45,7 @@ const connectToDatabase = async () => {
   const connectOptions = {
     serverSelectionTimeoutMS: 5000,
     connectTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
+    socketTimeoutMS: 15000,  // REDUCED from 45s to prevent long hangs
     maxPoolSize: 100,             // 100 per replica × 2 replicas = 200 total
     minPoolSize: 10,              // Keep 10 warm connections
     maxIdleTimeMS: 30000,         // Close idle connections after 30s

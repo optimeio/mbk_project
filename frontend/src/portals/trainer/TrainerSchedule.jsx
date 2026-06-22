@@ -1,15 +1,18 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { App as AntdApp } from 'antd';
 
 import { CalendarDaysIcon, ListBulletIcon } from '@heroicons/react/24/outline';
 import scheduleService from '@/services/scheduleService';
-import { getTrainerProfile } from '@/services/trainerService';
+import { getTrainerProfile, fetchTrainersPage } from '@/services/trainerService';
+import { getTrainingColleges } from '@/services/trainingCollegeService';
+import { getTrainingCourses } from '@/services/courseService';
 import { api } from '@/services/api';
 import { getSecureImageUrl } from '@/utils/imageUtils';
 import { formatGeoValidationSourceLabel } from '@/components/common/GeoVerificationReportCard';
 import { useAuth } from '@/context/AuthContext';
+import ScheduleFilterPanel from '@/components/common/ScheduleFilterPanel';
 
 import MobileTrainerLayout from '@/app/layouts/MobileTrainerLayout';
 import PendingActionsPanel from './TrainerSchedule/PendingActionsPanel';
@@ -525,6 +528,13 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
     const [pendingSchedules, setPendingSchedules] = useState([]);
     const [hasHydratedScheduleSnapshot, setHasHydratedScheduleSnapshot] = useState(false);
 
+    // Filter states
+    const [filters, setFilters] = useState({ trainer: '', college: '', course: '' });
+    const [trainers, setTrainers] = useState([]);
+    const [staticColleges, setStaticColleges] = useState([]);
+    const [staticCourses, setStaticCourses] = useState([]);
+    const [filteredSchedules, setFilteredSchedules] = useState([]);
+
     // Attendance submission modal
     const [showCheckInModal, setShowCheckInModal] = useState(false);
     const [showCheckOutModal, setShowCheckOutModal] = useState(false);
@@ -797,6 +807,170 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
             setCurrentTrainerId(authTrainerId);
         }
     }, [authTrainerId, currentTrainerId]);
+
+    // Fetch colleges and courses for filter
+    useEffect(() => {
+        const fetchFilterData = async () => {
+            try {
+                const collegesData = await getTrainingColleges();
+                const coursesData = await getTrainingCourses();
+                setStaticColleges(collegesData || []);
+                setStaticCourses(coursesData || []);
+            } catch (err) {
+                console.error('Failed to fetch filter data:', err);
+            }
+        };
+        fetchFilterData();
+    }, []);
+
+    // Merge static colleges/courses with actual scheduled colleges/courses
+    const colleges = useMemo(() => {
+        const seen = new Set();
+        const result = [];
+
+        // 1. Add colleges from schedules
+        (schedules || []).forEach((s) => {
+            const college = s.collegeId || s.college;
+            if (college && college.name) {
+                const nameKey = String(college.name).trim().toLowerCase();
+                if (!seen.has(nameKey)) {
+                    seen.add(nameKey);
+                    result.push({
+                        id: college._id || college.id,
+                        _id: college._id || college.id,
+                        name: college.name,
+                        city: college.city || '',
+                        state: college.state || 'Tamil Nadu'
+                    });
+                }
+            }
+        });
+
+        // 2. Add static colleges
+        (staticColleges || []).forEach((c) => {
+            const nameKey = String(c.name).trim().toLowerCase();
+            if (!seen.has(nameKey)) {
+                seen.add(nameKey);
+                result.push(c);
+            }
+        });
+
+        return result;
+    }, [schedules, staticColleges]);
+
+    const courses = useMemo(() => {
+        const seen = new Set();
+        const result = [];
+
+        // 1. Add courses from schedules
+        (schedules || []).forEach((s) => {
+            const course = s.courseId || s.course;
+            if (course && (course.name || course.title)) {
+                const name = course.name || course.title;
+                const nameKey = String(name).trim().toLowerCase();
+                if (!seen.has(nameKey)) {
+                    seen.add(nameKey);
+                    result.push({
+                        id: course._id || course.id,
+                        _id: course._id || course.id,
+                        name: name,
+                        category: course.category || ''
+                    });
+                }
+            }
+        });
+
+        // 2. Add static courses
+        (staticCourses || []).forEach((c) => {
+            const nameKey = String(c.name).trim().toLowerCase();
+            if (!seen.has(nameKey)) {
+                seen.add(nameKey);
+                result.push(c);
+            }
+        });
+
+        return result;
+    }, [schedules, staticCourses]);
+
+    // Fetch all trainers for filter dropdown (auto-updates when new trainers register)
+    useEffect(() => {
+        let cancelled = false;
+        const fetchAllTrainers = async () => {
+            try {
+                const response = await fetchTrainersPage({ page: 1, limit: 250 });
+                if (cancelled) return;
+                const trainerRows = Array.isArray(response?.data) ? response.data : [];
+                // Map trainer data to format expected by ScheduleFilterPanel
+                const mappedTrainers = trainerRows.map((t) => ({
+                    id: t._id || t.id,
+                    _id: t._id || t.id,
+                    name: t.userId?.name || t.name || `${t.firstName || ''} ${t.lastName || ''}`.trim() || 'Unknown',
+                    firstName: t.firstName || t.userId?.name?.split(' ')[0] || '',
+                    lastName: t.lastName || '',
+                    specialization: t.specialization || '',
+                }));
+                // Always include current user as first option if they have an ID
+                if (authTrainerId) {
+                    const alreadyIncluded = mappedTrainers.some(
+                        (t) => String(t.id) === String(authTrainerId) || String(t._id) === String(authTrainerId)
+                    );
+                    if (!alreadyIncluded) {
+                        mappedTrainers.unshift({
+                            id: authTrainerId,
+                            _id: authTrainerId,
+                            name: `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'My Sessions',
+                            firstName: currentUser?.firstName || '',
+                            lastName: currentUser?.lastName || '',
+                        });
+                    }
+                }
+                setTrainers(mappedTrainers);
+            } catch (err) {
+                console.error('Failed to fetch trainers:', err);
+                // Fallback to current user only
+                if (!cancelled && authTrainerId) {
+                    setTrainers([{
+                        id: authTrainerId,
+                        _id: authTrainerId,
+                        name: `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'My Sessions',
+                        firstName: currentUser?.firstName || '',
+                        lastName: currentUser?.lastName || '',
+                    }]);
+                }
+            }
+        };
+        fetchAllTrainers();
+        return () => { cancelled = true; };
+    }, [currentUser, authTrainerId]);
+
+    // Filter schedules based on selected filters
+    useEffect(() => {
+        let filtered = schedules;
+
+        if (filters.college) {
+            filtered = filtered.filter(
+                (schedule) => String(schedule.collegeId || schedule.college?.id) === String(filters.college)
+            );
+        }
+
+        if (filters.course) {
+            filtered = filtered.filter(
+                (schedule) => String(schedule.courseId || schedule.course?.id) === String(filters.course)
+            );
+        }
+
+        if (filters.trainer) {
+            filtered = filtered.filter(
+                (schedule) => String(schedule.trainerId || schedule.trainer?.id) === String(filters.trainer)
+            );
+        }
+
+        setFilteredSchedules(filtered);
+    }, [schedules, filters]);
+
+    const handleFilterChange = (newFilters) => {
+        setFilters(newFilters);
+    };
 
     useEffect(() => {
         if (!initialSelectedMonth) {
@@ -1939,6 +2113,15 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                 </div>
             </div>
 
+            {/* Schedule Filter Panel */}
+            <ScheduleFilterPanel
+                trainers={trainers}
+                colleges={colleges}
+                courses={courses}
+                onFilterChange={handleFilterChange}
+                isOpen={true}
+            />
+
             {/* List View */}
             {view === 'list' && (
                 <div className="space-y-6">
@@ -1947,23 +2130,35 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                         onOpenCheckIn={openCheckInModal}
                         onOpenCheckOut={openCheckOutModal}
                     />
-                    <ScheduleList
-                        schedules={schedules}
-                        onOpenCheckIn={openCheckInModal}
-                        onOpenCheckOut={openCheckOutModal}
-                        onDelete={handleDelete}
-                    />
+                    {filteredSchedules.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                            {schedules.length === 0 ? 'No schedules found' : 'No schedules match the selected filters'}
+                        </div>
+                    ) : (
+                        <ScheduleList
+                            schedules={filteredSchedules}
+                            onOpenCheckIn={openCheckInModal}
+                            onOpenCheckOut={openCheckOutModal}
+                            onDelete={handleDelete}
+                        />
+                    )}
                 </div>
             )}
 
             {/* Calendar View */}
             {view === 'calendar' && (
-                <ScheduleCalendarView
-                    schedules={schedules}
-                    selectedMonth={selectedMonth}
-                    onOpenCheckIn={openCheckInModal}
-                    onOpenCheckOut={openCheckOutModal}
-                />
+                filteredSchedules.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                        {schedules.length === 0 ? 'No schedules found' : 'No schedules match the selected filters'}
+                    </div>
+                ) : (
+                    <ScheduleCalendarView
+                        schedules={filteredSchedules}
+                        selectedMonth={selectedMonth}
+                        onOpenCheckIn={openCheckInModal}
+                        onOpenCheckOut={openCheckOutModal}
+                    />
+                )
             )}
 
             {showCheckInModal && selectedSchedule && (

@@ -26,4 +26,6 @@ module.exports = {
   // Trainer-document hierarchy helpers
   ensureTrainerDocumentHierarchy:
     driveTrainerDocumentsService.ensureTrainerDocumentHierarchy,
+  ensureTrainerCollegeHierarchy:
+    driveTrainerDocumentsService.ensureTrainerCollegeHierarchy,
 };

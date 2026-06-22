@@ -20,7 +20,8 @@ const shouldRetryQuery = (failureCount, error) => {
     return false;
   }
 
-  return failureCount < 1;
+  // INCREASED: Retry up to 3 times (was 1) with exponential backoff
+  return failureCount < 3;
 };
 
 const createQueryClient = () =>

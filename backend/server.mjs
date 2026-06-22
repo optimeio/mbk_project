@@ -15,6 +15,7 @@ import rateLimiter from "./middleware/rateLimiter.js";
 import requestLogger from "./middleware/requestLogger.js";
 import healthCheck from "./middleware/healthCheck.js";
 import routes from "./routes/index.mjs";
+import globalErrorHandler from "./middleware/globalErrorHandler.js";
 import { createRequire } from "module";
 import { connectToDatabase } from './config/database.mjs';
 import socketManager from './services/socketManager.mjs';
@@ -244,8 +245,11 @@ app.use("/api", routes);
 // Root
 app.get("/", (req, res) => res.send("MBK API is running..."));
 
-// Global error handler — delegates to errorTracker for structured logging + alerting
+// Global error tracker
 app.use(errorTracker);
+
+// Global error handler — final middleware to catch all errors
+app.use(globalErrorHandler);
 
 
 

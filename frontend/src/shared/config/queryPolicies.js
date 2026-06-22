@@ -1,7 +1,7 @@
 export const QUERY_STALE_TIMES = Object.freeze({
   DASHBOARD_STATS: 30_000,
   HIGH_CHURN_LIST: 60_000,
-  MASTER_DATA: 10 * 60_000,
+  MASTER_DATA: 3 * 60_000,  // REDUCED from 10min to 3min for fresher data
   DETAIL: 2 * 60_000,
   LIVE_VIEW: 20_000,
 });

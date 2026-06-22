@@ -88,8 +88,9 @@ const cache = (ttlSeconds = 60, options = {}) => {
           res.setHeader('Content-Type', contentType || 'application/json');
           return res.status(statusCode || 200).send(body);
         }
-      } catch (_err) {
-        // Redis read failure – fall through to origin
+      } catch (err) {
+        console.warn(`[CacheMiddleware] Redis read failed for key "${key}":`, err.message);
+        // Fall through to origin
       }
     }
 
@@ -130,7 +131,9 @@ const cache = (ttlSeconds = 60, options = {}) => {
           if (isAvailable()) {
             redis
               .set(key, JSON.stringify(payload), 'EX', ttlSeconds)
-              .catch(() => {});
+              .catch((err) => {
+                console.warn(`[CacheMiddleware] Redis write failed for key "${key}":`, err.message);
+              });
           }
 
           // Write to memory fallback

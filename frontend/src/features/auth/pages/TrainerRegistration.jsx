@@ -21,6 +21,8 @@ import {
   getNdaTemplate,
 } from "@/services/trainerService";
 import { getCities } from "@/services/cityService";
+import { getTrainingColleges } from "@/services/trainingCollegeService";
+import { getTrainingCourses } from "@/services/courseService";
 import {
   getDocumentImagePreviewCandidates,
   getImagePreviewUrl,
@@ -599,6 +601,10 @@ const buildStep2FormState = (email = "", regData = {}) => ({
   address: regData.address || "",
   specialization: regData.specialization || "",
   experience: regData.experience ?? "",
+  college: regData.college || "",
+  collegeId: regData.collegeId || "",
+  course: regData.course || "",
+  courseId: regData.courseId || "",
 });
 
 const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
@@ -606,6 +612,10 @@ const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cities, setCities] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [collegeSearch, setCollegeSearch] = useState("");
+  const [courseSearch, setCourseSearch] = useState("");
 
   useEffect(() => {
     const nextForm = buildStep2FormState(email, regData);
@@ -624,6 +634,32 @@ const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
       }
     };
     fetchCities();
+  }, []);
+
+  useEffect(() => {
+    const fetchColleges = async () => {
+      try {
+        const data = await getTrainingColleges();
+        setColleges(data || []);
+      } catch (err) {
+        console.error("Failed to fetch colleges:", err);
+        setColleges([]);
+      }
+    };
+    fetchColleges();
+  }, []);
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const data = await getTrainingCourses();
+        setCourses(data || []);
+      } catch (err) {
+        console.error("Failed to fetch courses:", err);
+        setCourses([]);
+      }
+    };
+    fetchCourses();
   }, []);
 
   useEffect(() => {
@@ -649,6 +685,52 @@ const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
     });
   }, [cities, form.cityId, onDraftChange]);
 
+  useEffect(() => {
+    if (!form.collegeId || colleges.length === 0) {
+      return;
+    }
+
+    setForm((prev) => {
+      if (prev.college) {
+        return prev;
+      }
+
+      const matchedCollege = colleges.find(
+        (college) => String(college.id) === String(prev.collegeId),
+      );
+      if (!matchedCollege) {
+        return prev;
+      }
+
+      const next = { ...prev, college: matchedCollege.name };
+      onDraftChange?.(next);
+      return next;
+    });
+  }, [colleges, form.collegeId, onDraftChange]);
+
+  useEffect(() => {
+    if (!form.courseId || courses.length === 0) {
+      return;
+    }
+
+    setForm((prev) => {
+      if (prev.course) {
+        return prev;
+      }
+
+      const matchedCourse = courses.find(
+        (course) => String(course.id) === String(prev.courseId),
+      );
+      if (!matchedCourse) {
+        return prev;
+      }
+
+      const next = { ...prev, course: matchedCourse.name };
+      onDraftChange?.(next);
+      return next;
+    });
+  }, [courses, form.courseId, onDraftChange]);
+
   const handleCityChange = (event) => {
     const cityName = event.target.value;
     const matchedCity = cities.find(
@@ -659,6 +741,36 @@ const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
       ...form,
       city: cityName,
       cityId: matchedCity?._id || "",
+    };
+    setForm(next);
+    onDraftChange?.(next);
+  };
+
+  const handleCollegeChange = (event) => {
+    const collegeName = event.target.value;
+    const matchedCollege = colleges.find(
+      (college) =>
+        String(college.name || "").trim().toLowerCase() === collegeName.trim().toLowerCase(),
+    );
+    const next = {
+      ...form,
+      college: collegeName,
+      collegeId: matchedCollege?.id || "",
+    };
+    setForm(next);
+    onDraftChange?.(next);
+  };
+
+  const handleCourseChange = (event) => {
+    const courseName = event.target.value;
+    const matchedCourse = courses.find(
+      (course) =>
+        String(course.name || "").trim().toLowerCase() === courseName.trim().toLowerCase(),
+    );
+    const next = {
+      ...form,
+      course: courseName,
+      courseId: matchedCourse?.id || "",
     };
     setForm(next);
     onDraftChange?.(next);
@@ -692,6 +804,15 @@ const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
     setForm(next);
     onDraftChange?.(next);
   };
+
+  const filteredColleges = colleges.filter((college) =>
+    college.name.toLowerCase().includes(collegeSearch.toLowerCase()) ||
+    college.city.toLowerCase().includes(collegeSearch.toLowerCase())
+  );
+
+  const filteredCourses = courses.filter((course) =>
+    course.name.toLowerCase().includes(courseSearch.toLowerCase())
+  );
 
   return (
     <div className="tr-form-wrapper">
@@ -755,6 +876,46 @@ const Step2 = ({ email, regData, onComplete, onBack, onDraftChange }) => {
             <datalist id="trainer-city-options">
               {cities.map((cityOption) => (
                 <option key={cityOption._id} value={cityOption.name} />
+              ))}
+            </datalist>
+          </div>
+        </div>
+        <div className="tr-field-row">
+          <div className="tr-field">
+            <label>College*</label>
+            <input
+              type="text"
+              list="trainer-college-options"
+              value={form.college}
+              onChange={(e) => {
+                setCollegeSearch(e.target.value);
+                handleCollegeChange(e);
+              }}
+              placeholder="Search and select a college"
+              required
+            />
+            <datalist id="trainer-college-options">
+              {filteredColleges.slice(0, 20).map((collegeOption) => (
+                <option key={collegeOption.id} value={collegeOption.name} />
+              ))}
+            </datalist>
+          </div>
+          <div className="tr-field">
+            <label>Course*</label>
+            <input
+              type="text"
+              list="trainer-course-options"
+              value={form.course}
+              onChange={(e) => {
+                setCourseSearch(e.target.value);
+                handleCourseChange(e);
+              }}
+              placeholder="Search and select a course"
+              required
+            />
+            <datalist id="trainer-course-options">
+              {filteredCourses.map((courseOption) => (
+                <option key={courseOption.id} value={courseOption.name} />
               ))}
             </datalist>
           </div>
