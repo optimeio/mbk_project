@@ -130,22 +130,16 @@
 }
 
 .table {
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-thead {
+.thead {
   background: #f7fafc;
   border-bottom: 2px solid #e2e8f0;
 }
 
-th {
+.th {
   padding: 1rem;
   text-align: left;
   font-weight: 600;
@@ -155,14 +149,18 @@ th {
   letter-spacing: 0.05em;
 }
 
-td {
+.td {
   padding: 1rem;
   border-bottom: 1px solid #e2e8f0;
   font-size: 0.95rem;
   color: #4a5568;
 }
 
-tbody tr:hover {
+.tbody {
+  display: table-row-group;
+}
+
+.tr:hover {
   background: #f7fafc;
 }
 
@@ -255,12 +253,12 @@ tbody tr:hover {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  table {
+  .table {
     font-size: 0.85rem;
   }
 
-  th,
-  td {
+  .th,
+  .td {
     padding: 0.75rem 0.5rem;
   }
 }

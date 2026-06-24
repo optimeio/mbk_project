@@ -171,54 +171,56 @@ export default function AdminDashboard() {
             </div>
           ) : null}
 
-          <div className={styles.table}>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th>Colleges</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trainers.map(trainer => (
-                <tr key={trainer._id}>
-                  <td>
-                    <strong>{trainer.firstName} {trainer.lastName}</strong>
-                  </td>
-                  <td>{trainer.email}</td>
-                  <td>{trainer.phone}</td>
-                  <td>
-                    <span className={`${styles.badge} ${styles[trainer.registrationStatus]}`}>
-                      {trainer.registrationStatus}
-                    </span>
-                  </td>
-                  <td>{trainer.colleges?.length || 0}</td>
-                  <td>
-                    <div className={styles.actions}>
-                      {trainer.registrationStatus === 'pending' && (
+          <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <table className={styles.table}>
+              <thead className={styles.thead}>
+                <tr className={styles.tr}>
+                  <th className={styles.th}>Name</th>
+                  <th className={styles.th}>Email</th>
+                  <th className={styles.th}>Phone</th>
+                  <th className={styles.th}>Status</th>
+                  <th className={styles.th}>Colleges</th>
+                  <th className={styles.th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className={styles.tbody}>
+                {trainers.map(trainer => (
+                  <tr key={trainer._id} className={styles.tr}>
+                    <td className={styles.td}>
+                      <strong>{trainer.firstName} {trainer.lastName}</strong>
+                    </td>
+                    <td className={styles.td}>{trainer.email}</td>
+                    <td className={styles.td}>{trainer.phone}</td>
+                    <td className={styles.td}>
+                      <span className={`${styles.badge} ${styles[trainer.registrationStatus]}`}>
+                        {trainer.registrationStatus}
+                      </span>
+                    </td>
+                    <td className={styles.td}>{trainer.colleges?.length || 0}</td>
+                    <td className={styles.td}>
+                      <div className={styles.actions}>
+                        {trainer.registrationStatus === 'pending' && (
+                          <CTAButton
+                            size="sm"
+                            variant="brand"
+                            onClick={() => handleApproveTrainer(trainer._id)}
+                          >
+                            Approve
+                          </CTAButton>
+                        )}
                         <CTAButton
                           size="sm"
-                          variant="brand"
-                          onClick={() => handleApproveTrainer(trainer._id)}
+                          variant="secondary"
+                          onClick={() => setSelectedTrainer(trainer)}
                         >
-                          Approve
+                          Assign
                         </CTAButton>
-                      )}
-                      <CTAButton
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setSelectedTrainer(trainer)}
-                      >
-                        Assign
-                      </CTAButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       )}
@@ -255,43 +257,45 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          <div className={styles.table}>
-            <thead>
-              <tr>
-                <th>Error Type</th>
-                <th>Severity</th>
-                <th>Message</th>
-                <th>Trainer</th>
-                <th>Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {errorLogs.map(error => (
-                <tr key={error._id} className={`${styles.errorRow} ${styles[error.severity]}`}>
-                  <td><strong>{error.errorType}</strong></td>
-                  <td>
-                    <span className={`${styles.severityBadge} ${styles[error.severity]}`}>
-                      {error.severity}
-                    </span>
-                  </td>
-                  <td className={styles.message}>{error.message}</td>
-                  <td>
-                    {error.trainerId?.firstName} {error.trainerId?.lastName}
-                  </td>
-                  <td>{new Date(error.createdAt).toLocaleDateString()}</td>
-                  <td>
-                    <CTAButton
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleResolveError(error._id, 'Resolved by admin')}
-                    >
-                      Resolve
-                    </CTAButton>
-                  </td>
+          <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <table className={styles.table}>
+              <thead className={styles.thead}>
+                <tr className={styles.tr}>
+                  <th className={styles.th}>Error Type</th>
+                  <th className={styles.th}>Severity</th>
+                  <th className={styles.th}>Message</th>
+                  <th className={styles.th}>Trainer</th>
+                  <th className={styles.th}>Date</th>
+                  <th className={styles.th}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody className={styles.tbody}>
+                {errorLogs.map(error => (
+                  <tr key={error._id} className={`${styles.tr} ${styles.errorRow} ${styles[error.severity]}`}>
+                    <td className={styles.td}><strong>{error.errorType}</strong></td>
+                    <td className={styles.td}>
+                      <span className={`${styles.severityBadge} ${styles[error.severity]}`}>
+                        {error.severity}
+                      </span>
+                    </td>
+                    <td className={`${styles.td} ${styles.message}`}>{error.message}</td>
+                    <td className={styles.td}>
+                      {error.trainerId?.firstName} {error.trainerId?.lastName}
+                    </td>
+                    <td className={styles.td}>{new Date(error.createdAt).toLocaleDateString()}</td>
+                    <td className={styles.td}>
+                      <CTAButton
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleResolveError(error._id, 'Resolved by admin')}
+                      >
+                        Resolve
+                      </CTAButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </section>
       )}

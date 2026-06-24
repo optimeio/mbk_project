@@ -68,6 +68,12 @@ const toDepartmentDayFolders = (dayFoldersByDayNumber = {}) =>
         geoTagFolderId: folderMeta?.geoTagFolder?.id || null,
         geoTagFolderName: folderMeta?.geoTagFolder?.name || null,
         geoTagFolderLink: folderMeta?.geoTagFolder?.link || null,
+        pptFolderId: folderMeta?.pptFolder?.id || null,
+        pptFolderName: folderMeta?.pptFolder?.name || null,
+        pptFolderLink: folderMeta?.pptFolder?.link || null,
+        videosFolderId: folderMeta?.videosFolder?.id || null,
+        videosFolderName: folderMeta?.videosFolder?.name || null,
+        videosFolderLink: folderMeta?.videosFolder?.link || null,
       };
     })
     .filter(Boolean)
@@ -79,13 +85,24 @@ const ensureDayFolderWithSubFolders = async ({ parentFolderId, dayNumber }) => {
     parentFolderId,
   });
 
+  // Create all required subfolders: attendance, geo_tag, ppt, videos
   const attendanceFolder = await ensureDriveFolder({
-    folderName: "Attendance",
+    folderName: "attendance",
     parentFolderId: dayFolder.id,
   });
 
   const geoTagFolder = await ensureDriveFolder({
-    folderName: "GeoTag",
+    folderName: "geo_tag",
+    parentFolderId: dayFolder.id,
+  });
+
+  const pptFolder = await ensureDriveFolder({
+    folderName: "ppt",
+    parentFolderId: dayFolder.id,
+  });
+
+  const videosFolder = await ensureDriveFolder({
+    folderName: "videos",
     parentFolderId: dayFolder.id,
   });
 
@@ -93,6 +110,8 @@ const ensureDayFolderWithSubFolders = async ({ parentFolderId, dayNumber }) => {
     ...toFolderPayload(dayFolder),
     attendanceFolder: toFolderPayload(attendanceFolder),
     geoTagFolder: toFolderPayload(geoTagFolder),
+    pptFolder: toFolderPayload(pptFolder),
+    videosFolder: toFolderPayload(videosFolder),
   };
 };
 

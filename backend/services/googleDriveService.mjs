@@ -94,16 +94,18 @@ export const createCollegeFolderStructure = async (trainerFolderId, collegeName)
       const dayFolderName = `day_${day}`;
       const dayFolder = await createFolder(dayFolderName, collegeFolder.id);
       
-      // Create sub-folders for each day
+      // Create sub-folders for each day: attendance, geo_tag, ppt, videos
       const attendanceFolder = await createFolder('attendance', dayFolder.id);
       const geoTagFolder = await createFolder('geo_tag', dayFolder.id);
-      const excelFolder = await createFolder('excel_sheet', dayFolder.id);
+      const pptFolder = await createFolder('ppt', dayFolder.id);
+      const videosFolder = await createFolder('videos', dayFolder.id);
       
       dayFolders[day] = {
         dayFolderId: dayFolder.id,
         attendance: attendanceFolder.id,
         geo_tag: geoTagFolder.id,
-        excel_sheet: excelFolder.id,
+        ppt: pptFolder.id,
+        videos: videosFolder.id,
       };
     }
 

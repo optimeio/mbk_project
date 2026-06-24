@@ -14,9 +14,15 @@ import {
 } from "lucide-react";
 
 import PortalLoadingState from "@/components/common/PortalLoadingState";
+import SearchableDropdown from "@/components/SearchableDropdown";
 import { usePortalRoleGuard } from "@/hooks/usePortalRoleGuard";
 import { companyPortalService } from "@/services/companyPortalService";
 import scheduleService from "@/services/scheduleService";
+import { TRAINING_COURSES, filterCourses } from "@/services/courseEnhancedService";
+import { 
+  filterColleges as filterCollegesFromList,
+  getAllColleges as getAllTamilNaduColleges 
+} from "@/services/tamilNaduCollegeService";
 
 const MetricCard = ({ label, value, icon: Icon, href }) => (
   <Link
@@ -104,17 +110,32 @@ export default function CompanyDashboard() {
   const loadDropdowns = useCallback(async () => {
     setDropdownsLoading(true);
     try {
-      const [trainerRes, collegeRes, courseRes] = await Promise.all([
+      const [trainerRes, collegeRes] = await Promise.all([
         companyPortalService.getTrainers().catch(() => null),
         companyPortalService.getColleges().catch(() => null),
-        companyPortalService.getCourses().catch(() => null),
       ]);
 
       if (trainerRes?.success) setTrainers(trainerRes.data || []);
-      if (collegeRes?.success) setColleges(collegeRes.data || []);
-      if (courseRes?.success) setCourses(courseRes.data || []);
+      
+      // Combine API colleges with Tamil Nadu colleges
+      const apiColleges = collegeRes?.data || [];
+      const combinedColleges = [
+        ...apiColleges,
+        ...getAllTamilNaduColleges()
+      ].reduce((acc, college, index) => {
+        // Remove duplicates by name
+        const isDuplicate = acc.some((c) => c.name?.toLowerCase() === college.name?.toLowerCase());
+        if (!isDuplicate) acc.push(college);
+        return acc;
+      }, []);
+      
+      setColleges(combinedColleges);
+      
+      // Use predefined courses (already comprehensive)
+      setCourses(TRAINING_COURSES);
     } catch {
-      /* silently ignore – user will see empty dropdowns */
+      // Fallback to predefined data if API fails
+      setCourses(TRAINING_COURSES);
     } finally {
       setDropdownsLoading(false);
     }
@@ -377,70 +398,60 @@ export default function CompanyDashboard() {
                 </div>
               ) : (
                 <>
-                  {/* Trainer */}
-                  <div>
-                    <label htmlFor="sched-trainer" className="mb-1 block text-sm font-medium text-slate-700">
-                      Trainer <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="sched-trainer"
-                      name="trainerId"
-                      value={scheduleForm.trainerId}
-                      onChange={handleScheduleChange}
-                      required
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">Select Trainer</option>
-                      {trainers.map((t) => (
-                        <option key={t._id || t.id} value={t._id || t.id}>
-                          {t.name || [t.firstName, t.lastName].filter(Boolean).join(" ")}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Trainer - Searchable Dropdown */}
+                  <SearchableDropdown
+                    label="Trainer"
+                    id="sched-trainer"
+                    placeholder="Search trainer by name..."
+                    options={trainers}
+                    value={scheduleForm.trainerId}
+                    onChange={(trainer) => setScheduleForm((prev) => ({ 
+                      ...prev, 
+                      trainerId: trainer?._id || trainer?.id || "" 
+                    }))}
+                    getOptionLabel={(trainer) => 
+                      trainer?.name || [trainer?.firstName, trainer?.lastName].filter(Boolean).join(" ")
+                    }
+                    getOptionValue={(trainer) => trainer?._id || trainer?.id}
+                    searchFields={["firstName", "lastName", "email"]}
+                    showSearch={true}
+                    error={scheduleError && scheduleForm.trainerId === "" ? "Trainer is required" : ""}
+                  />
 
-                  {/* College */}
-                  <div>
-                    <label htmlFor="sched-college" className="mb-1 block text-sm font-medium text-slate-700">
-                      College <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="sched-college"
-                      name="collegeId"
-                      value={scheduleForm.collegeId}
-                      onChange={handleScheduleChange}
-                      required
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">Select College</option>
-                      {colleges.map((c) => (
-                        <option key={c._id || c.id} value={c._id || c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* College - Searchable Dropdown */}
+                  <SearchableDropdown
+                    label="College"
+                    id="sched-college"
+                    placeholder="Search college by name or city..."
+                    options={colleges}
+                    value={scheduleForm.collegeId}
+                    onChange={(college) => setScheduleForm((prev) => ({ 
+                      ...prev, 
+                      collegeId: college?._id || college?.id || "" 
+                    }))}
+                    getOptionLabel={(college) => college?.name}
+                    getOptionValue={(college) => college?._id || college?.id}
+                    searchFields={["name", "city"]}
+                    showSearch={true}
+                    error={scheduleError && scheduleForm.collegeId === "" ? "College is required" : ""}
+                  />
 
-                  {/* Course */}
-                  <div>
-                    <label htmlFor="sched-course" className="mb-1 block text-sm font-medium text-slate-700">
-                      Course
-                    </label>
-                    <select
-                      id="sched-course"
-                      name="courseId"
-                      value={scheduleForm.courseId}
-                      onChange={handleScheduleChange}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">Select Course (optional)</option>
-                      {courses.map((c) => (
-                        <option key={c._id || c.id} value={c._id || c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Course - Searchable Dropdown */}
+                  <SearchableDropdown
+                    label="Course"
+                    id="sched-course"
+                    placeholder="Search course by name..."
+                    options={courses}
+                    value={scheduleForm.courseId}
+                    onChange={(course) => setScheduleForm((prev) => ({ 
+                      ...prev, 
+                      courseId: course?._id || course?.id || "" 
+                    }))}
+                    getOptionLabel={(course) => course?.name || course?.title}
+                    getOptionValue={(course) => course?._id || course?.id}
+                    searchFields={["name", "title", "description"]}
+                    showSearch={true}
+                  />
 
                   {/* Date */}
                   <div>
