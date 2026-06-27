@@ -98,10 +98,10 @@ const nextConfig = {
 
   // Note: headers() and rewrites() are not supported in static export.
   // Security headers are handled by .htaccess on Hostinger.
-  // API calls go directly to https://mbk-vgge.onrender.com via NEXT_PUBLIC_API_URL.
+  // API calls go directly to https://mbk-project-spf5.onrender.com via NEXT_PUBLIC_API_URL.
   env: {
     NEXT_PUBLIC_API_URL:
-      process.env.NEXT_PUBLIC_API_URL || "https://mbk-vgge.onrender.com",
+      process.env.NEXT_PUBLIC_API_URL || "https://mbk-project-spf5.onrender.com",
     NEXT_PUBLIC_API_TIMEOUT_MS:
       process.env.NEXT_PUBLIC_API_TIMEOUT_MS || "45000",
   },

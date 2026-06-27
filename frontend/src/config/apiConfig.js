@@ -4,7 +4,7 @@
  */
 
 const DEFAULT_DEV_API_ORIGIN = 'http://localhost:5005';
-export const PRODUCTION_API_ORIGIN = 'https://mbk-vgge.onrender.com';
+export const PRODUCTION_API_ORIGIN = 'https://mbk-project-spf5.onrender.com';
 
 const rawApiUrl = (
   process.env.NEXT_PUBLIC_API_URL ||
