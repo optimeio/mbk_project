@@ -32,8 +32,9 @@ export const resolveAuthErrorMessage = (error, fallback = AUTH_ERROR_MESSAGES.IN
   const status = Number(error?.status || error?.response?.status || 0);
   const data = error?.response?.data || error?.response || error?.data || {};
   const serverMessage = String(
-    error?.message ||
-      data?.message ||
+    data?.message ||
+      error?.response?.data?.message ||
+      error?.message ||
       error?.response?.message ||
       "",
   ).trim();
