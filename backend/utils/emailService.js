@@ -8,10 +8,12 @@ const smtpPass = process.env.EMAIL_PASS || process.env.SMTP_PASS || "cici ixth y
 let transporter;
 
 // Force explicit STARTTLS connection on port 587 for Gmail to bypass Render's port 465 blocks.
+// Force family: 4 (IPv4) to prevent IPv6 network unreachable errors.
 transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 587,
   secure: false, // Use STARTTLS
+  family: 4,     // Force IPv4 only
   auth: {
     user: smtpUser,
     pass: smtpPass,
