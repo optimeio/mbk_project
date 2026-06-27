@@ -1687,6 +1687,9 @@ const sendRegistrationOTP = async (userEmail, userName, otp) => {
     return httpResult;
   }
   if (httpResult && httpResult.success === false) {
+    if (canUseGmailApi()) {
+      return httpResult;
+    }
     console.warn(
       "[EMAIL] HTTP provider failed, falling back to SMTP:",
       httpResult.error,

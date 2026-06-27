@@ -10,14 +10,18 @@ const resolveGmailOAuthConfig = () => {
       process.env.GOOGLE_OAUTH_CLIENT_ID ||
       process.env.GOOGLE_CLIENT_ID ||
       "",
-  ).trim();
+  )
+    .trim()
+    .replace(/^["']|["']$/g, "");
   const clientSecret = String(
     process.env.GOOGLE_GMAIL_CLIENT_SECRET ||
       process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
       process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
       process.env.GOOGLE_CLIENT_SECRET ||
       "",
-  ).trim();
+  )
+    .trim()
+    .replace(/^["']|["']$/g, "");
   const refreshToken = String(
     process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
       process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
@@ -70,8 +74,11 @@ const getGmailOAuthDiagnostics = () => {
 
   return {
     configured: Boolean(config),
-    clientIdSuffix: config?.clientId ? config.clientId.slice(-16) : null,
+    clientIdMasked: config?.clientId
+      ? `${config.clientId.slice(0, 12)}...${config.clientId.slice(-28)}`
+      : null,
     hasClientSecret: Boolean(config?.clientSecret),
+    clientSecretLength: config?.clientSecret ? config.clientSecret.length : 0,
     hasRefreshToken: Boolean(config?.refreshToken),
     refreshTokenPrefix: config?.refreshToken ? config.refreshToken.slice(0, 8) : null,
     emailUser: resolveGmailSenderEmail() || null,

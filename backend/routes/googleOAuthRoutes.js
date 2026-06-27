@@ -10,13 +10,17 @@ const resolveOAuthConfig = () => {
       process.env.GOOGLE_OAUTH_CLIENT_ID ||
       process.env.GOOGLE_CLIENT_ID ||
       "",
-  ).trim();
+  )
+    .trim()
+    .replace(/^["']|["']$/g, "");
   const clientSecret = String(
     process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
       process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
       process.env.GOOGLE_CLIENT_SECRET ||
       "",
-  ).trim();
+  )
+    .trim()
+    .replace(/^["']|["']$/g, "");
   const backendUrl = String(
     process.env.BACKEND_URL || "https://mbk-project-spf5.onrender.com",
   )
@@ -211,6 +215,7 @@ router.get("/oauth2callback", async (req, res) => {
     const emailUser =
       String(process.env.EMAIL_USER || "mbkdrive82@gmail.com").trim() ||
       "mbkdrive82@gmail.com";
+    const { clientId } = createOAuthClient().config || {};
 
     if (!refreshToken) {
       return res.send(
@@ -236,9 +241,11 @@ router.get("/oauth2callback", async (req, res) => {
         bodyHtml: `
           <p class="ok">Success. Copy these into Render Environment:</p>
           <pre>GOOGLE_GMAIL_REFRESH_TOKEN=${refreshToken}
+GOOGLE_DRIVE_CLIENT_ID=${clientId || "(same client used for this token)"}
 EMAIL_USER=${emailUser}
 EMAIL_FROM="MBK Carrierz" &lt;${emailUser}&gt;
 GOOGLE_DRIVE_OAUTH_REDIRECT_URI=${config.redirectUri}</pre>
+          <p>Use the <strong>same</strong> Client ID + Secret on Render before saving the refresh token.</p>
           <p>Save Render env → wait 2 minutes → test:</p>
           <pre>${config.backendUrl}/api/health/email</pre>
           <p>Then try trainer signup OTP again.</p>
