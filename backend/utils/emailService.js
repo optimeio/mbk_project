@@ -1,6 +1,11 @@
 const nodemailer = require("nodemailer");
 const dns = require("dns");
 const welcomeEmailTemplate = require("./welcomeEmailTemplate");
+const {
+  canUseGmailApi,
+  sendEmailViaGmailApi,
+  validateGmailApiConfiguration,
+} = require("../services/gmailApiService");
 
 // Render/cloud hosts often lack working IPv6 routes to Gmail SMTP.
 dns.setDefaultResultOrder("ipv4first");
@@ -31,6 +36,9 @@ const getDefaultFromAddress = () =>
   process.env.EMAIL_FROM || `"MBK CarrierZ" <${smtpUser}>`;
 
 const getActiveHttpEmailProvider = () => {
+  if (canUseGmailApi()) {
+    return "gmail";
+  }
   if ((process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || "").trim()) {
     return "brevo";
   }
@@ -56,8 +64,21 @@ const parseFromAddress = (fromValue) => {
 };
 
 const sendEmailViaHttpApi = async ({ to, subject, html, text }) => {
+  if (canUseGmailApi()) {
+    const gmailResult = await sendEmailViaGmailApi({
+      to,
+      subject,
+      html,
+      text,
+      from: getDefaultFromAddress(),
+    });
+    if (gmailResult) {
+      return gmailResult;
+    }
+  }
+
   const provider = getActiveHttpEmailProvider();
-  if (!provider) {
+  if (!provider || provider === "gmail") {
     return null;
   }
 
@@ -312,10 +333,14 @@ const sendMailWithProfiles = async (mailOptions) => {
 };
 
 const validateEmailConfiguration = async () => {
+  if (canUseGmailApi()) {
+    return validateGmailApiConfiguration();
+  }
+
   const httpProvider = getActiveHttpEmailProvider();
   const from = getDefaultFromAddress();
 
-  if (httpProvider) {
+  if (httpProvider && httpProvider !== "gmail") {
     return {
       ok: true,
       deliveryMode: `${httpProvider}-api`,
@@ -338,7 +363,7 @@ const validateEmailConfiguration = async () => {
       ok: false,
       issues,
       hint:
-        "Render free tier blocks SMTP ports 465/587. Set BREVO_API_KEY (recommended) or upgrade Render to a paid plan.",
+        "Render free tier blocks SMTP ports 465/587. Use Gmail API: set GOOGLE_DRIVE_CLIENT_ID/SECRET + GOOGLE_GMAIL_REFRESH_TOKEN, or upgrade Render to paid for SMTP.",
     };
   }
 
@@ -1643,7 +1668,7 @@ const sendRegistrationOTP = async (userEmail, userName, otp) => {
     return {
       success: false,
       error:
-        "Email service is not configured. Set BREVO_API_KEY on Render (free tier) or SMTP on a paid plan.",
+        "Email service is not configured. Set Gmail API OAuth vars (GOOGLE_GMAIL_REFRESH_TOKEN) or SMTP on a paid Render plan.",
     };
   }
 
