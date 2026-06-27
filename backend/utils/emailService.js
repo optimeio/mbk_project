@@ -30,6 +30,124 @@ const getSmtpAuth = () => ({ user: smtpUser, pass: smtpPass });
 const getDefaultFromAddress = () =>
   process.env.EMAIL_FROM || `"MBK CarrierZ" <${smtpUser}>`;
 
+const getActiveHttpEmailProvider = () => {
+  if ((process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || "").trim()) {
+    return "brevo";
+  }
+  if ((process.env.RESEND_API_KEY || "").trim()) {
+    return "resend";
+  }
+  return null;
+};
+
+const parseFromAddress = (fromValue) => {
+  const raw = String(fromValue || getDefaultFromAddress() || smtpUser || "").trim();
+  const match = raw.match(/^(.+?)\s*<([^>]+)>$/);
+  if (match) {
+    return {
+      name: match[1].replace(/^["']|["']$/g, "").trim() || "MBK Carrierz",
+      email: match[2].trim(),
+    };
+  }
+  return {
+    name: "MBK Carrierz",
+    email: raw.replace(/^["']|["']$/g, ""),
+  };
+};
+
+const sendEmailViaHttpApi = async ({ to, subject, html, text }) => {
+  const provider = getActiveHttpEmailProvider();
+  if (!provider) {
+    return null;
+  }
+
+  const from = parseFromAddress(process.env.EMAIL_FROM);
+  if (!from.email) {
+    return {
+      success: false,
+      error: "EMAIL_FROM is not configured for HTTP email delivery.",
+      profile: `${provider}-api`,
+    };
+  }
+
+  try {
+    if (provider === "brevo") {
+      const apiKey = (
+        process.env.BREVO_API_KEY ||
+        process.env.SENDINBLUE_API_KEY ||
+        ""
+      ).trim();
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": apiKey,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name: from.name, email: from.email },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+          ...(text ? { textContent: text } : {}),
+        }),
+      });
+      const body = await response.text();
+      if (!response.ok) {
+        throw new Error(body || `Brevo API failed with status ${response.status}`);
+      }
+      let parsed = {};
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        parsed = {};
+      }
+      return {
+        success: true,
+        messageId: parsed.messageId || null,
+        profile: "brevo-api",
+      };
+    }
+
+    const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${from.name} <${from.email}>`,
+        to: [to],
+        subject,
+        html,
+        ...(text ? { text } : {}),
+      }),
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(body || `Resend API failed with status ${response.status}`);
+    }
+    let parsed = {};
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      parsed = {};
+    }
+    return {
+      success: true,
+      messageId: parsed.id || null,
+      profile: "resend-api",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error?.message || String(error),
+      profile: `${provider}-api`,
+    };
+  }
+};
+
 const buildSmtpTimeoutOptions = () => ({
   connectionTimeout: SMTP_TIMEOUT_MS,
   greetingTimeout: SMTP_TIMEOUT_MS,
@@ -194,6 +312,19 @@ const sendMailWithProfiles = async (mailOptions) => {
 };
 
 const validateEmailConfiguration = async () => {
+  const httpProvider = getActiveHttpEmailProvider();
+  const from = getDefaultFromAddress();
+
+  if (httpProvider) {
+    return {
+      ok: true,
+      deliveryMode: `${httpProvider}-api`,
+      from,
+      smtpUser: smtpUser || null,
+      hint: "Using HTTPS email API (works on Render free tier).",
+    };
+  }
+
   const issues = [];
 
   if (!smtpUser) {
@@ -203,7 +334,12 @@ const validateEmailConfiguration = async () => {
     issues.push("Missing EMAIL_PASS (or EMAIL_PASSWORD / SMTP_PASS).");
   }
   if (issues.length) {
-    return { ok: false, issues };
+    return {
+      ok: false,
+      issues,
+      hint:
+        "Render free tier blocks SMTP ports 465/587. Set BREVO_API_KEY (recommended) or upgrade Render to a paid plan.",
+    };
   }
 
   const profiles = buildSmtpTransportProfiles();
@@ -245,6 +381,8 @@ const validateEmailConfiguration = async () => {
     primaryProfile: profiles[0].label,
     profileCount: profiles.length,
     attemptedProfiles,
+    hint:
+      "Render free tier blocks SMTP ports 465/587. Set BREVO_API_KEY (recommended) or upgrade Render to a paid plan.",
   };
 };
 
@@ -259,6 +397,7 @@ if (primaryTransportOptions) {
 }
 
 console.log("Initializing Email Service with:", {
+  httpProvider: getActiveHttpEmailProvider() || "none",
   primaryProfile: buildSmtpTransportProfiles()[0]?.label || "unconfigured",
   user: smtpUser,
   passLength: smtpPass ? smtpPass.length : 0,
@@ -1482,11 +1621,51 @@ const sendRegistrationOTP = async (userEmail, userName, otp) => {
   };
 
   if (!transporter) {
+    const httpResult = await sendEmailViaHttpApi({
+      to: userEmail,
+      subject: mailOptions.subject,
+      html: mailOptions.html,
+      text: `Hello ${userName}, your MBK verification code is ${otp}. It expires in 10 minutes.`,
+    });
+    if (httpResult?.success) {
+      console.log(
+        "Registration OTP email sent successfully via",
+        httpResult.profile,
+        httpResult.messageId || "",
+      );
+      return httpResult;
+    }
+    if (httpResult) {
+      return httpResult;
+    }
+
     console.error("Registration OTP email skipped: SMTP is not configured.");
     return {
       success: false,
-      error: "Email service is not configured on the server.",
+      error:
+        "Email service is not configured. Set BREVO_API_KEY on Render (free tier) or SMTP on a paid plan.",
     };
+  }
+
+  const httpResult = await sendEmailViaHttpApi({
+    to: userEmail,
+    subject: mailOptions.subject,
+    html: mailOptions.html,
+    text: `Hello ${userName}, your MBK verification code is ${otp}. It expires in 10 minutes.`,
+  });
+  if (httpResult?.success) {
+    console.log(
+      "Registration OTP email sent successfully via",
+      httpResult.profile,
+      httpResult.messageId || "",
+    );
+    return httpResult;
+  }
+  if (httpResult && httpResult.success === false) {
+    console.warn(
+      "[EMAIL] HTTP provider failed, falling back to SMTP:",
+      httpResult.error,
+    );
   }
 
   try {
