@@ -133,6 +133,16 @@ const resolveSmtpTransportOptions = () => {
   return profiles[0]?.options || null;
 };
 
+const closeTransport = async (transport) => {
+  try {
+    if (typeof transport?.close === "function") {
+      await transport.close();
+    }
+  } catch {
+    // ignore close errors
+  }
+};
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const sendMailWithProfiles = async (mailOptions) => {
@@ -147,7 +157,7 @@ const sendMailWithProfiles = async (mailOptions) => {
     const transport = nodemailer.createTransport(profile.options);
     try {
       const info = await transport.sendMail(mailOptions);
-      await transport.close().catch(() => {});
+      await closeTransport(transport);
       return { info, profile: profile.label };
     } catch (error) {
       lastError = error;
@@ -155,7 +165,7 @@ const sendMailWithProfiles = async (mailOptions) => {
         `[EMAIL] Send failed via ${profile.label}:`,
         error?.message || error,
       );
-      await transport.close().catch(() => {});
+      await closeTransport(transport);
       await sleep(750);
     }
   }
@@ -185,7 +195,7 @@ const validateEmailConfiguration = async () => {
   const transport = nodemailer.createTransport(primary.options);
   try {
     await transport.verify();
-    await transport.close().catch(() => {});
+    await closeTransport(transport);
     return {
       ok: true,
       smtpUser,
@@ -194,7 +204,7 @@ const validateEmailConfiguration = async () => {
       profileCount: profiles.length,
     };
   } catch (error) {
-    await transport.close().catch(() => {});
+    await closeTransport(transport);
     return {
       ok: false,
       issues: [error?.message || "SMTP verification failed."],
