@@ -85,9 +85,9 @@ rl.question("Enter the code here: ", async (code) => {
     console.log("");
     console.log("Render env:");
     console.log(`GOOGLE_GMAIL_REFRESH_TOKEN=${tokens.refresh_token || ""}`);
-    console.log(`EMAIL_USER=${process.env.EMAIL_USER || "mbktechnologies8@gmail.com"}`);
+    console.log(`EMAIL_USER=${process.env.EMAIL_USER || "mbkdrive82@gmail.com"}`);
     console.log(
-      `EMAIL_FROM="MBK Carrierz" <${process.env.EMAIL_USER || "mbktechnologies8@gmail.com"}>`,
+      `EMAIL_FROM="MBK Carrierz" <${process.env.EMAIL_USER || "mbkdrive82@gmail.com"}>`,
     );
 
     if (!tokens.refresh_token) {

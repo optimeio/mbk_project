@@ -331,6 +331,9 @@ const { router: metricsRouter, requestCounterMiddleware } = require('./routes/me
 app.use(requestCounterMiddleware);
 app.use("/api/metrics", metricsRouter);
 
+const googleOAuthRoutes = require("./routes/googleOAuthRoutes.js");
+app.use(googleOAuthRoutes);
+
 app.use("/api", routes);
 
 // Root
