@@ -6,6 +6,12 @@
 #   Root Directory = backend
 #   Build Command = npm install
 #   Start Command = npm start
+#
+# Required in Render dashboard (not committed):
+# GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_DRIVE_FOLDER_ID, EMAIL_USER, EMAIL_PASS
+# JWT_SECRET, SESSION_SECRET, MONGODB_URI, FRONTEND_URL, BACKEND_URL
+# STREAM_CHAT_API_KEY, STREAM_CHAT_API_SECRET (optional chat)
+# PLIVO_AUTH_ID, PLIVO_AUTH_TOKEN, PLIVO_SOURCE_NUMBER (optional SMS; trainer OTP uses email)
 
 services:
   - type: web

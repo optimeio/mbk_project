@@ -299,6 +299,60 @@ const initTrainerRegistration = async ({
   };
 };
 
+const resendTrainerRegistrationOtp = async ({ email, ipAddress }) => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    const err = new Error("Email is required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user) {
+    const err = new Error("No registration found for this email. Start registration first.");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const normalizedRole = String(user.role || "").toLowerCase();
+  if (
+    normalizedRole &&
+    normalizedRole !== "trainer" &&
+    !normalizedRole.includes("trainer")
+  ) {
+    const err = new Error("This email is registered with a different account type.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (user.accountStatus === "active" && (user.emailVerified || user.isEmailVerified)) {
+    const err = new Error("This email is already verified. Please log in.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const trainer = await Trainer.findOne({ email: normalizedEmail });
+  const otpResult = await sendEmailOtp({
+    email: normalizedEmail,
+    purpose: OTP_PURPOSE.TRAINER_REGISTRATION,
+    recipientName: user.name || "Trainer Candidate",
+    ipAddress,
+  });
+
+  user.emailOtp = null;
+  user.emailOtpExpires = otpResult.expiresAt;
+  await user.save();
+
+  return {
+    success: true,
+    message: "A new verification code has been sent to your email.",
+    email: normalizedEmail,
+    registrationStep: trainer?.registrationStep || 1,
+    deliveryMode: otpResult.deliveryMode,
+    ...(otpResult.debugOtp ? { debugOtp: otpResult.debugOtp } : {}),
+  };
+};
+
 const verifyTrainerRegistrationOtp = async ({
   email,
   otp,
@@ -419,6 +473,7 @@ module.exports = {
   registerStudent,
   registerCompany,
   initTrainerRegistration,
+  resendTrainerRegistrationOtp,
   verifyTrainerRegistrationOtp,
   registerWithRole,
   notifyAdminsOfTrainerSignup,

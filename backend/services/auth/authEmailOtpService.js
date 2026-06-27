@@ -85,7 +85,9 @@ const sendEmailOtp = async ({
 
   let deliveryMode = "email";
   let debugOtp = null;
-  const allowDebugMode = String(process.env.ALLOW_OTP_DEBUG || "").trim() === "1";
+  const isProduction = String(process.env.NODE_ENV || "").trim() === "production";
+  const allowDebugMode =
+    !isProduction && String(process.env.ALLOW_OTP_DEBUG || "").trim() === "1";
 
   if (allowDebugMode) {
     deliveryMode = "debug";

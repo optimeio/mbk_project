@@ -1245,9 +1245,10 @@ const sendAdminSubmissionNotificationEmail = async (
 
 // 10️⃣ REGISTRATION OTP – EMAIL
 const sendRegistrationOTP = async (userEmail, userName, otp) => {
-  // Check 2 requested logs:
-  console.log("Sending OTP to:", userEmail);
-  console.log("Generated OTP:", otp);
+  const isProduction = process.env.NODE_ENV === "production";
+  if (!isProduction) {
+    console.log("Sending OTP to:", userEmail);
+  }
 
   const allowOtpDebug =
     process.env.NODE_ENV !== "production" &&

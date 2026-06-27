@@ -1,6 +1,7 @@
 const express = require("express");
 const {
   initTrainerRegistration,
+  resendTrainerRegistrationOtp,
   verifyTrainerRegistrationOtp,
   registerStudent,
   registerCompany,
@@ -86,6 +87,20 @@ router.post("/trainer", async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error("[AUTH] trainer registration init error:", error);
+    return handleServiceError(res, error);
+  }
+});
+
+router.post("/trainer/resend-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const result = await resendTrainerRegistrationOtp({
+      email,
+      ipAddress: req.ip,
+    });
+    return res.json(result);
+  } catch (error) {
+    console.error("[AUTH] trainer OTP resend error:", error);
     return handleServiceError(res, error);
   }
 });

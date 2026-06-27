@@ -8,6 +8,7 @@ import SignatureCanvas from "react-signature-canvas";
 import {
   checkTrainerEmail,
   registrationInit,
+  resendTrainerOtp,
   verifyOtp,
 } from "@/services/authService";
 import {
@@ -371,7 +372,7 @@ const Step1 = ({ onComplete, onExistingStatusChange }) => {
     setError("");
     setNotice("");
     try {
-      const initResult = await registrationInit({ email, password });
+      const initResult = await resendTrainerOtp({ email });
       setCountdown(60);
       if (initResult?.debugOtp) {
         setOtp(String(initResult.debugOtp));

@@ -292,7 +292,10 @@ const ensureTrainerDriveFolder = async (trainer) => {
 
     return hierarchy.trainerFolder;
   } catch (error) {
-    console.warn("[GOOGLE-DRIVE] Folder creation failed but proceeding gracefully:", error.message);
+    console.error("[GOOGLE-DRIVE] Folder creation failed:", error.message);
+    if (isDriveOnlyStorage()) {
+      throw error;
+    }
     return null;
   }
 };
@@ -1362,22 +1365,50 @@ router.post("/submit", async (req, res) => {
         .json({ success: false, message: "Trainer not found" });
     }
 
+    const registrationStatus = String(trainer.registrationStatus || "")
+      .trim()
+      .toLowerCase();
+    const existingNda =
+      trainer.ndaAgreementPdf ||
+      trainer.documents?.ndaAgreement ||
+      trainer.documents?.ntaAgreement ||
+      null;
+    const isNdaRetry =
+      registrationStatus === "under_review" &&
+      !existingNda &&
+      trainer.signature &&
+      trainer.passwordHash;
+
     if (
-      String(trainer.registrationStatus || "").toLowerCase() === "under_review" ||
-      String(trainer.registrationStatus || "").toLowerCase() === "approved" ||
+      registrationStatus === "under_review" ||
+      registrationStatus === "approved" ||
       Number(trainer.registrationStep || 0) >= 6
     ) {
+      if (!isNdaRetry) {
+        return res.json({
+          success: true,
+          message:
+            registrationStatus === "approved"
+              ? "Registration is already approved."
+              : "Registration is already submitted and pending admin review.",
+          status: trainer.registrationStatus || "under_review",
+          registrationStep: trainer.registrationStep || 6,
+          ndaAgreementPdf: existingNda,
+          ntaAgreementPdf: existingNda,
+          NDAAgreementPdf: existingNda,
+        });
+      }
+    }
+
+    if (isNdaRetry) {
+      const ndaUpload = await syncTrainerNdaAgreementPdfToDrive(trainer);
+      await trainer.save();
       return res.json({
         success: true,
-        message:
-          String(trainer.registrationStatus || "").toLowerCase() === "approved"
-            ? "Registration is already approved."
-            : "Registration is already submitted and pending admin review.",
-        status: trainer.registrationStatus || "under_review",
-        registrationStep: trainer.registrationStep || 6,
-        ndaAgreementPdf: trainer.ndaAgreementPdf || trainer.documents?.ndaAgreement || null,
-        ntaAgreementPdf: trainer.ntaAgreementPdf || trainer.documents?.ndaAgreement || null,
-        NDAAgreementPdf: trainer.NDAAgreementPdf || trainer.documents?.ndaAgreement || null,
+        message: "NDA agreement saved to Google Drive.",
+        ndaAgreementPdf: ndaUpload.filePath,
+        ntaAgreementPdf: ndaUpload.filePath,
+        NDAAgreementPdf: ndaUpload.filePath,
       });
     }
 
@@ -1386,16 +1417,32 @@ router.post("/submit", async (req, res) => {
       return;
     }
 
+    const trainerDocuments = await TrainerDocument.find({ trainerId: trainer._id });
+    const documentWorkflow = evaluateTrainerDocumentWorkflow(trainer, trainerDocuments);
+    if (!documentWorkflow.hasAllRequiredDocuments) {
+      return res.status(400).json({
+        success: false,
+        message: "Complete all required document uploads before submitting.",
+        data: { missingDocuments: documentWorkflow.missingDocuments || [] },
+      });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 1. Update signature and agreement status
+    // 1. Update signature and agreement fields (keep pending until Drive upload succeeds)
     trainer.passwordHash = passwordHash;
     trainer.signature = signature;
     trainer.agreementAccepted = hasAcceptedAgreement;
     trainer.agreementDate = agreementDate || new Date();
     trainer.emailVerified = true;
     trainer.status = "PENDING";
+    trainer.registrationStep = 5;
+    trainer.registrationStatus = "pending";
 
+    // 2. Generate the signed NDA PDF and store it in the trainer's Drive folder
+    const ndaUpload = await syncTrainerNdaAgreementPdfToDrive(trainer);
+
+    // 3. Mark registration as submitted only after Drive upload succeeds
     const registrationState = getPersistedRegistrationState(6, {
       ...trainer.toObject(),
       passwordHash,
@@ -1404,14 +1451,9 @@ router.post("/submit", async (req, res) => {
     });
     trainer.registrationStep = registrationState.registrationStep;
     trainer.registrationStatus = registrationState.registrationStatus;
-
     await trainer.save();
 
-    // 2. Generate the signed NDA PDF and store it in the trainer's Drive folder
-    const ndaUpload = await syncTrainerNdaAgreementPdfToDrive(trainer);
-    await trainer.save();
-
-    // 3. Update associated user account status
+    // 4. Update associated user account status
     const user = await User.findOne({ email });
     if (user) {
       const fullName = [trainer.firstName, trainer.lastName]

@@ -424,10 +424,17 @@ const getTrainerRegistrationAccessState = async (
     listTrainerDocumentsLoader = listTrainerDocumentsByTrainerId,
     syncTrainerDocumentWorkflowLoader = syncTrainerDocumentWorkflow,
     saveTrainerLoader = saveTrainerRecord,
+    syncStep = true,
   } = {},
 ) => {
+  const priorStep = Number(trainer?.registrationStep || 1);
   const trainerDocuments = await listTrainerDocumentsLoader({ trainerId: trainer._id });
   const workflow = syncTrainerDocumentWorkflowLoader(trainer, trainerDocuments);
+
+  if (!syncStep && trainer) {
+    trainer.registrationStep = priorStep;
+  }
+
   await saveTrainerLoader({ trainer });
 
   return {
@@ -635,11 +642,18 @@ const uploadTrainerDocumentFeed = async ({
   });
 
   if (!isAdminUpload) {
-    const accessState = await getTrainerRegistrationAccessStateLoader(trainer);
-    if (
-      accessState.registrationStatus !== "pending" ||
-      accessState.currentStep !== 3
-    ) {
+    const registrationStatus = String(trainer.registrationStatus || "pending")
+      .trim()
+      .toLowerCase();
+    const hasAgreementSubmission = Boolean(
+      trainer.signature &&
+        (trainer.agreementAccepted === true || trainer.agreementAccepted === "true"),
+    );
+
+    if (registrationStatus !== "pending") {
+      const accessState = await getTrainerRegistrationAccessStateLoader(trainer, {
+        syncStep: false,
+      });
       throw createStatusError(
         409,
         buildTrainerStepLockMessage(3, accessState.currentStep),
@@ -649,6 +663,29 @@ const uploadTrainerDocumentFeed = async ({
             currentStep: accessState.currentStep,
             registrationStatus: accessState.registrationStatus,
             workflow: accessState.workflow,
+          }),
+        },
+      );
+    }
+
+    if (hasAgreementSubmission) {
+      throw createStatusError(
+        409,
+        "Document uploads are locked after the agreement step. Contact support if you need to replace a file.",
+      );
+    }
+
+    const currentStep = Number(trainer.registrationStep || 1);
+    if (currentStep < 3) {
+      throw createStatusError(
+        409,
+        buildTrainerStepLockMessage(3, currentStep),
+        {
+          responsePayload: buildRejectTrainerStepAccessPayloadLoader({
+            requiredStep: 3,
+            currentStep,
+            registrationStatus,
+            workflow: null,
           }),
         },
       );

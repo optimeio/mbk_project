@@ -1229,6 +1229,61 @@ const deleteFromDrive = async (fileId) => {
   }
 };
 
+const validateDriveConfiguration = async () => {
+  const issues = [];
+  const folderId = getDefaultTrainerDocumentsFolderId();
+
+  if (!folderId) {
+    issues.push(
+      "Missing root folder ID. Set GOOGLE_DRIVE_FOLDER_ID or GOOGLE_DRIVE_ROOT_FOLDER_ID.",
+    );
+  }
+
+  const hasServiceAccount = Boolean(tryResolveServiceAccountConfig());
+  const hasOAuth = Boolean(resolveOAuthDriveConfig());
+
+  if (!hasServiceAccount && !hasOAuth) {
+    issues.push(
+      "Missing Drive credentials. Set GOOGLE_SERVICE_ACCOUNT_JSON or OAuth refresh token vars.",
+    );
+  }
+
+  if (issues.length) {
+    return { ok: false, issues };
+  }
+
+  try {
+    const drive = await getDriveClient();
+    const metadata = await drive.files.get({
+      fileId,
+      fields: "id,name,mimeType,driveId",
+      supportsAllDrives: true,
+    });
+
+    const authMode = resolveConfiguredDriveAuthMode() || (hasServiceAccount ? "service_account" : "oauth2");
+    const inSharedDrive = Boolean(metadata.data.driveId);
+
+    return {
+      ok: true,
+      folderId,
+      folderName: metadata.data.name || null,
+      authMode,
+      inSharedDrive,
+      warning: inSharedDrive
+        ? null
+        : "Root folder is not in a Shared Drive. Service account uploads may fail with quota errors.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [
+        error?.message ||
+          "Could not access the configured Google Drive folder. Check credentials and folder sharing.",
+      ],
+    };
+  }
+};
+
 module.exports = {
   DEFAULT_TRAINER_DOCUMENTS_FOLDER_ID,
   getDefaultTrainerDocumentsFolderId,
@@ -1250,4 +1305,5 @@ module.exports = {
   uploadToDrive,
   uploadToDriveWithRetry,
   deleteFromDrive,
+  validateDriveConfiguration,
 };

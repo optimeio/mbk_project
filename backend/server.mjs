@@ -25,6 +25,8 @@ const require = createRequire(import.meta.url);
 const { startAnalyticsWorker } = require("./workers/analyticsWorker.js");
 const { redis, isAvailable: isRedisAvailable } = require('./config/redis.js');
 const errorTracker = require('./middleware/errorTracker.js');
+const { validateDriveConfiguration } = require('./services/googleDriveService.js');
+const { isDriveOnlyStorage } = require('./utils/storagePolicy.js');
 
 // Redis session store — gracefully falls back to MemoryStore if unavailable
 let RedisStore = null;
@@ -430,6 +432,28 @@ const startServer = async (port = Number(process.env.PORT || process.env.BACKEND
       const backendUrl = `${PROTOCOL}://${HOST}:${port}`;
       console.log(`🚀 Server running at ${backendUrl}`);
       printStartupBanner(backendUrl, dbContext?.selectedMongoUri ?? null);
+
+      if (isDriveOnlyStorage()) {
+        validateDriveConfiguration()
+          .then((result) => {
+            if (!result.ok) {
+              console.error("[GOOGLE-DRIVE] Startup validation failed:", result.issues);
+            } else {
+              console.log("[GOOGLE-DRIVE] Startup validation passed:", {
+                folderId: result.folderId,
+                folderName: result.folderName,
+                authMode: result.authMode,
+                inSharedDrive: result.inSharedDrive,
+              });
+              if (result.warning) {
+                console.warn("[GOOGLE-DRIVE]", result.warning);
+              }
+            }
+          })
+          .catch((error) => {
+            console.error("[GOOGLE-DRIVE] Startup validation error:", error.message);
+          });
+      }
 
       // Keep-alive tuning — prevents Nginx 502 errors under load.
       // keepAliveTimeout must be > Nginx's keepalive_timeout (default 75s).

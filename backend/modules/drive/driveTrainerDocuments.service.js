@@ -131,6 +131,11 @@ const ensureTrainerDocumentHierarchy = async ({
   let existingTrainerFolderId = null;
   let existingDocumentsFolderId = null;
 
+  // Prefer persisted trainer folder ID so renames (email → full name) do not create duplicates.
+  if (trainer.driveFolderId && !isDocumentsFolderReference(trainer)) {
+    existingTrainerFolderId = trainer.driveFolderId;
+  }
+
   if (isDocumentsFolderReference(trainer)) {
     existingDocumentsFolderId = trainer.driveFolderId || null;
     const existingTrainerFolder = await findDriveFolder({
