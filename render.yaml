@@ -1,0 +1,30 @@
+# Render Blueprint — MBK backend API
+# Dashboard: New > Blueprint > connect repo, or set these manually on the Web Service.
+#
+# If you see "failed to read dockerfile: open npm install":
+#   Settings > Environment = Node (NOT Docker)
+#   Root Directory = backend
+#   Build Command = npm install
+#   Start Command = npm start
+
+services:
+  - type: web
+    name: mbk-backend
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STORAGE_MODE
+        value: drive_only
+      - key: DISABLE_LOCAL_FILE_FALLBACK
+        value: "1"
+      - key: DISABLE_REDIS
+        value: "1"
+      - key: ALLOW_OTP_DEBUG
+        value: "0"
