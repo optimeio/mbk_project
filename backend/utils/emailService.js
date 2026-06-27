@@ -1,5 +1,16 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns");
 const welcomeEmailTemplate = require("./welcomeEmailTemplate");
+
+// Render/cloud hosts often lack working IPv6 routes to Gmail SMTP.
+dns.setDefaultResultOrder("ipv4first");
+
+const ipv4Lookup = (hostname, options, callback) => {
+  if (typeof options === "function") {
+    return dns.lookup(hostname, { family: 4 }, options);
+  }
+  return dns.lookup(hostname, { ...options, family: 4 }, callback);
+};
 
 const smtpUser = (process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
 const smtpPass = (
@@ -40,7 +51,15 @@ const buildSmtpTransportProfiles = () => {
       return;
     }
     seen.add(key);
-    profiles.push({ label, options: { ...options, auth } });
+    profiles.push({
+      label,
+      options: {
+        ...options,
+        auth,
+        family: 4,
+        lookup: ipv4Lookup,
+      },
+    });
   };
 
   const smtpHost = (process.env.SMTP_HOST || "").trim();
