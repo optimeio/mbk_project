@@ -7,9 +7,10 @@ dns.setDefaultResultOrder("ipv4first");
 
 const ipv4Lookup = (hostname, options, callback) => {
   if (typeof options === "function") {
-    return dns.lookup(hostname, { family: 4 }, options);
+    callback = options;
+    options = {};
   }
-  return dns.lookup(hostname, { ...options, family: 4 }, callback);
+  dns.lookup(hostname, { family: 4, ...(options || {}) }, callback);
 };
 
 const smtpUser = (process.env.EMAIL_USER || process.env.SMTP_USER || "").trim();
@@ -206,33 +207,45 @@ const validateEmailConfiguration = async () => {
   }
 
   const profiles = buildSmtpTransportProfiles();
-  const primary = profiles[0];
-  if (!primary) {
+  if (!profiles.length) {
     return { ok: false, issues: ["No SMTP transport profile could be built."] };
   }
 
-  const transport = nodemailer.createTransport(primary.options);
-  try {
-    await transport.verify();
-    await closeTransport(transport);
-    return {
-      ok: true,
-      smtpUser,
-      from: getDefaultFromAddress(),
-      primaryProfile: primary.label,
-      profileCount: profiles.length,
-    };
-  } catch (error) {
-    await closeTransport(transport);
-    return {
-      ok: false,
-      issues: [error?.message || "SMTP verification failed."],
-      smtpUser,
-      from: getDefaultFromAddress(),
-      primaryProfile: primary.label,
-      profileCount: profiles.length,
-    };
+  let lastError = null;
+  const attemptedProfiles = [];
+
+  for (const profile of profiles) {
+    attemptedProfiles.push(profile.label);
+    const transport = nodemailer.createTransport(profile.options);
+    try {
+      await transport.verify();
+      await closeTransport(transport);
+      return {
+        ok: true,
+        smtpUser,
+        from: getDefaultFromAddress(),
+        primaryProfile: profile.label,
+        profileCount: profiles.length,
+        attemptedProfiles,
+      };
+    } catch (error) {
+      lastError = error;
+      await closeTransport(transport);
+    }
   }
+
+  return {
+    ok: false,
+    issues: [
+      lastError?.message ||
+        "SMTP verification failed for all configured transport profiles.",
+    ],
+    smtpUser,
+    from: getDefaultFromAddress(),
+    primaryProfile: profiles[0].label,
+    profileCount: profiles.length,
+    attemptedProfiles,
+  };
 };
 
 // Email Configuration
