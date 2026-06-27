@@ -24,6 +24,30 @@ transporter = nodemailer.createTransport({
   },
 });
 
+// Centralized Non-Blocking Wrapper: Prevents Render SMTP blocks from causing connection timeouts.
+const originalSendMail = transporter.sendMail.bind(transporter);
+transporter.sendMail = function (mailOptions, callback) {
+  const dummyInfo = { messageId: "bg-queued-" + Date.now() };
+
+  // Handle callback signature
+  if (typeof callback === "function") {
+    originalSendMail(mailOptions, (err, info) => {
+      if (err) console.warn("[SMTP-BACKGROUND] Delivery failed:", err.message);
+      else console.log("[SMTP-BACKGROUND] Delivery success:", info.messageId);
+    });
+    return callback(null, dummyInfo);
+  }
+
+  // Handle promise signature
+  return new Promise((resolve) => {
+    originalSendMail(mailOptions, (err, info) => {
+      if (err) console.warn("[SMTP-BACKGROUND] Delivery failed:", err.message);
+      else console.log("[SMTP-BACKGROUND] Delivery success:", info?.messageId);
+    });
+    resolve(dummyInfo);
+  });
+};
+
 transporter.verify((error, success) => {
   if (error) {
     console.error("SMTP Configuration Error:", error);
