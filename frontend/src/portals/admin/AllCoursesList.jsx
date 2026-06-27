@@ -3,13 +3,18 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { Fragment } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
 import { 
     AcademicCapIcon, 
     ArrowPathIcon,
-    MagnifyingGlassIcon
+    MagnifyingGlassIcon,
+    PlusIcon,
+    XMarkIcon
 } from '@heroicons/react/24/outline';
 import { api } from '@/services/api';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
+import { toast } from 'react-hot-toast';
 
 // Subcomponent to fetch stats for each course individually to keep parent render lightweight
 const CourseStats = ({ courseId }) => {
@@ -51,6 +56,14 @@ const AllCoursesList = () => {
     const router = useRouter();
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [formData, setFormData] = useState({
+        title: '',
+        companyId: '',
+        courseHead: '',
+        description: ''
+    });
 
     const {
         data: courses = [],
@@ -63,6 +76,14 @@ const AllCoursesList = () => {
         staleTime: 30 * 1000,
     });
 
+    // Fetch companies for dropdown selection
+    const { data: companies = [] } = useQuery({
+        queryKey: ['admin', 'all-companies'],
+        queryFn: () => api.get('/companies'),
+        staleTime: 5 * 60 * 1000,
+        enabled: isModalOpen,
+    });
+
     const filteredCourses = useMemo(() => {
         if (!debouncedSearchTerm) return courses;
         const lower = debouncedSearchTerm.toLowerCase();
@@ -72,6 +93,27 @@ const AllCoursesList = () => {
                 c.description?.toLowerCase().includes(lower)
         );
     }, [courses, debouncedSearchTerm]);
+
+    const handleSaveCourse = async (e) => {
+        e.preventDefault();
+        if (!formData.companyId) {
+            toast.error("Please select a company for this course");
+            return;
+        }
+        setSaving(true);
+        try {
+            await api.post('/courses', formData);
+            toast.success("Course added successfully");
+            setIsModalOpen(false);
+            setFormData({ title: '', companyId: '', courseHead: '', description: '' });
+            refetch();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.response?.data?.message || "Failed to add course");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -103,13 +145,22 @@ const AllCoursesList = () => {
                             Manage curriculum, assigned colleges, and student batches.
                         </p>
                     </div>
-                    <button
-                        onClick={() => refetch()}
-                        className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 text-sm font-semibold transition-colors"
-                    >
-                        <ArrowPathIcon className="h-4 w-4" />
-                        Refresh List
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="inline-flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+                        >
+                            <PlusIcon className="h-4 w-4 mr-2" />
+                            Add Course
+                        </button>
+                        <button
+                            onClick={() => refetch()}
+                            className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 text-sm font-semibold transition-colors"
+                        >
+                            <ArrowPathIcon className="h-4 w-4" />
+                            Refresh List
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -188,6 +239,135 @@ const AllCoursesList = () => {
                     </div>
                 )}
             </div>
+
+            {/* Add Course Modal */}
+            <Transition.Root show={isModalOpen} as={Fragment}>
+                <Dialog as="div" className="relative z-10" onClose={() => setIsModalOpen(false)}>
+                    <Transition.Child
+                        as={Fragment}
+                        enter="ease-out duration-300"
+                        enterFrom="opacity-0"
+                        enterTo="opacity-100"
+                        leave="ease-in duration-200"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                    >
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+                    </Transition.Child>
+
+                    <div className="dashboard-modal-scrollport fixed inset-0 z-10 overflow-y-auto">
+                        <div className="dashboard-modal-center flex min-h-full items-center justify-center p-4 text-center sm:p-6">
+                            <Transition.Child
+                                as={Fragment}
+                                enter="ease-out duration-300"
+                                enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                                enterTo="opacity-100 translate-y-0 sm:scale-100"
+                                leave="ease-in duration-200"
+                                leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+                                leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                            >
+                                <Dialog.Panel className="dashboard-modal-panel relative transform rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                                    <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
+                                        <button
+                                            type="button"
+                                            className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            onClick={() => setIsModalOpen(false)}
+                                        >
+                                            <span className="sr-only">Close</span>
+                                            <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                    <div className="sm:flex sm:items-start">
+                                        <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                            <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                                                Add New Course
+                                            </Dialog.Title>
+                                            <div className="mt-2">
+                                                <form onSubmit={handleSaveCourse} className="space-y-4">
+                                                    <div>
+                                                        <label htmlFor="companyId" className="block text-sm font-medium text-gray-700">
+                                                            Assign to Company
+                                                        </label>
+                                                        <select
+                                                            id="companyId"
+                                                            name="companyId"
+                                                            required
+                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2 bg-white"
+                                                            value={formData.companyId}
+                                                            onChange={(e) => setFormData({ ...formData, companyId: e.target.value })}
+                                                        >
+                                                            <option value="">Select a company</option>
+                                                            {companies.map((c) => (
+                                                                <option key={c._id} value={c._id}>{c.name || c.companyName}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                                                            Course Title
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            name="title"
+                                                            id="title"
+                                                            required
+                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+                                                            value={formData.title}
+                                                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="courseHead" className="block text-sm font-medium text-gray-700">
+                                                            Course Head (Optional)
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            name="courseHead"
+                                                            id="courseHead"
+                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+                                                            value={formData.courseHead}
+                                                            onChange={(e) => setFormData({ ...formData, courseHead: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                                                            Description
+                                                        </label>
+                                                        <textarea
+                                                            name="description"
+                                                            id="description"
+                                                            rows={3}
+                                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
+                                                            value={formData.description}
+                                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                                                        <button
+                                                            type="submit"
+                                                            disabled={saving}
+                                                            className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                                                        >
+                                                            {saving ? 'Saving...' : 'Save'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
+                                                            onClick={() => setIsModalOpen(false)}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Dialog.Panel>
+                            </Transition.Child>
+                        </div>
+                    </div>
+                </Dialog>
+            </Transition.Root>
         </div>
     );
 };
