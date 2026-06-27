@@ -43,6 +43,47 @@ const resolveGmailSenderEmail = () =>
     .trim()
     .toLowerCase();
 
+const formatGmailAuthHint = (message = "") => {
+  if (/invalid_client/i.test(message)) {
+    return [
+      "GOOGLE_DRIVE_CLIENT_ID or GOOGLE_DRIVE_CLIENT_SECRET on Render is wrong, or the refresh token was created with a different OAuth client.",
+      "Use Google Cloud → Credentials → OAuth 2.0 Client ID (Web application), not the service account JSON.",
+      "Update Render client ID + secret, then reconnect: https://mbk-project-spf5.onrender.com/api/oauth/gmail/start?email=mbkdrive82@gmail.com",
+    ].join(" ");
+  }
+  if (/invalid_grant|unauthorized|revoked/i.test(message)) {
+    return "Refresh token is invalid or revoked. Reconnect Gmail at /api/oauth/gmail/start?email=mbkdrive82@gmail.com";
+  }
+  if (/insufficient|scope|403/i.test(message)) {
+    return "OAuth token missing gmail.send scope. Reconnect Gmail at /api/oauth/gmail/start?email=mbkdrive82@gmail.com";
+  }
+  return null;
+};
+
+const getGmailOAuthDiagnostics = () => {
+  const config = resolveGmailOAuthConfig();
+  const backendUrl = String(
+    process.env.BACKEND_URL || "https://mbk-project-spf5.onrender.com",
+  )
+    .trim()
+    .replace(/\/+$/, "");
+
+  return {
+    configured: Boolean(config),
+    clientIdSuffix: config?.clientId ? config.clientId.slice(-16) : null,
+    hasClientSecret: Boolean(config?.clientSecret),
+    hasRefreshToken: Boolean(config?.refreshToken),
+    refreshTokenPrefix: config?.refreshToken ? config.refreshToken.slice(0, 8) : null,
+    emailUser: resolveGmailSenderEmail() || null,
+    redirectUri: String(
+      process.env.GOOGLE_DRIVE_OAUTH_REDIRECT_URI ||
+        process.env.GOOGLE_OAUTH_REDIRECT_URL ||
+        `${backendUrl}/oauth2callback`,
+    ).trim(),
+    reconnectUrl: `${backendUrl}/api/oauth/gmail/start?email=mbkdrive82@gmail.com`,
+  };
+};
+
 const canUseGmailApi = () => Boolean(resolveGmailOAuthConfig());
 
 let gmailClientPromise = null;
@@ -120,10 +161,9 @@ const sendEmailViaGmailApi = async ({ to, subject, html, text, from }) => {
       profile: "gmail-api",
     };
   } catch (error) {
+    gmailClientPromise = null;
     const message = error?.message || String(error);
-    const hint = /insufficient|scope|403/i.test(message)
-      ? "Re-run backend/scripts/getGmailRefreshToken.js and add GOOGLE_GMAIL_REFRESH_TOKEN to Render with gmail.send scope."
-      : null;
+    const hint = formatGmailAuthHint(message);
 
     return {
       success: false,
@@ -171,11 +211,13 @@ const validateGmailApiConfiguration = async () => {
         (accountEmail ? `"MBK Carrierz" <${accountEmail}>` : null),
     };
   } catch (error) {
+    gmailClientPromise = null;
+    const message = error?.message || "Gmail API validation failed.";
     return {
       ok: false,
-      issues: [error?.message || "Gmail API validation failed."],
-      hint:
-        "Enable Gmail API in Google Cloud, add gmail.send scope, then run backend/scripts/getGmailRefreshToken.js.",
+      issues: [message],
+      hint: formatGmailAuthHint(message),
+      diagnostics: getGmailOAuthDiagnostics(),
     };
   }
 };
@@ -186,4 +228,6 @@ module.exports = {
   sendEmailViaGmailApi,
   validateGmailApiConfiguration,
   resolveGmailSenderEmail,
+  getGmailOAuthDiagnostics,
+  formatGmailAuthHint,
 };

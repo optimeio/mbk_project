@@ -114,6 +114,17 @@ const assertSetupAccess = (req, res) => {
   return false;
 };
 
+router.get("/api/oauth/gmail/status", async (_req, res) => {
+  const { validateGmailApiConfiguration, getGmailOAuthDiagnostics } = require("../services/gmailApiService");
+  const diagnostics = getGmailOAuthDiagnostics();
+  const validation = await validateGmailApiConfiguration();
+
+  return res.status(validation.ok ? 200 : 503).json({
+    ...validation,
+    diagnostics,
+  });
+});
+
 router.get("/api/oauth/gmail/help", (_req, res) => {
   const config = resolveOAuthConfig();
   const startUrl = `${config.backendUrl}/api/oauth/gmail/start?email=mbkdrive82@gmail.com`;
