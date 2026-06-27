@@ -1,6 +1,6 @@
 # Apache Rewrite Rules for Next.js Static Export on Hostinger
 # Frontend: https://mbktechnologies.info
-# Backend API: https://mbk-project.onrender.com
+# Backend API: https://mbk-vgge.onrender.com
 
 <IfModule mod_rewrite.c>
   RewriteEngine On

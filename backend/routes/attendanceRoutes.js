@@ -68,6 +68,10 @@ const {
     createStructuredLogger,
 } = require('../shared/utils/structuredLogger');
 const {
+    isDriveOnlyStorage,
+    cleanupFilesByField,
+} = require('../utils/storagePolicy');
+const {
     getAttendanceScheduleController,
     getAttendanceLegacyDetailsController,
     getAttendanceTrainerController,
@@ -2127,6 +2131,9 @@ const syncAttendanceFilesToDrive = async ({
             dayFolderId,
             subFolders: foldersByType
         });
+        if (isDriveOnlyStorage()) {
+            await cleanupFilesByField(filesByField);
+        }
     } catch (error) {
         logAttendanceAsyncTelemetry('error', {
             correlationId: resolvedCorrelationId,

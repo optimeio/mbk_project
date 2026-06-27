@@ -44,6 +44,11 @@ const {
   autoCreateTrainerAdminChannels,
   cleanupDeletedUserChatArtifacts,
 } = require("../services/streamChatService");
+const {
+  isDriveOnlyStorage,
+  removeLocalUploadFile,
+  buildDriveUploadError,
+} = require("../utils/storagePolicy");
 
 const escapeRegex = (value = "") =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -331,10 +336,29 @@ const syncTrainerNdaAgreementPdfToDrive = async (trainer) => {
       cleanupDuplicateFiles: false,
     });
   } catch (driveError) {
-    console.warn("[GOOGLE-DRIVE] NDA PDF upload failed, falling back to local file storage:", driveError.message);
+    await removeLocalUploadFile(resolveGeneratedFilePath(pdfPath));
+    if (isDriveOnlyStorage()) {
+      throw buildDriveUploadError(
+        driveError,
+        "NDA PDF could not be saved to Google Drive.",
+      );
+    }
+    console.warn(
+      "[GOOGLE-DRIVE] NDA PDF upload failed, falling back to local file storage:",
+      driveError.message,
+    );
   }
 
   const fileUrl = driveUpload?.fileUrl || localUrl;
+  if (isDriveOnlyStorage() && !driveUpload?.fileUrl) {
+    throw buildDriveUploadError(
+      null,
+      "NDA PDF could not be saved to Google Drive.",
+    );
+  }
+  if (driveUpload?.fileUrl) {
+    await removeLocalUploadFile(resolveGeneratedFilePath(pdfPath));
+  }
   trainer.documents = trainer.documents || {};
   trainer.ndaAgreementPdf = fileUrl;
   trainer.ntaAgreementPdf = fileUrl;
@@ -1948,13 +1972,27 @@ router.post(
 
         if (driveUpload?.fileUrl) {
           fileUrl = driveUpload.fileUrl;
+          await removeLocalUploadFile(file.path);
+        } else if (isDriveOnlyStorage()) {
+          await removeLocalUploadFile(file.path);
+          return res.status(503).json({
+            success: false,
+            message:
+              "Document could not be saved to Google Drive. Please try again.",
+          });
         }
       } catch (driveError) {
+        await removeLocalUploadFile(file.path);
         console.error(
-          "[GOOGLE-DRIVE] Document upload failed, falling back to local storage:",
+          "[GOOGLE-DRIVE] Document upload failed:",
           driveError.message,
         );
-        // Keep the local file already saved by multer and continue.
+        if (isDriveOnlyStorage()) {
+          return res.status(503).json({
+            success: false,
+            message: `Google Drive upload failed: ${driveError.message}`,
+          });
+        }
       }
 
       trainer.documents = trainer.documents || {};
@@ -2322,8 +2360,22 @@ router.post(
           );
         }
       } catch (driveError) {
-        console.warn("[GOOGLE-DRIVE] Profile picture upload failed, falling back to local file storage:", driveError.message);
+        await removeLocalUploadFile(file.path);
+        console.warn(
+          "[GOOGLE-DRIVE] Profile picture upload failed:",
+          driveError.message,
+        );
+        if (isDriveOnlyStorage()) {
+          return res.status(503).json({
+            success: false,
+            message: `Google Drive upload failed: ${driveError.message}`,
+          });
+        }
         fileLink = `/uploads/${path.basename(file.path)}`;
+      }
+
+      if (driveUpload?.fileUrl) {
+        await removeLocalUploadFile(file.path);
       }
 
       trainer.profilePicture = fileLink;
