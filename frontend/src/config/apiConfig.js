@@ -26,11 +26,11 @@ export const isProductionFrontendHost = () => {
 
 /** Backend origin without trailing slash or /api suffix (e.g. http://localhost:5005) */
 export const getApiOrigin = () => {
-  if (rawApiUrl) {
-    return rawApiUrl.replace(/\/+$/, '').replace(/\/api\/?$/i, '');
-  }
   if (isProductionFrontendHost()) {
     return PRODUCTION_API_ORIGIN;
+  }
+  if (rawApiUrl) {
+    return rawApiUrl.replace(/\/+$/, '').replace(/\/api\/?$/i, '');
   }
   return DEFAULT_DEV_API_ORIGIN;
 };
@@ -76,7 +76,10 @@ const probeHealth = async (origin) => {
  */
 export const discoverApiOrigin = async () => {
   if (discoveredOrigin) return discoveredOrigin;
-  if (process.env.NODE_ENV === 'production') return getApiOrigin();
+  if (isProductionFrontendHost() || process.env.NODE_ENV === 'production') {
+    discoveredOrigin = getApiOrigin();
+    return discoveredOrigin;
+  }
 
   const hasExplicitOrigin = Boolean(rawApiUrl);
   if (!hasExplicitOrigin) {
