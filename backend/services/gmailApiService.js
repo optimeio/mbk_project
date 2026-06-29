@@ -8,92 +8,30 @@ const trimEnv = (value = "") =>
     .trim()
     .replace(/^["']|["']$/g, "");
 
+/** Single OAuth source: GOOGLE_DRIVE_* + GOOGLE_GMAIL_REFRESH_TOKEN only. */
+const resolveDriveOAuthCredentials = () => {
+  const clientId = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID);
+  const clientSecret = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET);
+  const refreshToken = String(
+    process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
+      process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+      "",
+  ).trim();
+
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  return { clientId, clientSecret, refreshToken };
+};
+
 const collectGmailOAuthCandidates = () => {
-  const clientIds = [
-    process.env.GOOGLE_GMAIL_CLIENT_ID,
-    process.env.GOOGLE_DRIVE_CLIENT_ID,
-    process.env.GOOGLE_OAUTH_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_ID,
-  ]
-    .map(trimEnv)
-    .filter(Boolean);
-
-  const clientSecrets = [
-    process.env.GOOGLE_GMAIL_CLIENT_SECRET,
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET,
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-    process.env.GOOGLE_CLIENT_SECRET,
-  ]
-    .map(trimEnv)
-    .filter(Boolean);
-
-  const refreshTokens = [
-    process.env.GOOGLE_GMAIL_REFRESH_TOKEN,
-    process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
-    process.env.GOOGLE_REFRESH_TOKEN,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-
-  const uniqueIds = [...new Set(clientIds)];
-  const uniqueSecrets = [...new Set(clientSecrets)];
-  const uniqueTokens = [...new Set(refreshTokens)];
-
-  if (!uniqueIds.length || !uniqueSecrets.length || !uniqueTokens.length) {
+  const creds = resolveDriveOAuthCredentials();
+  if (!creds?.refreshToken) {
     return [];
   }
 
-  const candidates = [];
-  const seen = new Set();
-
-  const addCandidate = (clientId, clientSecret, refreshToken, label) => {
-    if (!clientId || !clientSecret || !refreshToken) {
-      return;
-    }
-    const key = `${clientId}|${clientSecret}|${refreshToken.slice(0, 16)}`;
-    if (seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    candidates.push({ clientId, clientSecret, refreshToken, label });
-  };
-
-  // Prefer explicit env pairs before brute-force combinations.
-  addCandidate(
-    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID),
-    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET),
-    String(process.env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim(),
-    "oauth-pair",
-  );
-  addCandidate(
-    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID),
-    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET),
-    String(process.env.GOOGLE_GMAIL_REFRESH_TOKEN || "").trim(),
-    "drive+gmail-token",
-  );
-  addCandidate(
-    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID),
-    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET),
-    String(process.env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim(),
-    "drive+oauth-token",
-  );
-  addCandidate(
-    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID),
-    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET),
-    String(process.env.GOOGLE_GMAIL_REFRESH_TOKEN || "").trim(),
-    "oauth-secret+gmail-token",
-  );
-
-  for (const clientId of uniqueIds) {
-    for (const clientSecret of uniqueSecrets) {
-      for (const refreshToken of uniqueTokens) {
-        addCandidate(clientId, clientSecret, refreshToken, "combo");
-      }
-    }
-  }
-
-  return candidates;
+  return [{ ...creds, label: "drive" }];
 };
 
 let cachedWorkingConfig = null;
@@ -118,11 +56,11 @@ const resolveGmailSenderEmail = () =>
     .toLowerCase();
 
 const formatGmailAuthHint = (message = "") => {
-  if (/invalid_client/i.test(message)) {
+  if (/invalid_client|deleted client|unauthorized_client/i.test(message)) {
     return [
-      "Google OAuth client ID, client secret, and refresh token must all belong to the same OAuth Web client.",
-      "Remove duplicate GOOGLE_OAUTH_* vars or regenerate the refresh token:",
-      "https://mbk-project-spf5.onrender.com/api/oauth/gmail/start?email=mbkdrive82@gmail.com",
+      "Google OAuth client on Render does not match the refresh token.",
+      "Use only GOOGLE_DRIVE_CLIENT_ID + GOOGLE_DRIVE_CLIENT_SECRET (delete old GOOGLE_OAUTH_* vars).",
+      "Then reconnect: https://mbk-project-spf5.onrender.com/api/oauth/gmail/start?email=mbkdrive82@gmail.com",
     ].join(" ");
   }
   if (/invalid_grant|unauthorized|revoked/i.test(message)) {
@@ -135,62 +73,43 @@ const formatGmailAuthHint = (message = "") => {
 };
 
 const getGmailOAuthDiagnostics = () => {
-  const candidates = collectGmailOAuthCandidates();
-  const config = resolveGmailOAuthConfig();
+  const creds = resolveDriveOAuthCredentials();
   const backendUrl = String(
     process.env.BACKEND_URL || "https://mbk-project-spf5.onrender.com",
   )
     .trim()
     .replace(/\/+$/, "");
 
-  const clientIds = [
-    process.env.GOOGLE_GMAIL_CLIENT_ID,
-    process.env.GOOGLE_DRIVE_CLIENT_ID,
-    process.env.GOOGLE_OAUTH_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_ID,
-  ]
-    .map(trimEnv)
-    .filter(Boolean);
-  const clientSecrets = [
-    process.env.GOOGLE_GMAIL_CLIENT_SECRET,
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET,
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-    process.env.GOOGLE_CLIENT_SECRET,
-  ]
-    .map(trimEnv)
-    .filter(Boolean);
-  const refreshTokens = [
-    process.env.GOOGLE_GMAIL_REFRESH_TOKEN,
-    process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
-    process.env.GOOGLE_REFRESH_TOKEN,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-
-  const primaryClientId = clientIds[0] || null;
+  const legacyOAuthId = trimEnv(process.env.GOOGLE_OAUTH_CLIENT_ID);
+  const legacyConflict =
+    Boolean(legacyOAuthId) &&
+    Boolean(creds?.clientId) &&
+    legacyOAuthId !== creds.clientId;
 
   return {
-    configured: candidates.length > 0,
-    candidateCount: candidates.length,
-    activePair: cachedWorkingConfig?.label || config?.label || null,
-    clientIdMasked: primaryClientId
-      ? `${primaryClientId.slice(0, 12)}...${primaryClientId.slice(-28)}`
+    configured: Boolean(creds?.clientId && creds?.clientSecret && creds?.refreshToken),
+    candidateCount: collectGmailOAuthCandidates().length,
+    activePair: cachedWorkingConfig?.label || null,
+    clientIdMasked: creds?.clientId
+      ? `${creds.clientId.slice(0, 12)}...${creds.clientId.slice(-28)}`
       : null,
-    hasClientId: clientIds.length > 0,
-    hasClientSecret: clientSecrets.length > 0,
-    clientSecretLength: clientSecrets[0] ? clientSecrets[0].length : 0,
-    hasRefreshToken: refreshTokens.length > 0,
-    refreshTokenPrefix: refreshTokens[0] ? refreshTokens[0].slice(0, 8) : null,
+    hasClientId: Boolean(creds?.clientId),
+    hasClientSecret: Boolean(creds?.clientSecret),
+    clientSecretLength: creds?.clientSecret ? creds.clientSecret.length : 0,
+    hasRefreshToken: Boolean(creds?.refreshToken),
+    refreshTokenPrefix: creds?.refreshToken ? creds.refreshToken.slice(0, 8) : null,
     missingForGmailApi: [
-      ...(clientIds.length ? [] : ["GOOGLE_DRIVE_CLIENT_ID"]),
-      ...(clientSecrets.length ? [] : ["GOOGLE_DRIVE_CLIENT_SECRET"]),
-      ...(refreshTokens.length ? [] : ["GOOGLE_GMAIL_REFRESH_TOKEN"]),
+      ...(creds?.clientId ? [] : ["GOOGLE_DRIVE_CLIENT_ID"]),
+      ...(creds?.clientSecret ? [] : ["GOOGLE_DRIVE_CLIENT_SECRET"]),
+      ...(creds?.refreshToken ? [] : ["GOOGLE_GMAIL_REFRESH_TOKEN"]),
     ],
+    legacyOAuthConflict: legacyConflict,
+    legacyOAuthHint: legacyConflict
+      ? "Delete GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET on Render — they point to an old/deleted OAuth client."
+      : null,
     emailUser: resolveGmailSenderEmail() || null,
     redirectUri: String(
       process.env.GOOGLE_DRIVE_OAUTH_REDIRECT_URI ||
-        process.env.GOOGLE_OAUTH_REDIRECT_URL ||
         `${backendUrl}/oauth2callback`,
     ).trim(),
     reconnectUrl: `${backendUrl}/api/oauth/gmail/start?email=mbkdrive82@gmail.com`,
@@ -222,28 +141,17 @@ const resolveWorkingGmailClient = async () => {
   }
 
   gmailClientPromise = (async () => {
-    let lastError = null;
-
-    for (const candidate of candidates) {
-      try {
-        const gmail = createGmailClientForConfig(candidate);
-        await gmail.users.getProfile({ userId: "me" });
-        cachedWorkingConfig = candidate;
-        console.log(
-          `[GMAIL-API] Using OAuth credential pair: ${candidate.label}`,
-        );
-        return gmail;
-      } catch (error) {
-        lastError = error;
-        console.warn(
-          `[GMAIL-API] OAuth pair "${candidate.label}" failed:`,
-          error?.message || error,
-        );
-      }
+    const candidate = candidates[0];
+    try {
+      const gmail = createGmailClientForConfig(candidate);
+      await gmail.users.getProfile({ userId: "me" });
+      cachedWorkingConfig = candidate;
+      console.log("[GMAIL-API] Authenticated with GOOGLE_DRIVE OAuth client.");
+      return gmail;
+    } catch (error) {
+      gmailClientPromise = null;
+      throw error;
     }
-
-    gmailClientPromise = null;
-    throw lastError || new Error("Gmail API authentication failed.");
   })().catch((error) => {
     gmailClientPromise = null;
     throw error;
@@ -321,6 +229,14 @@ const sendEmailViaGmailApi = async ({ to, subject, html, text, from }) => {
 const validateGmailApiConfiguration = async () => {
   const diagnostics = getGmailOAuthDiagnostics();
 
+  if (diagnostics.legacyOAuthConflict) {
+    return {
+      ok: false,
+      issues: [diagnostics.legacyOAuthHint],
+      diagnostics,
+    };
+  }
+
   if (!canUseGmailApi()) {
     return {
       ok: false,
@@ -329,9 +245,7 @@ const validateGmailApiConfiguration = async () => {
           ? `Missing on Render: ${diagnostics.missingForGmailApi.join(", ")}`
           : "Missing Google OAuth credentials for Gmail API.",
       ],
-      hint: diagnostics.hasRefreshToken
-        ? "Refresh token present but client ID/secret missing or mismatched."
-        : "Complete OAuth connect first: https://mbk-project-spf5.onrender.com/api/oauth/gmail/help",
+      hint: "Complete OAuth connect: https://mbk-project-spf5.onrender.com/api/oauth/gmail/help",
       diagnostics,
     };
   }
@@ -372,7 +286,7 @@ const validateGmailApiConfiguration = async () => {
       ok: false,
       issues: [message],
       hint: formatGmailAuthHint(message),
-      diagnostics: getGmailOAuthDiagnostics(),
+      diagnostics,
     };
   }
 };

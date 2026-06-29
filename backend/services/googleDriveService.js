@@ -3,6 +3,11 @@ const path = require("path");
 const { Readable } = require("stream");
 const { google } = require("googleapis");
 
+const trimEnv = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+
 const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"];
 const DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
 const MIME_EXTENSION_MAP = {
@@ -177,23 +182,11 @@ const resolveServiceAccountConfig = () => {
 };
 
 const resolveOAuthDriveConfig = () => {
-  const clientId = String(
-    process.env.GOOGLE_DRIVE_CLIENT_ID ||
-      process.env.GOOGLE_OAUTH_CLIENT_ID ||
-      process.env.GOOGLE_CLIENT_ID ||
-      "",
-  ).trim();
-  const clientSecret = String(
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-      process.env.GOOGLE_CLIENT_SECRET ||
-      "",
-  ).trim();
+  const clientId = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID);
+  const clientSecret = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET);
   const refreshToken = String(
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
-      process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
-      process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
-      process.env.GOOGLE_REFRESH_TOKEN ||
+    process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
+      process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
       "",
   ).trim();
 

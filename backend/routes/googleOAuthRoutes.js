@@ -4,23 +4,14 @@ const { GMAIL_SEND_SCOPE } = require("../services/gmailApiService");
 
 const router = express.Router();
 
+const trimEnv = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+
 const resolveOAuthConfig = () => {
-  const clientId = String(
-    process.env.GOOGLE_DRIVE_CLIENT_ID ||
-      process.env.GOOGLE_OAUTH_CLIENT_ID ||
-      process.env.GOOGLE_CLIENT_ID ||
-      "",
-  )
-    .trim()
-    .replace(/^["']|["']$/g, "");
-  const clientSecret = String(
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-      process.env.GOOGLE_CLIENT_SECRET ||
-      "",
-  )
-    .trim()
-    .replace(/^["']|["']$/g, "");
+  const clientId = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID);
+  const clientSecret = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET);
   const backendUrl = String(
     process.env.BACKEND_URL || "https://mbk-project-spf5.onrender.com",
   )
@@ -28,7 +19,6 @@ const resolveOAuthConfig = () => {
     .replace(/\/+$/, "");
   const redirectUri = String(
     process.env.GOOGLE_DRIVE_OAUTH_REDIRECT_URI ||
-      process.env.GOOGLE_OAUTH_REDIRECT_URL ||
       `${backendUrl}/oauth2callback`,
   ).trim();
 
@@ -258,8 +248,6 @@ router.get("/oauth2callback", async (req, res) => {
           <p>Copy this entire block into Render → Environment (replace Client Secret with yours from Google Cloud):</p>
           <pre>GOOGLE_DRIVE_CLIENT_ID=${clientId || "YOUR_CLIENT_ID"}
 GOOGLE_DRIVE_CLIENT_SECRET=YOUR_CLIENT_SECRET_FROM_GOOGLE_CLOUD
-GOOGLE_OAUTH_CLIENT_ID=${clientId || "YOUR_CLIENT_ID"}
-GOOGLE_OAUTH_CLIENT_SECRET=YOUR_CLIENT_SECRET_FROM_GOOGLE_CLOUD
 GOOGLE_GMAIL_REFRESH_TOKEN=${refreshToken}
 GOOGLE_DRIVE_OAUTH_REDIRECT_URI=${config.redirectUri}
 GOOGLE_DRIVE_AUTH_MODE=oauth2
@@ -267,7 +255,7 @@ EMAIL_USER=${emailUser}
 EMAIL_FROM="MBK Carrierz" &lt;${emailUser}&gt;
 BACKEND_URL=${config.backendUrl}</pre>
           <p><strong>${clientSecretNote}</strong></p>
-          <p>Delete old duplicate refresh tokens (<code>GOOGLE_OAUTH_REFRESH_TOKEN</code>) if present — only <code>GOOGLE_GMAIL_REFRESH_TOKEN</code> is needed.</p>
+          <p>Delete <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> from Render if still present (old deleted client).</p>
           <p>Save Render → wait 2 minutes → test:</p>
           <pre>${config.backendUrl}/api/health/email</pre>
           <p>Must show <code>"ok": true</code>. Then try trainer signup OTP.</p>
