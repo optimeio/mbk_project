@@ -149,6 +149,7 @@ const resolveWorkingGmailClient = async () => {
     const candidate = candidates[0];
     try {
       const auth = createOAuth2ClientForConfig(candidate);
+      await auth.getAccessToken();
       const oauth2 = google.oauth2({ version: "v2", auth });
       await oauth2.userinfo.get();
       cachedWorkingConfig = candidate;
@@ -266,6 +267,7 @@ const validateGmailApiConfiguration = async () => {
   try {
     const candidate = collectGmailOAuthCandidates()[0];
     const auth = createOAuth2ClientForConfig(candidate);
+    await auth.getAccessToken();
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     const accountEmail = String(userInfo.data.email || "").toLowerCase();
