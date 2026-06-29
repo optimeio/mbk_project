@@ -143,17 +143,50 @@ const getGmailOAuthDiagnostics = () => {
     .trim()
     .replace(/\/+$/, "");
 
+  const clientIds = [
+    process.env.GOOGLE_GMAIL_CLIENT_ID,
+    process.env.GOOGLE_DRIVE_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_ID,
+  ]
+    .map(trimEnv)
+    .filter(Boolean);
+  const clientSecrets = [
+    process.env.GOOGLE_GMAIL_CLIENT_SECRET,
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    process.env.GOOGLE_CLIENT_SECRET,
+  ]
+    .map(trimEnv)
+    .filter(Boolean);
+  const refreshTokens = [
+    process.env.GOOGLE_GMAIL_REFRESH_TOKEN,
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+    process.env.GOOGLE_REFRESH_TOKEN,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  const primaryClientId = clientIds[0] || null;
+
   return {
     configured: candidates.length > 0,
     candidateCount: candidates.length,
     activePair: cachedWorkingConfig?.label || config?.label || null,
-    clientIdMasked: config?.clientId
-      ? `${config.clientId.slice(0, 12)}...${config.clientId.slice(-28)}`
+    clientIdMasked: primaryClientId
+      ? `${primaryClientId.slice(0, 12)}...${primaryClientId.slice(-28)}`
       : null,
-    hasClientSecret: Boolean(config?.clientSecret),
-    clientSecretLength: config?.clientSecret ? config.clientSecret.length : 0,
-    hasRefreshToken: Boolean(config?.refreshToken),
-    refreshTokenPrefix: config?.refreshToken ? config.refreshToken.slice(0, 8) : null,
+    hasClientId: clientIds.length > 0,
+    hasClientSecret: clientSecrets.length > 0,
+    clientSecretLength: clientSecrets[0] ? clientSecrets[0].length : 0,
+    hasRefreshToken: refreshTokens.length > 0,
+    refreshTokenPrefix: refreshTokens[0] ? refreshTokens[0].slice(0, 8) : null,
+    missingForGmailApi: [
+      ...(clientIds.length ? [] : ["GOOGLE_DRIVE_CLIENT_ID"]),
+      ...(clientSecrets.length ? [] : ["GOOGLE_DRIVE_CLIENT_SECRET"]),
+      ...(refreshTokens.length ? [] : ["GOOGLE_GMAIL_REFRESH_TOKEN"]),
+    ],
     emailUser: resolveGmailSenderEmail() || null,
     redirectUri: String(
       process.env.GOOGLE_DRIVE_OAUTH_REDIRECT_URI ||
@@ -161,6 +194,7 @@ const getGmailOAuthDiagnostics = () => {
         `${backendUrl}/oauth2callback`,
     ).trim(),
     reconnectUrl: `${backendUrl}/api/oauth/gmail/start?email=mbkdrive82@gmail.com`,
+    helpUrl: `${backendUrl}/api/oauth/gmail/help`,
   };
 };
 
@@ -285,12 +319,20 @@ const sendEmailViaGmailApi = async ({ to, subject, html, text, from }) => {
 };
 
 const validateGmailApiConfiguration = async () => {
+  const diagnostics = getGmailOAuthDiagnostics();
+
   if (!canUseGmailApi()) {
     return {
       ok: false,
       issues: [
-        "Missing Google OAuth credentials for Gmail API. Set GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_GMAIL_REFRESH_TOKEN (or GOOGLE_DRIVE_REFRESH_TOKEN with gmail.send scope).",
+        diagnostics.missingForGmailApi.length
+          ? `Missing on Render: ${diagnostics.missingForGmailApi.join(", ")}`
+          : "Missing Google OAuth credentials for Gmail API.",
       ],
+      hint: diagnostics.hasRefreshToken
+        ? "Refresh token present but client ID/secret missing or mismatched."
+        : "Complete OAuth connect first: https://mbk-project-spf5.onrender.com/api/oauth/gmail/help",
+      diagnostics,
     };
   }
 

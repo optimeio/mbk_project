@@ -131,6 +131,8 @@ router.get("/api/oauth/gmail/status", async (_req, res) => {
 
 router.get("/api/oauth/gmail/help", (_req, res) => {
   const config = resolveOAuthConfig();
+  const { getGmailOAuthDiagnostics } = require("../services/gmailApiService");
+  const diagnostics = getGmailOAuthDiagnostics();
   const startUrl = `${config.backendUrl}/api/oauth/gmail/start?email=mbkdrive82@gmail.com`;
 
   res.send(
@@ -139,14 +141,23 @@ router.get("/api/oauth/gmail/help", (_req, res) => {
       config,
       bodyHtml: `
         <p><strong>One OAuth client</strong> is used for Drive uploads and Gmail OTP — you do not need separate Gmail OAuth credentials.</p>
+        <p>Server status: Client ID ${diagnostics.hasClientId ? "✅" : "❌"} · Secret ${diagnostics.hasClientSecret ? "✅" : "❌"} · Refresh token ${diagnostics.hasRefreshToken ? "✅" : "❌"}</p>
+        ${diagnostics.clientIdMasked ? `<p>Active Client ID: <code>${diagnostics.clientIdMasked}</code></p>` : ""}
         <ol>
           <li>Google Cloud Console → same project → enable <strong>Gmail API</strong> and <strong>Google Drive API</strong>.</li>
-          <li>APIs &amp; Services → Credentials → open your <strong>OAuth 2.0 Web application</strong> client (the one you created for Drive).</li>
+          <li>APIs &amp; Services → Credentials → open your <strong>OAuth 2.0 Web application</strong> client.</li>
           <li>Authorized redirect URIs → add exactly: <code>${config.redirectUri}</code></li>
-          <li>OAuth consent screen → add test user <strong>mbkdrive82@gmail.com</strong>.</li>
-          <li>On Render, set <code>GOOGLE_DRIVE_CLIENT_ID</code> and <code>GOOGLE_DRIVE_CLIENT_SECRET</code> from that same Web client (both GOOGLE_OAUTH_* vars must match).</li>
-          <li>Click Connect below while signed in as <strong>mbkdrive82@gmail.com</strong>.</li>
-          <li>Copy the refresh token from the success page into Render as <code>GOOGLE_GMAIL_REFRESH_TOKEN</code>.</li>
+          <li><strong>OAuth consent screen</strong> → Publishing status must be <strong>Testing</strong> → Test users → add <strong>mbkdrive82@gmail.com</strong> (required or Google shows “Access blocked”).</li>
+          <li>On Render, set matching <code>GOOGLE_DRIVE_CLIENT_ID</code> + <code>GOOGLE_DRIVE_CLIENT_SECRET</code>.</li>
+          <li>Click Connect below in an <strong>Incognito</strong> window, signed in only as <strong>mbkdrive82@gmail.com</strong>.</li>
+          <li>Copy refresh token from success page → Render <code>GOOGLE_GMAIL_REFRESH_TOKEN</code> → Save → redeploy.</li>
+        </ol>
+        <h2>If Google shows “Access blocked”</h2>
+        <ol>
+          <li>Consent screen → Test users → confirm <strong>mbkdrive82@gmail.com</strong> is listed.</li>
+          <li>Remove old app access: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">Google Account permissions</a> → remove MBK app → connect again.</li>
+          <li>Use Incognito; do not use a different Gmail account.</li>
+          <li>Redirect URI on the OAuth client must exactly match: <code>${config.redirectUri}</code></li>
         </ol>
         <a class="btn" href="${startUrl}">Connect mbkdrive82@gmail.com</a>
       `,
