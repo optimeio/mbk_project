@@ -345,10 +345,6 @@ const sendMailWithProfiles = async (mailOptions) => {
 };
 
 const validateEmailConfiguration = async () => {
-  if (canUseGmailApi()) {
-    return validateGmailApiConfiguration();
-  }
-
   const httpProvider = getActiveHttpEmailProvider();
   const from = getDefaultFromAddress();
 
@@ -358,8 +354,12 @@ const validateEmailConfiguration = async () => {
       deliveryMode: `${httpProvider}-api`,
       from,
       smtpUser: smtpUser || null,
-      hint: "Using HTTPS email API (works on Render free tier).",
+      hint: `Using HTTPS email API (${httpProvider}) (works on Render free tier).`,
     };
+  }
+
+  if (httpProvider === "gmail") {
+    return validateGmailApiConfiguration();
   }
 
   const issues = [];
