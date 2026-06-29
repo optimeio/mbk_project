@@ -1249,7 +1249,7 @@ const validateDriveConfiguration = async () => {
   try {
     const drive = await getDriveClient();
     const metadata = await drive.files.get({
-      fileId,
+      fileId: folderId,
       fields: "id,name,mimeType,driveId",
       supportsAllDrives: true,
     });
