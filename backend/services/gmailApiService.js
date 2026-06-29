@@ -294,6 +294,12 @@ const validateGmailApiConfiguration = async () => {
       issues: [message],
       hint: formatGmailAuthHint(message),
       diagnostics,
+      debug: {
+        errorCode: error?.code,
+        httpStatus: error?.response?.status,
+        responseData: error?.response?.data || null,
+        errorErrors: error?.errors || null,
+      },
     };
   }
 };
