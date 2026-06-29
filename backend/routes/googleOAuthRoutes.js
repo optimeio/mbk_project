@@ -138,13 +138,15 @@ router.get("/api/oauth/gmail/help", (_req, res) => {
       title: "Gmail OAuth Setup",
       config,
       bodyHtml: `
-        <p>Use this for <strong>mbkdrive82@gmail.com</strong> OTP email on Render free tier.</p>
+        <p><strong>One OAuth client</strong> is used for Drive uploads and Gmail OTP — you do not need separate Gmail OAuth credentials.</p>
         <ol>
-          <li>Google Cloud Console → enable <strong>Gmail API</strong>.</li>
+          <li>Google Cloud Console → same project → enable <strong>Gmail API</strong> and <strong>Google Drive API</strong>.</li>
+          <li>APIs &amp; Services → Credentials → open your <strong>OAuth 2.0 Web application</strong> client (the one you created for Drive).</li>
+          <li>Authorized redirect URIs → add exactly: <code>${config.redirectUri}</code></li>
           <li>OAuth consent screen → add test user <strong>mbkdrive82@gmail.com</strong>.</li>
-          <li>OAuth client → add redirect URI shown below.</li>
-          <li>Set on Render: <code>GOOGLE_DRIVE_CLIENT_ID</code>, <code>GOOGLE_DRIVE_CLIENT_SECRET</code>, <code>GOOGLE_DRIVE_OAUTH_REDIRECT_URI</code>, <code>EMAIL_USER=mbkdrive82@gmail.com</code>.</li>
-          <li>Click start and sign in with mbkdrive82@gmail.com.</li>
+          <li>On Render, set <code>GOOGLE_DRIVE_CLIENT_ID</code> and <code>GOOGLE_DRIVE_CLIENT_SECRET</code> from that same Web client (both GOOGLE_OAUTH_* vars must match).</li>
+          <li>Click Connect below while signed in as <strong>mbkdrive82@gmail.com</strong>.</li>
+          <li>Copy the refresh token from the success page into Render as <code>GOOGLE_GMAIL_REFRESH_TOKEN</code>.</li>
         </ol>
         <a class="btn" href="${startUrl}">Connect mbkdrive82@gmail.com</a>
       `,
@@ -216,6 +218,8 @@ router.get("/oauth2callback", async (req, res) => {
       String(process.env.EMAIL_USER || "mbkdrive82@gmail.com").trim() ||
       "mbkdrive82@gmail.com";
     const { clientId } = createOAuthClient().config || {};
+    const clientSecretNote =
+      "Use the Client Secret from the SAME OAuth Web client in Google Cloud (Credentials page).";
 
     if (!refreshToken) {
       return res.send(
@@ -239,16 +243,23 @@ router.get("/oauth2callback", async (req, res) => {
         title: "Gmail connected",
         config,
         bodyHtml: `
-          <p class="ok">Success. Copy these into Render Environment:</p>
-          <pre>GOOGLE_GMAIL_REFRESH_TOKEN=${refreshToken}
-GOOGLE_DRIVE_CLIENT_ID=${clientId || "(same client used for this token)"}
+          <p class="ok">Success — one OAuth client powers both Drive and Gmail.</p>
+          <p>Copy this entire block into Render → Environment (replace Client Secret with yours from Google Cloud):</p>
+          <pre>GOOGLE_DRIVE_CLIENT_ID=${clientId || "YOUR_CLIENT_ID"}
+GOOGLE_DRIVE_CLIENT_SECRET=YOUR_CLIENT_SECRET_FROM_GOOGLE_CLOUD
+GOOGLE_OAUTH_CLIENT_ID=${clientId || "YOUR_CLIENT_ID"}
+GOOGLE_OAUTH_CLIENT_SECRET=YOUR_CLIENT_SECRET_FROM_GOOGLE_CLOUD
+GOOGLE_GMAIL_REFRESH_TOKEN=${refreshToken}
+GOOGLE_DRIVE_OAUTH_REDIRECT_URI=${config.redirectUri}
+GOOGLE_DRIVE_AUTH_MODE=oauth2
 EMAIL_USER=${emailUser}
 EMAIL_FROM="MBK Carrierz" &lt;${emailUser}&gt;
-GOOGLE_DRIVE_OAUTH_REDIRECT_URI=${config.redirectUri}</pre>
-          <p>Use the <strong>same</strong> Client ID + Secret on Render before saving the refresh token.</p>
-          <p>Save Render env → wait 2 minutes → test:</p>
+BACKEND_URL=${config.backendUrl}</pre>
+          <p><strong>${clientSecretNote}</strong></p>
+          <p>Delete old duplicate refresh tokens (<code>GOOGLE_OAUTH_REFRESH_TOKEN</code>) if present — only <code>GOOGLE_GMAIL_REFRESH_TOKEN</code> is needed.</p>
+          <p>Save Render → wait 2 minutes → test:</p>
           <pre>${config.backendUrl}/api/health/email</pre>
-          <p>Then try trainer signup OTP again.</p>
+          <p>Must show <code>"ok": true</code>. Then try trainer signup OTP.</p>
         `,
       }),
     );
