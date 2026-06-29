@@ -287,11 +287,17 @@ const isTrainerFinallyApproved = (trainer = {}) => {
   const registrationStatus = String(trainer.registrationStatus || "")
     .trim()
     .toLowerCase();
+  const documentStatus = String(
+    trainer.documentStatus || trainer.workflow?.documentStatus || "",
+  )
+    .trim()
+    .toLowerCase();
 
   return (
     status === "APPROVED" ||
     verificationStatus === "VERIFIED" ||
-    registrationStatus === "approved"
+    registrationStatus === "approved" ||
+    documentStatus === "approved"
   );
 };
 

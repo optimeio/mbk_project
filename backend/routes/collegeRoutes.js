@@ -1301,7 +1301,10 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
             // trainer under NM Trainers/{TrainerName}/{CollegeName}/Day 1..12/{Attendance,Geo Tag}
             // -------------------------------------------------
             let collegeHierarchy = null;
-            if (isTrainingDriveEnabled()) {
+            const { getDefaultTrainerDocumentsFolderId } = require('../services/googleDriveService');
+            const canProvisionDrive =
+              Boolean(getDefaultTrainerDocumentsFolderId()) || isTrainingDriveEnabled();
+            if (canProvisionDrive) {
                 try {
                     const trainerDoc = await Trainer.findById(trainer._id);
                     if (trainerDoc) {
@@ -1367,12 +1370,20 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                 }
             }
 
-            // Create schedules if provided
+            // Create schedules if provided; otherwise provision Day 1–12 slots automatically.
             const createdSchedules = [];
             const dayFoldersByNumber =
                 collegeHierarchy?.dayFoldersByDayNumber || null;
-            if (trainerData.schedules && trainerData.schedules.length > 0) {
-                for (const schedule of trainerData.schedules) {
+            const scheduleInputs = Array.isArray(trainerData.schedules) && trainerData.schedules.length > 0
+                ? trainerData.schedules
+                : Array.from({ length: 12 }, (_, index) => ({
+                    dayNumber: index + 1,
+                    startTime: '09:00',
+                    endTime: '17:00',
+                }));
+
+            if (scheduleInputs.length > 0) {
+                for (const schedule of scheduleInputs) {
                     if (!schedule.startTime || !schedule.endTime) {
                         console.warn(`[ASSIGN-TRAINERS] Skipping invalid schedule without startTime/endTime for trainer ${trainer._id}`);
                         continue;
@@ -1423,7 +1434,7 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                 await invalidateTrainerScheduleCaches(trainer._id);
             }
 
-            // Send notifications if schedules were created
+            // Send notifications when college is assigned (with or without explicit day schedules)
             if (createdSchedules.length > 0) {
                 const trainerInfo = {
                     name: trainer.userId?.name || 'Trainer',
@@ -1453,19 +1464,26 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
 
                 // Send email notification
                 try {
-                    if (trainer.userId?.email) {
+                    const trainerEmail = trainer.email || trainer.userId?.email || null;
+                    if (trainerEmail) {
                         const emailAssignments = createdSchedules.map(s => ({
                             course: college.courseId?.title || college.courseId?.name || 'Assigned Course',
-                            day: s.dayOfWeek,
+                            day: s.dayNumber ? `Day ${s.dayNumber}` : (s.dayOfWeek || 'Day 1'),
                             college: college.name,
-                            date: 'Weekly Recurring',
+                            date: s.scheduledDate
+                                ? new Date(s.scheduledDate).toLocaleDateString('en-GB').replace(/\//g, '-')
+                                : 'To be scheduled',
                             startTime: s.startTime,
                             endTime: s.endTime,
                             spocName: college.principalName || college.spocName || 'N/A',
                             spocPhone: college.phone || college.spocPhone || '',
                             mapLink: college.location?.mapUrl || ''
                         }));
-                        await sendBulkScheduleEmail(trainer.userId.email, trainer.name || trainer.userId.name, emailAssignments);
+                        await sendBulkScheduleEmail(
+                            trainerEmail,
+                            trainer.name || trainer.userId?.name || 'Trainer',
+                            emailAssignments,
+                        );
                     }
                 } catch (emailError) {
                     console.error('Error sending assignment email to trainer:', emailError);
@@ -1476,6 +1494,22 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                     trainerName: trainerInfo.name,
                     notifications: notificationResult
                 });
+            } else {
+                const trainerEmail = trainer.email || trainer.userId?.email || null;
+                if (trainerEmail) {
+                // College assigned without day schedules — still notify trainer
+                try {
+                    const { sendTrainerCollegeAssignmentEmail } = require('../utils/emailService');
+                    await sendTrainerCollegeAssignmentEmail(
+                        trainerEmail,
+                        trainerName || trainer.userId?.name || 'Trainer',
+                        college.name,
+                        collegeHierarchy?.collegeFolder?.link || null,
+                    );
+                } catch (emailError) {
+                    console.error('Error sending college assignment email to trainer:', emailError);
+                }
+                }
             }
         }
 

@@ -344,6 +344,61 @@ const sendMailWithProfiles = async (mailOptions) => {
   throw lastError || new Error("Email delivery failed");
 };
 
+/** Deliver mail via Resend/Brevo/Gmail HTTP API first, then SMTP fallback. */
+const deliverMailOptions = async (mailOptions = {}) => {
+  const to = mailOptions.to;
+  const subject = mailOptions.subject;
+  const html = mailOptions.html;
+  const text = mailOptions.text || null;
+
+  if (!to || !subject) {
+    return { success: false, error: "Missing email recipient or subject." };
+  }
+
+  const httpResult = await sendEmailViaHttpApi({ to, subject, html, text });
+  if (httpResult?.success) {
+    console.log(
+      `[EMAIL] Sent via ${httpResult.profile}:`,
+      httpResult.messageId || "",
+    );
+    return httpResult;
+  }
+
+  if (httpResult && httpResult.success === false && canUseGmailApi()) {
+    const gmailResult = await sendEmailViaGmailApi({
+      to,
+      subject,
+      html,
+      text,
+      from: getDefaultFromAddress(),
+    });
+    if (gmailResult?.success) {
+      console.log(
+        `[EMAIL] Sent via ${gmailResult.profile} (fallback after HTTP provider failure):`,
+        gmailResult.messageId || "",
+      );
+      return gmailResult;
+    }
+  }
+
+  if (!transporter && !buildSmtpTransportProfiles().length) {
+    return {
+      success: false,
+      error:
+        httpResult?.error ||
+        "Email service is not configured. Set RESEND_API_KEY or SMTP credentials.",
+    };
+  }
+
+  try {
+    const { info, profile } = await sendMailWithProfiles(mailOptions);
+    return { success: true, messageId: info.messageId, profile };
+  } catch (error) {
+    console.error("[EMAIL] Delivery failed:", error?.message || error);
+    return { success: false, error: error?.message || String(error) };
+  }
+};
+
 const validateEmailConfiguration = async () => {
   const httpProvider = getActiveHttpEmailProvider();
   const from = getDefaultFromAddress();
@@ -922,17 +977,7 @@ const sendBulkScheduleEmail = async (trainerEmail, trainerName, schedules) => {
         `,
   };
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(
-      `Smart Bulk Assign email sent to ${trainerEmail}:`,
-      info.messageId,
-    );
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error(`Error sending smart bulk email to ${trainerEmail}:`, error);
-    return { success: false, error: error.message };
-  }
+  return deliverMailOptions(mailOptions);
 };
 
 const { generateICS } = require("./calendar");
@@ -1096,20 +1141,7 @@ const sendScheduleChangeEmail = async (
     attachments: attachments,
   };
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(
-      `Smart ${changeType} email sent to ${trainerEmail}:`,
-      info.messageId,
-    );
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error(
-      `Error sending smart ${changeType} email to ${trainerEmail}:`,
-      error,
-    );
-    return { success: false, error: error.message };
-  }
+  return deliverMailOptions(mailOptions);
 };
 
 // 4️⃣ TRAINER COMPLAINT – EMAIL
@@ -1850,14 +1882,7 @@ const sendTrainerApprovalEmail = async (
     `,
   };
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Trainer approval email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("Error sending trainer approval email:", error);
-    return { success: false, error: error.message };
-  }
+  return deliverMailOptions(mailOptions);
 };
 
 const sendTrainerCollegeAssignmentEmail = async (
@@ -1890,12 +1915,7 @@ const sendTrainerCollegeAssignmentEmail = async (
     `,
   };
 
-  try {
-    return await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error('Error sending trainer college assignment email:', error.message);
-    return { success: false, error: error.message };
-  }
+  return deliverMailOptions(mailOptions);
 };
 
 const sendTrainerLogin = async (trainer) => {
@@ -1927,12 +1947,7 @@ const sendTrainerLogin = async (trainer) => {
     `,
   };
 
-  try {
-    return await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error("Error sending trainer login details:", error);
-    return { success: false, error: error.message };
-  }
+  return deliverMailOptions(mailOptions);
 };
 
 const sendCompanyAdminWelcomeEmail = async ({
@@ -2000,6 +2015,7 @@ module.exports = {
   sendRegistrationOTP,
   sendTrainerApprovalEmail,
   sendTrainerCollegeAssignmentEmail,
+  deliverMailOptions,
   sendMail,
   sendOtpEmail,
   sendTrainerLogin,

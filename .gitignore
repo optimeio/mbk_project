@@ -50,6 +50,7 @@ backend/temp/
 *.sw?
 
 # Private Service Accounts & Secrets
+backend/config/service-account.json
 backend/config/superadmin-*.json
 backend/config/mbk-tsmg-drive-31c901fee365.json
 **/superadmin-*.json

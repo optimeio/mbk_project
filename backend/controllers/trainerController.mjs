@@ -235,6 +235,23 @@ export const approveTrainer = async (req, res) => {
       });
     }
 
+    // Send approval email (Resend HTTP API on Render, SMTP fallback locally)
+    try {
+      const { sendTrainerApprovalEmail } = await import('../utils/emailService.js');
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+      const trainerName =
+        `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || trainer.email;
+      await sendTrainerApprovalEmail(
+        trainer.email,
+        trainerName,
+        `${frontendUrl}/login`,
+        trainer.trainerId,
+        null,
+      );
+    } catch (emailError) {
+      console.error('Failed to send trainer approval email:', emailError.message);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Trainer approved successfully',
@@ -264,7 +281,7 @@ export const assignCollegeToTrainer = async (req, res) => {
     }
 
     // Get trainer and college
-    const trainer = await Trainer.findById(trainerId);
+    const trainer = await Trainer.findById(trainerId).populate('userId', 'name email firstName lastName');
     const college = await College.findById(collegeId);
 
     if (!trainer || !college) {
@@ -274,15 +291,14 @@ export const assignCollegeToTrainer = async (req, res) => {
       });
     }
 
-    // Check if already assigned
-    const alreadyAssigned = (trainer.colleges || []).some(
+    // Check if already assigned — refresh drive folders and schedules instead of blocking.
+    const existingCollegeEntry = (trainer.colleges || []).find(
       (c) => String(c.collegeId) === String(collegeId),
     );
-    if (alreadyAssigned) {
-      return res.status(409).json({
-        success: false,
-        message: 'College already assigned to this trainer',
-      });
+    if (existingCollegeEntry) {
+      existingCollegeEntry.active = true;
+      existingCollegeEntry.status = 'active';
+      existingCollegeEntry.assignedDate = new Date();
     }
 
     // Deactivate previous college entries so the dashboard shows the latest one.
@@ -353,17 +369,27 @@ export const assignCollegeToTrainer = async (req, res) => {
       // is re-ensured automatically on the trainer's first daily upload.
     }
 
-    // Add college assignment to trainer record
-    trainer.colleges.push({
-      collegeId,
-      collegeName,
-      googleDriveFolderId: collegeFolderId,
-      googleDriveFolderName: collegeName,
-      collegeLink,
-      dayFolders: mappedDayFolders,
-      assignedDate: new Date(),
-      status: 'active',
-    });
+    // Add college assignment to trainer record (skip duplicate push when refreshing)
+    if (!existingCollegeEntry) {
+      trainer.colleges.push({
+        collegeId,
+        collegeName,
+        googleDriveFolderId: collegeFolderId,
+        googleDriveFolderName: collegeName,
+        collegeLink,
+        dayFolders: mappedDayFolders,
+        assignedDate: new Date(),
+        status: 'active',
+        active: true,
+      });
+    } else {
+      existingCollegeEntry.googleDriveFolderId = collegeFolderId || existingCollegeEntry.googleDriveFolderId;
+      existingCollegeEntry.googleDriveFolderName = collegeName;
+      existingCollegeEntry.collegeLink = collegeLink || existingCollegeEntry.collegeLink;
+      if (mappedDayFolders.length) {
+        existingCollegeEntry.dayFolders = mappedDayFolders;
+      }
+    }
 
     if (collegeFolderId) {
       trainer.collegeDriveFolderId = collegeFolderId;
@@ -389,28 +415,123 @@ export const assignCollegeToTrainer = async (req, res) => {
       college.trainers.push(trainer._id);
     }
 
+    // Create Day 1–12 schedule slots so the trainer dashboard is actionable immediately.
+    const { Schedule } = require('../models');
+    const { invalidateTrainerScheduleCaches } = require('../services/trainerScheduleCacheService');
+    const createdSchedules = [];
+    const defaultStartTime = '09:00';
+    const defaultEndTime = '17:00';
+
+    for (let dayNumber = 1; dayNumber <= 12; dayNumber += 1) {
+      const dayMeta = dayFoldersForResponse[dayNumber] || dayFoldersForResponse[String(dayNumber)] || null;
+      try {
+        const existingSchedule = await Schedule.findOne({
+          trainerId: trainer._id,
+          collegeId: college._id,
+          dayNumber,
+          isActive: { $ne: false },
+        });
+
+        const scheduleFields = {
+          trainerId: trainer._id,
+          collegeId: college._id,
+          companyId: college.companyId || null,
+          courseId: college.courseId || null,
+          dayNumber,
+          startTime: defaultStartTime,
+          endTime: defaultEndTime,
+          status: 'scheduled',
+          isActive: true,
+          collegeLocation: college.location || {},
+          ...(dayMeta?.id
+            ? {
+                dayFolderId: dayMeta.id,
+                dayFolderName: `Day ${dayNumber}`,
+                attendanceFolderId: dayMeta.attendanceFolder?.id || null,
+                attendanceFolderName: 'Attendance',
+                geoTagFolderId: dayMeta.geoTagFolder?.id || null,
+                geoTagFolderName: 'Geo Tag',
+                driveFolderId: dayMeta.id,
+                driveFolderName: `Day ${dayNumber}`,
+              }
+            : {}),
+        };
+
+        if (existingSchedule) {
+          Object.assign(existingSchedule, scheduleFields);
+          await existingSchedule.save();
+          createdSchedules.push(existingSchedule);
+        } else {
+          const newSchedule = await Schedule.create(scheduleFields);
+          createdSchedules.push(newSchedule);
+        }
+      } catch (scheduleError) {
+        console.error(
+          `[ASSIGN-COLLEGE] Failed to create/update Day ${dayNumber} schedule:`,
+          scheduleError.message,
+        );
+      }
+    }
+
+    if (typeof invalidateTrainerScheduleCaches === 'function') {
+      await invalidateTrainerScheduleCaches(trainer._id);
+    }
+
     // Send assignment email
+    const trainerEmail =
+      trainer.email ||
+      trainer.userId?.email ||
+      null;
+    const trainerDisplayName =
+      `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() ||
+      trainer.userId?.name ||
+      trainerEmail ||
+      'Trainer';
+
     try {
       const emailModule = await import('../utils/emailService.js');
       const sendTrainerCollegeAssignmentEmail =
         emailModule.sendTrainerCollegeAssignmentEmail ||
         emailModule.default?.sendTrainerCollegeAssignmentEmail;
-      if (typeof sendTrainerCollegeAssignmentEmail === 'function') {
+      const sendBulkScheduleEmail =
+        emailModule.sendBulkScheduleEmail ||
+        emailModule.default?.sendBulkScheduleEmail;
+
+      if (trainerEmail && typeof sendTrainerCollegeAssignmentEmail === 'function') {
         await sendTrainerCollegeAssignmentEmail(
-          trainer.email,
-          `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || trainer.email,
+          trainerEmail,
+          trainerDisplayName,
           collegeName,
           collegeLink,
         );
-      } else {
-        console.warn('sendTrainerCollegeAssignmentEmail is not available from emailService module');
+      }
+
+      if (
+        trainerEmail &&
+        createdSchedules.length > 0 &&
+        typeof sendBulkScheduleEmail === 'function'
+      ) {
+        const emailAssignments = createdSchedules.map((schedule) => ({
+          course: college.courseId?.title || college.courseId?.name || 'Assigned Course',
+          day: `Day ${schedule.dayNumber || 1}`,
+          college: collegeName,
+          date: 'To be scheduled',
+          startTime: schedule.startTime || defaultStartTime,
+          endTime: schedule.endTime || defaultEndTime,
+          spocName: college.principalName || college.spocName || 'N/A',
+          spocPhone: college.phone || college.spocPhone || '',
+          mapLink: college.location?.mapUrl || '',
+        }));
+        await sendBulkScheduleEmail(trainerEmail, trainerDisplayName, emailAssignments);
       }
     } catch (emailError) {
       console.error('Failed to send college assignment email:', emailError);
     }
 
-    // Increment total trainers for college
-    college.totalTrainers += 1;
+    // Increment total trainers for college (only on first assignment)
+    if (!existingCollegeEntry) {
+      college.totalTrainers = (college.totalTrainers || 0) + 1;
+    }
     await college.save();
 
     res.status(200).json({
@@ -424,6 +545,7 @@ export const assignCollegeToTrainer = async (req, res) => {
         collegeLink,
         dayFolders: mappedDayFolders,
         dayFoldersDetail: dayFoldersForResponse,
+        schedulesCreated: createdSchedules.length,
       },
     });
   } catch (error) {
@@ -522,9 +644,13 @@ export const getTrainerColleges = async (req, res) => {
       });
     }
 
+    const activeColleges = (trainer.colleges || []).filter(
+      (entry) => entry && entry.active !== false && entry.status !== 'completed',
+    );
+
     res.status(200).json({
       success: true,
-      data: trainer.colleges,
+      data: activeColleges,
     });
   } catch (error) {
     console.error('Get trainer colleges error:', error);

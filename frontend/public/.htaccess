@@ -19,6 +19,10 @@
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
+  # Static export: serve prebuilt college/department shells for any dynamic id
+  RewriteRule ^dashboard/companies/college/[^/]+/department/[^/]+/?$ /dashboard/companies/college/1/department/1/index.html [L]
+  RewriteRule ^dashboard/companies/college/[^/]+/?$ /dashboard/companies/college/1/index.html [L]
+
   # For paths that have a trailing slash and an index.html exists, serve it
   RewriteCond %{REQUEST_FILENAME}/index.html -f
   RewriteRule ^(.*)$ $1/index.html [L]

@@ -79,6 +79,7 @@ const { notifyTrainerSchedule } = require("../../services/notificationService");
 const {
   ensureCompanyHierarchy,
   isTrainingDriveEnabled,
+  ensureTrainerCollegeHierarchy,
 } = require("../drive/driveGateway");
 const {
   createCorrelationId,
@@ -913,6 +914,96 @@ const getCaseInsensitiveCellValue = (row = {}, key = "") => {
   return actualKey ? row[actualKey] : null;
 };
 
+const resolveTrainerNmTrainersFolderFields = async ({
+  trainerId,
+  college,
+  dayNumber = 1,
+} = {}) => {
+  if (!trainerId || !college?.name) return {};
+
+  const { Trainer } = require("../../models");
+  const trainerDoc = await Trainer.findById(trainerId);
+  if (!trainerDoc) return {};
+
+  try {
+    const hierarchy = await ensureTrainerCollegeHierarchy({
+      trainer: trainerDoc,
+      collegeName: college.name,
+      totalDays: 12,
+    });
+
+    const dayNum = Math.max(1, Number(dayNumber) || 1);
+    const dayMeta = (hierarchy.dayFoldersByDayNumber || {})[dayNum] || {};
+
+    let collegeEntry = (trainerDoc.colleges || []).find(
+      (entry) =>
+        String(entry?.collegeId?._id || entry?.collegeId) === String(college._id),
+    );
+
+    if (!collegeEntry) {
+      (trainerDoc.colleges || []).forEach((entry) => {
+        if (entry && String(entry.collegeId) !== String(college._id)) {
+          entry.active = false;
+          if (entry.status === "active") entry.status = "completed";
+        }
+      });
+      collegeEntry = {
+        collegeId: college._id,
+        collegeName: college.name,
+        assignedDate: new Date(),
+        active: true,
+        status: "active",
+      };
+      trainerDoc.colleges = trainerDoc.colleges || [];
+      trainerDoc.colleges.push(collegeEntry);
+    }
+
+    if (hierarchy.collegeFolder?.id) {
+      collegeEntry.googleDriveFolderId = hierarchy.collegeFolder.id;
+      collegeEntry.googleDriveFolderName = college.name;
+      collegeEntry.collegeLink = hierarchy.collegeFolder.link || null;
+      trainerDoc.collegeDriveFolderId = hierarchy.collegeFolder.id;
+      trainerDoc.collegeDriveFolderName = college.name;
+      trainerDoc.collegeId = college._id;
+    }
+
+    if (hierarchy.dayFoldersByDayNumber) {
+      collegeEntry.dayFolders = Object.entries(hierarchy.dayFoldersByDayNumber).map(
+        ([dayKey, folders]) => ({
+          day: Number(dayKey),
+          dayFolderId: folders.id,
+          attendance: folders.attendanceFolder?.id || null,
+          geo_tag: folders.geoTagFolder?.id || null,
+          excel_sheet: null,
+        }),
+      );
+    }
+
+    await trainerDoc.save();
+
+    if (!dayMeta.id) return {};
+
+    return {
+      dayFolderId: dayMeta.id,
+      dayFolderName: `Day ${dayNum}`,
+      attendanceFolderId: dayMeta.attendanceFolder?.id || null,
+      attendanceFolderName: "Attendance",
+      geoTagFolderId: dayMeta.geoTagFolder?.id || null,
+      geoTagFolderName: "Geo Tag",
+      driveFolderId: dayMeta.id,
+      driveFolderName: `Day ${dayNum}`,
+    };
+  } catch (error) {
+    schedulesAsyncLogger.warn({
+      stage: "create_schedule_nm_trainers_hierarchy_failed",
+      reason: error?.message || "Unknown error",
+      trainerId: String(trainerId),
+      collegeId: college?._id ? String(college._id) : null,
+    });
+    return {};
+  }
+};
+
 const createScheduleFeed = async ({
   payload = {},
   actorUserId = null,
@@ -972,11 +1063,24 @@ const createScheduleFeed = async ({
     });
   }
 
+  let nmFolderFields = {};
+  if (trainerId && college) {
+    nmFolderFields = await resolveTrainerNmTrainersFolderFields({
+      trainerId,
+      college,
+      dayNumber,
+    });
+  }
+
+  const mergedFolderFields = nmFolderFields?.dayFolderId
+    ? { ...(folderFields || {}), ...nmFolderFields }
+    : folderFields || {};
+
   const schedule = await createScheduleLoader({
     schedulePayload: {
       trainerId,
-      companyId,
-      courseId,
+      companyId: companyId || college?.companyId || null,
+      courseId: courseId || college?.courseId || null,
       collegeId,
       departmentId: departmentId || null,
       collegeLocation: college?.location || {},
@@ -989,7 +1093,7 @@ const createScheduleFeed = async ({
       remarks,
       createdBy,
       status: "scheduled",
-      ...(folderFields || {}),
+      ...(mergedFolderFields || {}),
     },
   });
 
@@ -1239,6 +1343,20 @@ const bulkCreateSchedulesFeed = async ({
       });
     }
 
+    let nmFolderFields = {};
+    const collegeForNm = collegeMap[String(schedule.collegeId)];
+    if (schedulePayload.trainerId && collegeForNm) {
+      nmFolderFields = await resolveTrainerNmTrainersFolderFields({
+        trainerId: schedulePayload.trainerId,
+        college: collegeForNm,
+        dayNumber: schedulePayload.dayNumber,
+      });
+    }
+
+    const mergedFolderFields = nmFolderFields?.dayFolderId
+      ? { ...(folderFields || {}), ...nmFolderFields }
+      : folderFields || {};
+
     if (existingDaySlot?._id) {
       updateOps.push({
         updateOne: {
@@ -1259,7 +1377,7 @@ const bulkCreateSchedulesFeed = async ({
               isActive: true,
               collegeLocation: collegeMap[String(schedule.collegeId)]?.location || {},
               createdBy: createdBy || actorUserId,
-              ...(folderFields || {}),
+              ...(mergedFolderFields || {}),
             },
           },
         },
@@ -1285,7 +1403,7 @@ const bulkCreateSchedulesFeed = async ({
       collegeLocation: collegeMap[String(schedule.collegeId)]?.location || {},
       createdBy: createdBy || actorUserId,
       status: "scheduled",
-      ...(folderFields || {}),
+      ...(mergedFolderFields || {}),
     });
   }
 
@@ -1924,7 +2042,23 @@ const assignScheduleFeed = async ({
     dayNumber: schedule.dayNumber,
     fallbackFields: typeof schedule.toObject === "function" ? schedule.toObject() : schedule,
   });
-  Object.assign(schedule, folderFields || {});
+
+  let nmFolderFields = {};
+  const collegeForAssign = await getCollegeByIdLoader({ collegeId: schedule.collegeId });
+  if (trainerId && collegeForAssign) {
+    nmFolderFields = await resolveTrainerNmTrainersFolderFields({
+      trainerId,
+      college: collegeForAssign,
+      dayNumber: schedule.dayNumber,
+    });
+  }
+
+  Object.assign(
+    schedule,
+    nmFolderFields?.dayFolderId
+      ? { ...(folderFields || {}), ...nmFolderFields }
+      : folderFields || {},
+  );
 
   const updatedSchedule = await saveScheduleLoader({ schedule });
 
