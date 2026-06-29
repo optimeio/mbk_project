@@ -41,6 +41,25 @@ export const registerTrainer = async (req, res) => {
       });
     }
 
+    // Create linked User record so the trainer is indexed properly by the system and can log in
+    let user = await User.findOne({ email: email.trim().toLowerCase() });
+    if (!user) {
+      const crypto = require('crypto');
+      const tempPassword = crypto.randomBytes(18).toString('hex');
+      user = await User.create({
+        name: `${firstName} ${lastName}`.trim(),
+        email: email.trim().toLowerCase(),
+        password: tempPassword,
+        role: 'Trainer',
+        phoneNumber: phone,
+        phone: phone,
+        isActive: false,
+        accountStatus: 'pending',
+        emailVerified: false,
+        isEmailVerified: false,
+      });
+    }
+
     // Create trainer record first so we have a canonical trainerId, then build
     // the ONE trainer Drive folder (NM Trainers/<First Last>/documents) that is
     // shared by both documents and future college uploads. Using the canonical
@@ -54,6 +73,7 @@ export const registerTrainer = async (req, res) => {
       mobile: phone,
       qualifications,
       registrationStatus: 'pending',
+      userId: user._id,
     });
 
     // Ensure a canonical trainer code (MBK###) exists before building Drive

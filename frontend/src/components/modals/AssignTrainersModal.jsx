@@ -100,7 +100,7 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
             schedules: (trainerSchedules[trainerId] || []).map(({ id, ...schedule }) => schedule)
         }));
 
-        onSave(college.id, trainersData);
+        onSave(college.id || college._id, trainersData);
         onClose();
     };
 

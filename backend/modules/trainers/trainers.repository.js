@@ -69,10 +69,14 @@ const findTrainerDirectoryPage = async ({
         as: "user",
       },
     },
-    { $unwind: "$user" },
+    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
     {
       $match: {
-        "user.role": { $regex: /^trainer$/i },
+        $or: [
+          { "user.role": { $regex: /^trainer$/i } },
+          { userId: { $exists: false } },
+          { userId: null },
+        ],
       },
     },
     ...queryStages,
@@ -81,7 +85,12 @@ const findTrainerDirectoryPage = async ({
         userSortName: {
           $toLower: {
             $trim: {
-              input: { $ifNull: ["$user.name", ""] },
+              input: {
+                $ifNull: [
+                  "$user.name",
+                  { $concat: [{ $ifNull: ["$firstName", ""] }, " ", { $ifNull: ["$lastName", ""] }] },
+                ],
+              },
             },
           },
         },
@@ -116,18 +125,24 @@ const findTrainerDirectoryPage = async ({
               createdAt: 1,
               updatedAt: 1,
               userId: {
-                _id: "$user._id",
-                name: "$user.name",
-                firstName: "$user.firstName",
-                lastName: "$user.lastName",
-                email: "$user.email",
-                phoneNumber: "$user.phoneNumber",
-                city: "$user.city",
-                specialization: "$user.specialization",
-                experience: "$user.experience",
-                isActive: "$user.isActive",
-                role: "$user.role",
-                createdAt: "$user.createdAt",
+                $cond: {
+                  if: { $gt: ["$user._id", null] },
+                  then: {
+                    _id: "$user._id",
+                    name: "$user.name",
+                    firstName: "$user.firstName",
+                    lastName: "$user.lastName",
+                    email: "$user.email",
+                    phoneNumber: "$user.phoneNumber",
+                    city: "$user.city",
+                    specialization: "$user.specialization",
+                    experience: "$user.experience",
+                    isActive: "$user.isActive",
+                    role: "$user.role",
+                    createdAt: "$user.createdAt",
+                  },
+                  else: "$$REMOVE",
+                },
               },
             },
           },

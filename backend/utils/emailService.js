@@ -61,14 +61,14 @@ const getActiveHttpEmailProvider = () => {
   }
 
   // Fallback defaults
-  if (canUseGmailApi()) {
-    return "gmail";
+  if ((process.env.RESEND_API_KEY || "").trim()) {
+    return "resend";
   }
   if ((process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || "").trim()) {
     return "brevo";
   }
-  if ((process.env.RESEND_API_KEY || "").trim()) {
-    return "resend";
+  if (canUseGmailApi()) {
+    return "gmail";
   }
   return null;
 };
@@ -377,32 +377,30 @@ const deliverMailOptions = async (mailOptions = {}) => {
     return httpResult;
   }
 
-  const preferredProvider = String(process.env.EMAIL_PROVIDER || "")
-    .trim()
-    .toLowerCase();
-
-  if (httpResult && httpResult.success === false && preferredProvider === "resend") {
+  if (httpResult && httpResult.success === false) {
     console.error(
-      "[EMAIL] Resend delivery failed:",
-      httpResult.error || "Unknown Resend error",
+      `[EMAIL] HTTP provider failed (${httpResult.profile}):`,
+      httpResult.error || "Unknown HTTP email error",
     );
-    return httpResult;
-  }
 
-  if (httpResult && httpResult.success === false && canUseGmailApi()) {
-    const gmailResult = await sendEmailViaGmailApi({
-      to,
-      subject,
-      html,
-      text,
-      from: getDefaultFromAddress(),
-    });
-    if (gmailResult?.success) {
-      console.log(
-        `[EMAIL] Sent via ${gmailResult.profile} (fallback after HTTP provider failure):`,
-        gmailResult.messageId || "",
-      );
-      return gmailResult;
+    const triedGmailFallback =
+      httpResult.profile !== "gmail-api" && canUseGmailApi();
+
+    if (triedGmailFallback) {
+      const gmailResult = await sendEmailViaGmailApi({
+        to,
+        subject,
+        html,
+        text,
+        from: getDefaultFromAddress(),
+      });
+      if (gmailResult?.success) {
+        console.log(
+          `[EMAIL] Sent via ${gmailResult.profile} (fallback after HTTP provider failure):`,
+          gmailResult.messageId || "",
+        );
+        return gmailResult;
+      }
     }
   }
 
@@ -1644,7 +1642,7 @@ const sendRegistrationOTP = async (userEmail, userName, otp) => {
   }
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || `"MBK BY TSMG" <${smtpUser}>`,
+    from: getDefaultFromAddress(),
     to: userEmail,
     subject: `Your Verification Code - MBK BY TSMG`,
     html: `
@@ -1705,9 +1703,32 @@ const sendRegistrationOTP = async (userEmail, userName, otp) => {
     return httpResult;
   }
   if (httpResult && httpResult.success === false) {
-    if (canUseGmailApi()) {
-      return httpResult;
+    console.error(
+      `[EMAIL] HTTP provider failed (${httpResult.profile}):`,
+      httpResult.error || "Unknown HTTP email error",
+    );
+
+    const tryGmailFallback =
+      httpResult.profile !== "gmail-api" && canUseGmailApi();
+
+    if (tryGmailFallback) {
+      const gmailResult = await sendEmailViaGmailApi({
+        to: userEmail,
+        subject: mailOptions.subject,
+        html: mailOptions.html,
+        text: mailOptions.text,
+        from: getDefaultFromAddress(),
+      });
+
+      if (gmailResult?.success) {
+        console.log(
+          "Registration OTP email sent successfully via Gmail API fallback:",
+          gmailResult.messageId,
+        );
+        return gmailResult;
+      }
     }
+
     console.warn(
       "[EMAIL] HTTP provider failed, falling back to SMTP:",
       httpResult.error,
@@ -1755,7 +1776,7 @@ const sendTrainerApprovalEmail = async (
                             </tr>`;
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || `"MBK CarrierZ" <${smtpUser}>`,
+    from: getDefaultFromAddress(),
     to: trainerEmail,
     subject: "Profile Approved Successfully - MBK CarrierZ",
     html: `
@@ -1868,7 +1889,7 @@ const sendTrainerCollegeAssignmentEmail = async (
   const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
   const loginUrl = `${frontendUrl}/login`;
   const mailOptions = {
-    from: process.env.EMAIL_FROM || `"MBK BY TSMG" <${smtpUser}>`,
+    from: getDefaultFromAddress(),
     to: trainerEmail,
     subject: `College Assigned: ${collegeName}`,
     html: `

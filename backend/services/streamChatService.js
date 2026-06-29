@@ -1778,6 +1778,9 @@ const sendAnnouncementMessage = async (user, body) => {
  * Updates a user's avatar/profile picture in Stream Chat.
  */
 const updateUserAvatar = async (userId, imageUrl, options = {}) => {
+    if (!isStreamChatConfigured()) {
+        return { success: false, message: 'Stream Chat not configured' };
+    }
     const correlationId =
         options?.correlationId ||
         createCorrelationId('chat_avatar');

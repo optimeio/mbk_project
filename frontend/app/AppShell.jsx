@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import RouteLoadingOverlay from "@/components/common/RouteLoadingOverlay";
 import ResponsiveAppShell from "@/components/common/ResponsiveAppShell";
@@ -24,7 +24,17 @@ const REALTIME_ROUTE_PATTERNS = [
 ];
 
 export default function AppShell({ children, portalDataProvider: PortalDataProvider }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const pathname = usePathname();
+
+  if (!mounted) {
+    return null;
+  }
+
   const resolvedPathname = pathname || "/";
   const isPublicRoute = isPublicPath(resolvedPathname);
   const isPortalRoute = isPortalPath(resolvedPathname);

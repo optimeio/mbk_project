@@ -269,8 +269,6 @@ const ensureTrainerCollegeHierarchy = async ({
       parentFolderId: dayFolder.id,
     });
 
-    // Per requirement, each Day folder contains ONLY "Attendance" and "Geo Tag".
-    // No "Excel Sheet" subfolder is created.
     dayFoldersByDayNumber[dayNumber] = {
       ...toFolderPayload(dayFolder),
       attendanceFolder: toFolderPayload(attendanceFolder),
