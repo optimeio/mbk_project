@@ -279,7 +279,7 @@ const initTrainerRegistration = async ({
     purpose: OTP_PURPOSE.TRAINER_REGISTRATION,
     recipientName: user.name || "Trainer Candidate",
     ipAddress,
-    awaitDelivery: true,
+    awaitDelivery: false,
   });
 
   user.emailOtp = null;

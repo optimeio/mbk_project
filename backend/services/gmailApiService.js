@@ -3,38 +3,108 @@ const MailComposer = require("nodemailer/lib/mail-composer");
 
 const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 
-const resolveGmailOAuthConfig = () => {
-  const clientId = String(
-    process.env.GOOGLE_GMAIL_CLIENT_ID ||
-      process.env.GOOGLE_DRIVE_CLIENT_ID ||
-      process.env.GOOGLE_OAUTH_CLIENT_ID ||
-      process.env.GOOGLE_CLIENT_ID ||
-      "",
-  )
+const trimEnv = (value = "") =>
+  String(value || "")
     .trim()
     .replace(/^["']|["']$/g, "");
-  const clientSecret = String(
-    process.env.GOOGLE_GMAIL_CLIENT_SECRET ||
-      process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
-      process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-      process.env.GOOGLE_CLIENT_SECRET ||
-      "",
-  )
-    .trim()
-    .replace(/^["']|["']$/g, "");
-  const refreshToken = String(
-    process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
-      process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
-      process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
-      process.env.GOOGLE_REFRESH_TOKEN ||
-      "",
-  ).trim();
 
-  if (!clientId || !clientSecret || !refreshToken) {
-    return null;
+const collectGmailOAuthCandidates = () => {
+  const clientIds = [
+    process.env.GOOGLE_GMAIL_CLIENT_ID,
+    process.env.GOOGLE_DRIVE_CLIENT_ID,
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_ID,
+  ]
+    .map(trimEnv)
+    .filter(Boolean);
+
+  const clientSecrets = [
+    process.env.GOOGLE_GMAIL_CLIENT_SECRET,
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+    process.env.GOOGLE_CLIENT_SECRET,
+  ]
+    .map(trimEnv)
+    .filter(Boolean);
+
+  const refreshTokens = [
+    process.env.GOOGLE_GMAIL_REFRESH_TOKEN,
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+    process.env.GOOGLE_REFRESH_TOKEN,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  const uniqueIds = [...new Set(clientIds)];
+  const uniqueSecrets = [...new Set(clientSecrets)];
+  const uniqueTokens = [...new Set(refreshTokens)];
+
+  if (!uniqueIds.length || !uniqueSecrets.length || !uniqueTokens.length) {
+    return [];
   }
 
-  return { clientId, clientSecret, refreshToken };
+  const candidates = [];
+  const seen = new Set();
+
+  const addCandidate = (clientId, clientSecret, refreshToken, label) => {
+    if (!clientId || !clientSecret || !refreshToken) {
+      return;
+    }
+    const key = `${clientId}|${clientSecret}|${refreshToken.slice(0, 16)}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    candidates.push({ clientId, clientSecret, refreshToken, label });
+  };
+
+  // Prefer explicit env pairs before brute-force combinations.
+  addCandidate(
+    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID),
+    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+    String(process.env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim(),
+    "oauth-pair",
+  );
+  addCandidate(
+    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID),
+    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET),
+    String(process.env.GOOGLE_GMAIL_REFRESH_TOKEN || "").trim(),
+    "drive+gmail-token",
+  );
+  addCandidate(
+    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID),
+    trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET),
+    String(process.env.GOOGLE_OAUTH_REFRESH_TOKEN || "").trim(),
+    "drive+oauth-token",
+  );
+  addCandidate(
+    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID),
+    trimEnv(process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+    String(process.env.GOOGLE_GMAIL_REFRESH_TOKEN || "").trim(),
+    "oauth-secret+gmail-token",
+  );
+
+  for (const clientId of uniqueIds) {
+    for (const clientSecret of uniqueSecrets) {
+      for (const refreshToken of uniqueTokens) {
+        addCandidate(clientId, clientSecret, refreshToken, "combo");
+      }
+    }
+  }
+
+  return candidates;
+};
+
+let cachedWorkingConfig = null;
+
+const resolveGmailOAuthConfig = () => {
+  if (cachedWorkingConfig) {
+    return cachedWorkingConfig;
+  }
+
+  const candidates = collectGmailOAuthCandidates();
+  return candidates[0] || null;
 };
 
 const resolveGmailSenderEmail = () =>
@@ -50,9 +120,9 @@ const resolveGmailSenderEmail = () =>
 const formatGmailAuthHint = (message = "") => {
   if (/invalid_client/i.test(message)) {
     return [
-      "GOOGLE_DRIVE_CLIENT_ID or GOOGLE_DRIVE_CLIENT_SECRET on Render is wrong, or the refresh token was created with a different OAuth client.",
-      "Use Google Cloud → Credentials → OAuth 2.0 Client ID (Web application), not the service account JSON.",
-      "Update Render client ID + secret, then reconnect: https://mbk-project-spf5.onrender.com/api/oauth/gmail/start?email=mbkdrive82@gmail.com",
+      "Google OAuth client ID, client secret, and refresh token must all belong to the same OAuth Web client.",
+      "Remove duplicate GOOGLE_OAUTH_* vars or regenerate the refresh token:",
+      "https://mbk-project-spf5.onrender.com/api/oauth/gmail/start?email=mbkdrive82@gmail.com",
     ].join(" ");
   }
   if (/invalid_grant|unauthorized|revoked/i.test(message)) {
@@ -65,6 +135,7 @@ const formatGmailAuthHint = (message = "") => {
 };
 
 const getGmailOAuthDiagnostics = () => {
+  const candidates = collectGmailOAuthCandidates();
   const config = resolveGmailOAuthConfig();
   const backendUrl = String(
     process.env.BACKEND_URL || "https://mbk-project-spf5.onrender.com",
@@ -73,7 +144,9 @@ const getGmailOAuthDiagnostics = () => {
     .replace(/\/+$/, "");
 
   return {
-    configured: Boolean(config),
+    configured: candidates.length > 0,
+    candidateCount: candidates.length,
+    activePair: cachedWorkingConfig?.label || config?.label || null,
     clientIdMasked: config?.clientId
       ? `${config.clientId.slice(0, 12)}...${config.clientId.slice(-28)}`
       : null,
@@ -91,32 +164,61 @@ const getGmailOAuthDiagnostics = () => {
   };
 };
 
-const canUseGmailApi = () => Boolean(resolveGmailOAuthConfig());
+const canUseGmailApi = () => collectGmailOAuthCandidates().length > 0;
 
 let gmailClientPromise = null;
 
-const getGmailClient = async () => {
-  if (!canUseGmailApi()) {
+const createGmailClientForConfig = (config) => {
+  const oauth2Client = new google.auth.OAuth2(
+    config.clientId,
+    config.clientSecret,
+  );
+  oauth2Client.setCredentials({ refresh_token: config.refreshToken });
+  return google.gmail({ version: "v1", auth: oauth2Client });
+};
+
+const resolveWorkingGmailClient = async () => {
+  if (gmailClientPromise) {
+    return gmailClientPromise;
+  }
+
+  const candidates = collectGmailOAuthCandidates();
+  if (!candidates.length) {
     return null;
   }
 
-  if (!gmailClientPromise) {
-    gmailClientPromise = (async () => {
-      const config = resolveGmailOAuthConfig();
-      const oauth2Client = new google.auth.OAuth2(
-        config.clientId,
-        config.clientSecret,
-      );
-      oauth2Client.setCredentials({ refresh_token: config.refreshToken });
-      return google.gmail({ version: "v1", auth: oauth2Client });
-    })().catch((error) => {
-      gmailClientPromise = null;
-      throw error;
-    });
-  }
+  gmailClientPromise = (async () => {
+    let lastError = null;
+
+    for (const candidate of candidates) {
+      try {
+        const gmail = createGmailClientForConfig(candidate);
+        await gmail.users.getProfile({ userId: "me" });
+        cachedWorkingConfig = candidate;
+        console.log(
+          `[GMAIL-API] Using OAuth credential pair: ${candidate.label}`,
+        );
+        return gmail;
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          `[GMAIL-API] OAuth pair "${candidate.label}" failed:`,
+          error?.message || error,
+        );
+      }
+    }
+
+    gmailClientPromise = null;
+    throw lastError || new Error("Gmail API authentication failed.");
+  })().catch((error) => {
+    gmailClientPromise = null;
+    throw error;
+  });
 
   return gmailClientPromise;
 };
+
+const getGmailClient = async () => resolveWorkingGmailClient();
 
 const buildRawMessage = async (mailOptions) => {
   const mail = new MailComposer(mailOptions);
@@ -169,6 +271,7 @@ const sendEmailViaGmailApi = async ({ to, subject, html, text, from }) => {
     };
   } catch (error) {
     gmailClientPromise = null;
+    cachedWorkingConfig = null;
     const message = error?.message || String(error);
     const hint = formatGmailAuthHint(message);
 
@@ -203,6 +306,7 @@ const validateGmailApiConfiguration = async () => {
         deliveryMode: "gmail-api",
         accountEmail,
         configuredSender,
+        activePair: cachedWorkingConfig?.label || null,
         warning:
           "EMAIL_USER does not match the authorized Gmail account. Emails send from the OAuth account.",
         from: process.env.EMAIL_FROM || `"MBK Carrierz" <${accountEmail}>`,
@@ -213,12 +317,14 @@ const validateGmailApiConfiguration = async () => {
       ok: true,
       deliveryMode: "gmail-api",
       accountEmail,
+      activePair: cachedWorkingConfig?.label || null,
       from:
         process.env.EMAIL_FROM ||
         (accountEmail ? `"MBK Carrierz" <${accountEmail}>` : null),
     };
   } catch (error) {
     gmailClientPromise = null;
+    cachedWorkingConfig = null;
     const message = error?.message || "Gmail API validation failed.";
     return {
       ok: false,

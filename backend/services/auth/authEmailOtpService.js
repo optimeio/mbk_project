@@ -104,7 +104,8 @@ const sendEmailOtp = async ({
     );
     if (!sendResult?.success) {
       const err = new Error(
-        sendResult?.error ||
+        sendResult?.hint ||
+          sendResult?.error ||
           "Unable to send verification email. Check spam or try again shortly.",
       );
       err.statusCode = 503;
