@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 
@@ -24,7 +24,13 @@ import {
 } from './driveSyncPreview';
 
 const SuperAdminCollegeDetails = () => {
-    const { id, departmentName } = useParams();
+    const { id: routeId, departmentName } = useParams();
+    const id = useMemo(() => {
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const match = window.location.pathname.match(/[a-f\d]{24}/i);
+        return match ? match[0] : routeId;
+    }, [routeId]);
     const router = useRouter();
     const [syncingDrive, setSyncingDrive] = useState(false);
     const [previewingDrive, setPreviewingDrive] = useState(false);

@@ -49,7 +49,13 @@ const hasPermission = (permissions = [], requiredPermission = 'view') => {
 
 const CollegeDepartments = () => {
   const router = useRouter();
-  const { id } = useParams();
+  const { id: routeId } = useParams();
+  const id = useMemo(() => {
+    if (routeId && routeId !== '1') return routeId;
+    if (typeof window === 'undefined') return routeId;
+    const match = window.location.pathname.match(/[a-f\d]{24}/i);
+    return match ? match[0] : routeId;
+  }, [routeId]);
   const { currentUser } = useAuth();
   const {
     data: departmentData,
