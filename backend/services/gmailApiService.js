@@ -149,6 +149,13 @@ const resolveWorkingGmailClient = async () => {
       console.log("[GMAIL-API] Authenticated with GOOGLE_DRIVE OAuth client.");
       return gmail;
     } catch (error) {
+      console.error("[GMAIL-API] getProfile failed:", {
+        message: error?.message,
+        code: error?.code,
+        status: error?.response?.status,
+        data: JSON.stringify(error?.response?.data || {}),
+        errors: error?.errors,
+      });
       gmailClientPromise = null;
       throw error;
     }
