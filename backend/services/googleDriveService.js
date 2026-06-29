@@ -182,11 +182,13 @@ const resolveServiceAccountConfig = () => {
 };
 
 const resolveOAuthDriveConfig = () => {
-  const clientId = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID);
-  const clientSecret = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET);
+  const clientId = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID);
+  const clientSecret = trimEnv(process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET);
   const refreshToken = String(
-    process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
-      process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN ||
+      process.env.GOOGLE_OAUTH_REFRESH_TOKEN ||
+      process.env.GOOGLE_GMAIL_REFRESH_TOKEN ||
+      process.env.GOOGLE_REFRESH_TOKEN ||
       "",
   ).trim();
 
