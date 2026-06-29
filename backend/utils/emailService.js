@@ -540,7 +540,7 @@ const sendMail = async (to, subject, text, html = null, attachments = null) => {
     ...(attachments && attachments.length ? { attachments } : {}),
   };
   try {
-    return await transporter.sendMail(mailOptions);
+    return await deliverMailOptions(mailOptions);
   } catch (error) {
     console.error("Error sending email:", error.message || error);
     throw error;
@@ -653,15 +653,13 @@ const sendVerificationEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Verification email sent:", info.messageId);
-
-    // For development, log preview URL
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Preview URL:", nodemailer.getTestMessageUrl(info));
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
     }
+    console.log("Verification email sent:", result.messageId || "");
 
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error("Error sending verification email:", error);
     throw error;
@@ -837,9 +835,12 @@ const sendComplaintStatusUpdateEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Complaint update email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
+    console.log("Complaint update email sent:", result.messageId || "");
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error("Error sending complaint update email:", error);
     return { success: false, error: error.message };
@@ -880,14 +881,22 @@ const sendTrainerRegistrationNotificationEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       "Trainer registration notification email sent:",
-      info.messageId,
+      result.messageId || "",
     );
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(
+      "Error sending trainer registration notification email:",
+      error,
+    );
+    return { success: false, error: error.message };
+  }
       "Error sending trainer registration notification email:",
       error,
     );
@@ -1160,9 +1169,12 @@ const sendComplaintNotificationEmail = async (recipients, complaintData) => {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`Complaint email sent to ${toAddress}:`, info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
+    console.log(`Complaint email sent to ${toAddress}:`, result.messageId || "");
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(`Error sending complaint email:`, error);
     return { success: false, error: error.message };
@@ -1220,12 +1232,15 @@ const sendTrainingCompletionEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       `Training completion email sent to ${trainerEmail}:`,
-      info.messageId,
+      result.messageId || "",
     );
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(
       `Error sending training completion email to ${trainerEmail}:`,
@@ -1274,12 +1289,15 @@ const sendAccountVerificationSuccessEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       `Verification Success email sent to ${trainerEmail}:`,
-      info.messageId,
+      result.messageId || "",
     );
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(`Error sending verification success email:`, error);
     return { success: false, error: error.message };
@@ -1355,12 +1373,15 @@ const sendDocumentRejectionEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       `Document Rejection email sent to ${trainerEmail}:`,
-      info.messageId,
+      result.messageId || "",
     );
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(`Error sending rejection email:`, error);
     return { success: false, error: error.message };
@@ -1404,12 +1425,15 @@ const sendProfileRejectionEmail = async (trainerEmail, trainerName, reason) => {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       `Profile Rejection email sent to ${trainerEmail}:`,
-      info.messageId,
+      result.messageId || "",
     );
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(`Error sending profile rejection email:`, error);
     return { success: false, error: error.message };
@@ -1476,9 +1500,12 @@ const sendTrainerDocumentReminderEmail = async ({
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Trainer document reminder email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
+    console.log("Trainer document reminder email sent:", result.messageId || "");
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error("Error sending trainer document reminder email:", error);
     return { success: false, error: error.message };
@@ -1547,9 +1574,12 @@ const sendTrainerRegistrationReminderEmail = async ({
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Trainer registration reminder email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
+    console.log("Trainer registration reminder email sent:", result.messageId || "");
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error("Error sending trainer registration reminder email:", error);
     return { success: false, error: error.message };
@@ -1601,12 +1631,15 @@ const sendAdminSubmissionNotificationEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       `Admin Submission Notification sent to ${toAddress}:`,
-      info.messageId,
+      result.messageId || "",
     );
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error(`Error sending admin submission notification:`, error);
     return { success: false, error: error.message };
@@ -1736,15 +1769,18 @@ const sendRegistrationOTP = async (userEmail, userName, otp) => {
   }
 
   try {
-    const { info, profile } = await sendMailWithProfiles(mailOptions);
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
     console.log(
       "Registration OTP email sent successfully:",
-      info.messageId,
-      `via ${profile}`,
+      result.messageId || "",
+      `via ${result.profile || "resend-api"}`,
     );
-    return { success: true, messageId: info.messageId, profile };
+    return { success: true, messageId: result.messageId, profile: result.profile };
   } catch (error) {
-    console.error("Error sending registration OTP email via SMTP:", error.message);
+    console.error("Error sending registration OTP email:", error.message);
     return { success: false, error: error.message || String(error) };
   }
 };
@@ -1983,9 +2019,12 @@ const sendCompanyAdminWelcomeEmail = async ({
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Company welcome email sent:", info.messageId);
-    return { success: true, messageId: info.messageId };
+    const result = await deliverMailOptions(mailOptions);
+    if (!result?.success) {
+      throw new Error(result?.error || "Delivery failed");
+    }
+    console.log("Company welcome email sent:", result.messageId || "");
+    return { success: true, messageId: result.messageId };
   } catch (error) {
     console.error("Error sending company welcome email:", error);
     return { success: false, error: error.message };

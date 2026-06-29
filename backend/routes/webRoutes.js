@@ -41,16 +41,7 @@ router.post('/track', async (req, res) => {
     }
 });
 
-// Email Transporter Config
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-        user: process.env.MAIL_USER || 'mbktechnologies8@gmail.com',
-        pass: (process.env.MAIL_PASS || 'cici ixth yfnh icfj').replace(/\s+/g, '')
-    }
-});
+const { deliverMailOptions } = require('../utils/emailService');
 
 // @route   GET /api/web/courses
 // @desc    Get all active courses for public site
@@ -144,8 +135,8 @@ router.post('/register', async (req, res) => {
             `
         };
 
-        transporter.sendMail(mailOptions).catch(e => console.error('Notify Admin Error:', e));
-        transporter.sendMail(autoReplyOptions).catch(e => console.error('Auto Reply Error:', e));
+        deliverMailOptions(mailOptions).catch(e => console.error('Notify Admin Error:', e));
+        deliverMailOptions(autoReplyOptions).catch(e => console.error('Auto Reply Error:', e));
 
         res.json({ success: true, message: 'Registration successful' });
     } catch (err) {
@@ -169,7 +160,7 @@ router.post('/contact', async (req, res) => {
             html: `<h3>New Inquiry</h3><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Message:</strong> ${message}</p>`
         };
 
-        transporter.sendMail(mailOptions).catch(e => console.error('Contact Notify Error:', e));
+        deliverMailOptions(mailOptions).catch(e => console.error('Contact Notify Error:', e));
 
         res.json({ success: true, message: 'Message sent successfully' });
     } catch (err) {
