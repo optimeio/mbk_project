@@ -36,6 +36,18 @@ const getDefaultFromAddress = () =>
   process.env.EMAIL_FROM || `"MBK CarrierZ" <${smtpUser}>`;
 
 const getActiveHttpEmailProvider = () => {
+  const preferred = String(process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
+  if (preferred === "resend" && (process.env.RESEND_API_KEY || "").trim()) {
+    return "resend";
+  }
+  if (preferred === "brevo" && (process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || "").trim()) {
+    return "brevo";
+  }
+  if (preferred === "gmail" && canUseGmailApi()) {
+    return "gmail";
+  }
+
+  // Fallback defaults
   if (canUseGmailApi()) {
     return "gmail";
   }
@@ -64,7 +76,8 @@ const parseFromAddress = (fromValue) => {
 };
 
 const sendEmailViaHttpApi = async ({ to, subject, html, text }) => {
-  if (canUseGmailApi()) {
+  const provider = getActiveHttpEmailProvider();
+  if (provider === "gmail") {
     const gmailResult = await sendEmailViaGmailApi({
       to,
       subject,
@@ -77,8 +90,7 @@ const sendEmailViaHttpApi = async ({ to, subject, html, text }) => {
     }
   }
 
-  const provider = getActiveHttpEmailProvider();
-  if (!provider || provider === "gmail") {
+  if (!provider) {
     return null;
   }
 
