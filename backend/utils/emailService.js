@@ -897,11 +897,6 @@ const sendTrainerRegistrationNotificationEmail = async (
     );
     return { success: false, error: error.message };
   }
-      "Error sending trainer registration notification email:",
-      error,
-    );
-    return { success: false, error: error.message };
-  }
 };
 
 // Send Bulk Schedule Notification to Trainer
