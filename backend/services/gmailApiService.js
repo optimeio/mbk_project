@@ -121,13 +121,18 @@ const canUseGmailApi = () => collectGmailOAuthCandidates().length > 0;
 
 let gmailClientPromise = null;
 
-const createGmailClientForConfig = (config) => {
+const createOAuth2ClientForConfig = (config) => {
   const oauth2Client = new google.auth.OAuth2(
     config.clientId,
     config.clientSecret,
   );
   oauth2Client.setCredentials({ refresh_token: config.refreshToken });
-  return google.gmail({ version: "v1", auth: oauth2Client });
+  return oauth2Client;
+};
+
+const createGmailClientForConfig = (config) => {
+  const auth = createOAuth2ClientForConfig(config);
+  return google.gmail({ version: "v1", auth });
 };
 
 const resolveWorkingGmailClient = async () => {
@@ -143,13 +148,14 @@ const resolveWorkingGmailClient = async () => {
   gmailClientPromise = (async () => {
     const candidate = candidates[0];
     try {
-      const gmail = createGmailClientForConfig(candidate);
-      await gmail.users.getProfile({ userId: "me" });
+      const auth = createOAuth2ClientForConfig(candidate);
+      const oauth2 = google.oauth2({ version: "v2", auth });
+      await oauth2.userinfo.get();
       cachedWorkingConfig = candidate;
       console.log("[GMAIL-API] Authenticated with GOOGLE_DRIVE OAuth client.");
-      return gmail;
+      return google.gmail({ version: "v1", auth });
     } catch (error) {
-      console.error("[GMAIL-API] getProfile failed:", {
+      console.error("[GMAIL-API] Authentication check failed:", {
         message: error?.message,
         code: error?.code,
         status: error?.response?.status,
@@ -258,9 +264,11 @@ const validateGmailApiConfiguration = async () => {
   }
 
   try {
-    const gmail = await getGmailClient();
-    const profile = await gmail.users.getProfile({ userId: "me" });
-    const accountEmail = String(profile.data.emailAddress || "").toLowerCase();
+    const candidate = collectGmailOAuthCandidates()[0];
+    const auth = createOAuth2ClientForConfig(candidate);
+    const oauth2 = google.oauth2({ version: "v2", auth });
+    const userInfo = await oauth2.userinfo.get();
+    const accountEmail = String(userInfo.data.email || "").toLowerCase();
     const configuredSender = resolveGmailSenderEmail();
 
     if (configuredSender && accountEmail && configuredSender !== accountEmail) {

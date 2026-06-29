@@ -36,6 +36,7 @@ const authUrl = oAuth2Client.generateAuthUrl({
   scope: [
     GMAIL_SEND_SCOPE,
     "https://www.googleapis.com/auth/drive",
+    "email",
   ],
 });
 

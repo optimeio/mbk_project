@@ -55,6 +55,7 @@ const buildAuthUrl = (loginHint = "") => {
     scope: [
       GMAIL_SEND_SCOPE,
       "https://www.googleapis.com/auth/drive",
+      "email",
     ],
     ...(loginHint ? { login_hint: loginHint } : {}),
   });
