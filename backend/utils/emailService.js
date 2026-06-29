@@ -32,8 +32,21 @@ const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS || 30000);
 
 const getSmtpAuth = () => ({ user: smtpUser, pass: smtpPass });
 
-const getDefaultFromAddress = () =>
-  process.env.EMAIL_FROM || `"MBK CarrierZ" <${smtpUser}>`;
+const getDefaultFromAddress = () => {
+  let raw = String(
+    process.env.RESEND_FROM || process.env.EMAIL_FROM || "",
+  ).trim();
+  if (!raw && smtpUser) {
+    raw = `"MBK CarrierZ" <${smtpUser}>`;
+  }
+  if (!raw) {
+    raw = '"MBK CarrierZ" <noreply@mbktechnologies.info>';
+  }
+  if (raw.startsWith('"') && raw.endsWith('"')) {
+    raw = raw.slice(1, -1).trim();
+  }
+  return raw;
+};
 
 const getActiveHttpEmailProvider = () => {
   const preferred = String(process.env.EMAIL_PROVIDER || "").trim().toLowerCase();
@@ -364,6 +377,18 @@ const deliverMailOptions = async (mailOptions = {}) => {
     return httpResult;
   }
 
+  const preferredProvider = String(process.env.EMAIL_PROVIDER || "")
+    .trim()
+    .toLowerCase();
+
+  if (httpResult && httpResult.success === false && preferredProvider === "resend") {
+    console.error(
+      "[EMAIL] Resend delivery failed:",
+      httpResult.error || "Unknown Resend error",
+    );
+    return httpResult;
+  }
+
   if (httpResult && httpResult.success === false && canUseGmailApi()) {
     const gmailResult = await sendEmailViaGmailApi({
       to,
@@ -650,9 +675,7 @@ const sendPasswordResetEmail = async (userEmail, userName, otp) => {
   const year = new Date().getFullYear();
 
   const mailOptions = {
-    from:
-      process.env.EMAIL_FROM ||
-      '"MBK CarrierZ" <official@mbktechnologies.info>',
+    from: getDefaultFromAddress(),
     to: userEmail,
     subject: "🔐 Password Reset OTP — MBK CarrierZ",
     html: `
@@ -758,67 +781,18 @@ const sendPasswordResetEmail = async (userEmail, userName, otp) => {
         `,
   };
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Password reset email sent:", info.messageId);
-    console.log("----------------------------------------");
-    console.log(`🔐 PASSWORD RESET OTP for ${userEmail}: ${otp}`);
-    console.log("----------------------------------------");
-
-    const allowOtpDebug =
-      process.env.NODE_ENV !== "production" ||
-      String(process.env.ALLOW_OTP_DEBUG || "").trim() === "1";
-
-    if (allowOtpDebug) {
-      console.log(`[AUTH-OTP] Password Reset OTP generated for ${userEmail} (debug mode enabled)`);
-      try {
-        const fs = require("fs");
-        const path = require("path");
-        const serverDebugFile = path.join(__dirname, "../otp_debug.txt");
-        const rootDebugFile = path.join(__dirname, "../../otp_debug.txt");
-        const logContent = `[${new Date().toISOString()}] Email: ${userEmail} | OTP: ${otp} (Password Reset)\n`;
-        fs.appendFileSync(serverDebugFile, logContent);
-        try {
-          fs.appendFileSync(rootDebugFile, logContent);
-        } catch (e) {}
-      } catch (err) {
-        console.error("Failed to write local OTP debug log:", err.message);
-      }
-    }
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("Preview URL:", nodemailer.getTestMessageUrl(info));
-    }
-
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("Error sending password reset email via SMTP:", error.message);
-    
-    // Fallback to local logging if email fails
-    const allowOtpDebug =
-      process.env.NODE_ENV !== "production" ||
-      String(process.env.ALLOW_OTP_DEBUG || "").trim() === "1";
-
-    if (allowOtpDebug) {
-      console.log(`[AUTH-OTP] Password Reset OTP generated for ${userEmail} (fallback due to SMTP failure)`);
-      try {
-        const fs = require("fs");
-        const path = require("path");
-        const serverDebugFile = path.join(__dirname, "../otp_debug.txt");
-        const rootDebugFile = path.join(__dirname, "../../otp_debug.txt");
-        const logContent = `[${new Date().toISOString()}] Email: ${userEmail} | OTP: ${otp} (Password Reset)\n`;
-        fs.appendFileSync(serverDebugFile, logContent);
-        try {
-          fs.appendFileSync(rootDebugFile, logContent);
-        } catch (e) {}
-      } catch (err) {
-        console.error("Failed to write local OTP debug log:", err.message);
-      }
-      return { success: true, messageId: "mock-id-local-testing" };
-    }
-    
+  const result = await deliverMailOptions(mailOptions);
+  if (!result?.success) {
+    const error = new Error(result?.error || "Failed to send password reset email");
+    console.error("Error sending password reset email:", error.message);
     throw error;
   }
+
+  console.log(
+    `[EMAIL] Password reset email sent via ${result.profile || "resend-api"}:`,
+    result.messageId || "",
+  );
+  return result;
 };
 
 // Old Complaint Notification Email removed in favor of new Smart Design below

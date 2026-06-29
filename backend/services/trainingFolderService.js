@@ -13,6 +13,10 @@ const {
   isTrainingDriveEnabled,
   toDepartmentDayFolders,
 } = require("../modules/drive/driveGateway");
+const {
+  resolveTrainerCollegeScheduleFolders,
+  SCHEDULE_DRIVE_FOLDER_SELECT,
+} = require("../modules/drive/trainerScheduleDriveFolders.service");
 
 const DEFAULT_DAY_COUNT = Math.max(
   1,
@@ -439,7 +443,7 @@ const ensureScheduleFolderState = async ({ scheduleId } = {}) => {
   }
 
   const schedule = await Schedule.findById(scheduleId).select(
-    "_id companyId courseId collegeId departmentId dayNumber driveFolderId driveFolderName driveFolderLink dayFolderId dayFolderName dayFolderLink attendanceFolderId attendanceFolderName attendanceFolderLink geoTagFolderId geoTagFolderName geoTagFolderLink startTime endTime",
+    `_id ${SCHEDULE_DRIVE_FOLDER_SELECT} startTime endTime`,
   );
 
   if (!schedule) {
@@ -473,6 +477,32 @@ const ensureScheduleFolderState = async ({ scheduleId } = {}) => {
 
   let result = null;
   if (!schedule.departmentId) {
+    const trainerFolders = await resolveTrainerCollegeScheduleFolders({
+      scheduleId,
+      scheduleDoc: schedule,
+    });
+    if (trainerFolders?.dayFolderId) {
+      const refreshedSchedule = await Schedule.findById(scheduleId).select(
+        `_id ${SCHEDULE_DRIVE_FOLDER_SELECT} startTime endTime`,
+      );
+      return {
+        schedule: refreshedSchedule,
+        folderState: {
+          dayFolderId: trainerFolders.dayFolderId,
+          dayFolderName: trainerFolders.dayFolderName,
+          dayFolderLink: trainerFolders.dayFolderLink,
+          attendanceFolderId: trainerFolders.attendanceFolderId,
+          attendanceFolderName: trainerFolders.attendanceFolderName,
+          attendanceFolderLink: trainerFolders.attendanceFolderLink,
+          geoTagFolderId: trainerFolders.geoTagFolderId,
+          geoTagFolderName: trainerFolders.geoTagFolderName,
+          geoTagFolderLink: trainerFolders.geoTagFolderLink,
+          driveFolderId: trainerFolders.driveFolderId,
+          driveFolderName: trainerFolders.driveFolderName,
+          driveFolderLink: trainerFolders.driveFolderLink,
+        },
+      };
+    }
     return ensureLegacyScheduleFolderState({ schedule });
   }
 
@@ -490,7 +520,7 @@ const ensureScheduleFolderState = async ({ scheduleId } = {}) => {
   }
 
   const refreshedSchedule = await Schedule.findById(scheduleId).select(
-    "_id companyId courseId collegeId departmentId dayNumber driveFolderId driveFolderName driveFolderLink dayFolderId dayFolderName dayFolderLink attendanceFolderId attendanceFolderName attendanceFolderLink geoTagFolderId geoTagFolderName geoTagFolderLink startTime endTime",
+    `_id ${SCHEDULE_DRIVE_FOLDER_SELECT} startTime endTime`,
   );
 
   return {

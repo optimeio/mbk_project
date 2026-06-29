@@ -43,13 +43,17 @@ const {
     isTrainingDriveEnabled,
     ensureTrainingRootFolder,
     ensureDepartmentHierarchy,
-    ensureTrainerCollegeHierarchy,
     toDepartmentDayFolders,
 } = require('../modules/drive/driveGateway');
 const {
     DRIVE_DAY_SUBFOLDERS,
     buildScheduleFolderFields,
 } = require('../modules/drive/driveFolderResolver');
+const {
+    resolveTrainerCollegeScheduleFolders,
+    SCHEDULE_DRIVE_FOLDER_SELECT,
+    hasCompleteScheduleFolderRefs,
+} = require('../modules/drive/trainerScheduleDriveFolders.service');
 const {
     normalizeAttendanceVerificationStatus,
     normalizeAttendancePresenceStatus,
@@ -1289,114 +1293,43 @@ const persistDepartmentDayFolderEntry = async ({
     await department.save();
 };
 
-const resolveTrainerCollegeDayFolders = async ({ scheduleId, fullSchedule }) => {
-    if (!scheduleId || !fullSchedule?.trainerId || !fullSchedule?.collegeId) {
-        return null;
-    }
-
-    const dayNumber = toDayNumber(fullSchedule.dayNumber);
-    if (!Number.isFinite(dayNumber) || dayNumber <= 0) {
-        return null;
-    }
-
-    const trainer = await Trainer.findById(fullSchedule.trainerId).select(
-        'colleges driveFolderId firstName lastName name email trainerId',
-    );
-    if (!trainer) {
-        return null;
-    }
-
-    const collegeId = String(fullSchedule.collegeId);
-    let collegeEntry = Array.isArray(trainer.colleges)
-        ? trainer.colleges.find((entry) => String(entry.collegeId) === collegeId)
-        : null;
-
-    let dayFolderEntry = Array.isArray(collegeEntry?.dayFolders)
-        ? collegeEntry.dayFolders.find((entry) => Number(entry.day) === dayNumber)
-        : null;
-
-    if (!dayFolderEntry?.dayFolderId) {
-        const college = await College.findById(fullSchedule.collegeId).select('name');
-        if (!college?.name) {
-            return null;
-        }
-
-        try {
-            const hierarchy = await ensureTrainerCollegeHierarchy({
-                trainer,
-                collegeName: college.name,
-                totalDays: 12,
-            });
-            const dayFolders = hierarchy?.dayFoldersByDayNumber?.[dayNumber];
-            if (!dayFolders?.id) {
-                return null;
-            }
-
-            dayFolderEntry = {
-                dayFolderId: dayFolders.id,
-                attendance: dayFolders.attendanceFolder?.id || null,
-                geo_tag: dayFolders.geoTagFolder?.id || null,
-            };
-        } catch (error) {
-            console.warn(
-                `[GOOGLE-DRIVE] Trainer college hierarchy ensure failed for schedule ${scheduleId}:`,
-                error.message,
-            );
-            return null;
-        }
-    }
-
-    if (!dayFolderEntry?.dayFolderId) {
-        return null;
-    }
-
-    const scheduleFolderState = {
-        dayFolderId: dayFolderEntry.dayFolderId,
-        dayFolderName: `Day ${dayNumber}`,
-        dayFolderLink: null,
-        attendanceFolderId:
-            dayFolderEntry.attendance ||
-            dayFolderEntry.attendanceFolderId ||
-            null,
-        attendanceFolderName: 'Attendance',
-        attendanceFolderLink: null,
-        geoTagFolderId:
-            dayFolderEntry.geo_tag ||
-            dayFolderEntry.geoTagFolderId ||
-            null,
-        geoTagFolderName: 'Geo Tag',
-        geoTagFolderLink: null,
-        driveFolderId: dayFolderEntry.dayFolderId,
-        driveFolderName: `Day ${dayNumber}`,
-        driveFolderLink: null,
-    };
-
-    await Schedule.findByIdAndUpdate(scheduleId, { $set: scheduleFolderState });
-    return {
-        ...scheduleFolderState,
-        departmentId: fullSchedule.departmentId,
-        dayNumber,
-    };
-};
-
 const ensureScheduleDriveFolders = async ({ scheduleId, scheduleDoc }) => {
     if (!scheduleId) return null;
 
-    const fullSchedule = scheduleDoc?.departmentId && scheduleDoc?.collegeId
-        ? scheduleDoc
-        : await Schedule.findById(scheduleId).select('companyId courseId collegeId departmentId dayNumber dayFolderId dayFolderName dayFolderLink attendanceFolderId attendanceFolderName attendanceFolderLink geoTagFolderId geoTagFolderName geoTagFolderLink driveFolderId driveFolderName driveFolderLink');
-    if (!fullSchedule?.collegeId) return null;
+    if (hasCompleteScheduleFolderRefs(scheduleDoc)) {
+        return {
+            dayFolderId: scheduleDoc.dayFolderId,
+            dayFolderName: scheduleDoc.dayFolderName || null,
+            dayFolderLink: scheduleDoc.dayFolderLink || null,
+            attendanceFolderId: scheduleDoc.attendanceFolderId,
+            attendanceFolderName: scheduleDoc.attendanceFolderName || 'Attendance',
+            attendanceFolderLink: scheduleDoc.attendanceFolderLink || null,
+            geoTagFolderId: scheduleDoc.geoTagFolderId,
+            geoTagFolderName: scheduleDoc.geoTagFolderName || 'Geo Tag',
+            geoTagFolderLink: scheduleDoc.geoTagFolderLink || null,
+            driveFolderId: scheduleDoc.dayFolderId || scheduleDoc.driveFolderId,
+            driveFolderName: scheduleDoc.dayFolderName || scheduleDoc.driveFolderName || null,
+            driveFolderLink: scheduleDoc.dayFolderLink || scheduleDoc.driveFolderLink || null,
+            departmentId: scheduleDoc.departmentId,
+            dayNumber: scheduleDoc.dayNumber,
+        };
+    }
 
-    const dayNumber = toDayNumber(fullSchedule.dayNumber);
-    if (!Number.isFinite(dayNumber) || dayNumber <= 0) return null;
-
-    const trainerCentricFolders = await resolveTrainerCollegeDayFolders({
+    const trainerCentricFolders = await resolveTrainerCollegeScheduleFolders({
         scheduleId,
-        fullSchedule,
+        scheduleDoc,
     });
     if (trainerCentricFolders?.dayFolderId) {
         return trainerCentricFolders;
     }
+
+    const fullSchedule = scheduleDoc?.collegeId
+        ? scheduleDoc
+        : await Schedule.findById(scheduleId).select(SCHEDULE_DRIVE_FOLDER_SELECT);
+    if (!fullSchedule?.collegeId) return null;
+
+    const dayNumber = toDayNumber(fullSchedule.dayNumber);
+    if (!Number.isFinite(dayNumber) || dayNumber <= 0) return null;
 
     const department = fullSchedule.departmentId
         ? await Department.findById(fullSchedule.departmentId).select('_id name companyId courseId collegeId dayFolders driveFolderId driveFolderName driveFolderLink')
@@ -1997,7 +1930,7 @@ const syncAttendanceFilesToDrive = async ({
 
     const scheduleDoc = schedule?.driveFolderId || schedule?.dayFolderId
         ? schedule
-        : await Schedule.findById(scheduleId).select('dayFolderId dayFolderName dayFolderLink attendanceFolderId attendanceFolderName attendanceFolderLink geoTagFolderId geoTagFolderName geoTagFolderLink driveFolderId driveFolderName driveFolderLink departmentId dayNumber');
+        : await Schedule.findById(scheduleId).select(SCHEDULE_DRIVE_FOLDER_SELECT);
     const scheduleDayNumber = toDayNumber(scheduleDoc?.dayNumber);
     const hasScheduleFolderRefs = Boolean(
         scheduleDoc?.attendanceFolderId

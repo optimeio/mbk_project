@@ -282,7 +282,7 @@ export const assignCollegeToTrainer = async (req, res) => {
 
     // Get trainer and college
     const trainer = await Trainer.findById(trainerId).populate('userId', 'name email firstName lastName');
-    const college = await College.findById(collegeId);
+    const college = await College.findById(collegeId).populate('courseId', 'title name');
 
     if (!trainer || !college) {
       return res.status(404).json({
@@ -498,12 +498,18 @@ export const assignCollegeToTrainer = async (req, res) => {
         emailModule.default?.sendBulkScheduleEmail;
 
       if (trainerEmail && typeof sendTrainerCollegeAssignmentEmail === 'function') {
-        await sendTrainerCollegeAssignmentEmail(
+        const assignmentMail = await sendTrainerCollegeAssignmentEmail(
           trainerEmail,
           trainerDisplayName,
           collegeName,
           collegeLink,
         );
+        if (!assignmentMail?.success) {
+          console.error(
+            '[EMAIL] College assignment email failed:',
+            assignmentMail?.error || 'Unknown error',
+          );
+        }
       }
 
       if (
@@ -522,7 +528,17 @@ export const assignCollegeToTrainer = async (req, res) => {
           spocPhone: college.phone || college.spocPhone || '',
           mapLink: college.location?.mapUrl || '',
         }));
-        await sendBulkScheduleEmail(trainerEmail, trainerDisplayName, emailAssignments);
+        const scheduleMail = await sendBulkScheduleEmail(
+          trainerEmail,
+          trainerDisplayName,
+          emailAssignments,
+        );
+        if (!scheduleMail?.success) {
+          console.error(
+            '[EMAIL] Schedule assignment email failed:',
+            scheduleMail?.error || 'Unknown error',
+          );
+        }
       }
     } catch (emailError) {
       console.error('Failed to send college assignment email:', emailError);
