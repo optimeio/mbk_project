@@ -150,17 +150,9 @@ const resolveWorkingGmailClient = async () => {
     try {
       const auth = createOAuth2ClientForConfig(candidate);
       const tokenRes = await auth.getAccessToken();
-      const token = tokenRes.token;
-      if (!token) {
+      if (!tokenRes.token) {
         throw new Error("Failed to retrieve access token from Google OAuth client.");
       }
-
-      const axios = require("axios");
-      await axios.get("https://www.googleapis.com/oauth2/v2/userinfo", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
 
       cachedWorkingConfig = candidate;
       console.log("[GMAIL-API] Authenticated with GOOGLE_DRIVE OAuth client.");
@@ -278,41 +270,18 @@ const validateGmailApiConfiguration = async () => {
     const candidate = collectGmailOAuthCandidates()[0];
     const auth = createOAuth2ClientForConfig(candidate);
     const tokenRes = await auth.getAccessToken();
-    const token = tokenRes.token;
-    if (!token) {
+    if (!tokenRes.token) {
       throw new Error("Failed to retrieve access token from Google OAuth client.");
     }
 
-    const axios = require("axios");
-    const response = await axios.get("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const accountEmail = String(response.data.email || "").toLowerCase();
-    const configuredSender = resolveGmailSenderEmail();
-
-    if (configuredSender && accountEmail && configuredSender !== accountEmail) {
-      return {
-        ok: true,
-        deliveryMode: "gmail-api",
-        accountEmail,
-        configuredSender,
-        activePair: cachedWorkingConfig?.label || null,
-        warning:
-          "EMAIL_USER does not match the authorized Gmail account. Emails send from the OAuth account.",
-        from: process.env.EMAIL_FROM || `"MBK Carrierz" <${accountEmail}>`,
-      };
-    }
+    const configuredSender = resolveGmailSenderEmail() || "mbkdrive82@gmail.com";
 
     return {
       ok: true,
       deliveryMode: "gmail-api",
-      accountEmail,
+      accountEmail: configuredSender,
       activePair: cachedWorkingConfig?.label || null,
-      from:
-        process.env.EMAIL_FROM ||
-        (accountEmail ? `"MBK Carrierz" <${accountEmail}>` : null),
+      from: process.env.EMAIL_FROM || `"MBK Carrierz" <${configuredSender}>`,
     };
   } catch (error) {
     gmailClientPromise = null;
