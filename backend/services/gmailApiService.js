@@ -149,9 +149,19 @@ const resolveWorkingGmailClient = async () => {
     const candidate = candidates[0];
     try {
       const auth = createOAuth2ClientForConfig(candidate);
-      await auth.getAccessToken();
-      const oauth2 = google.oauth2({ version: "v2", auth });
-      await oauth2.userinfo.get();
+      const tokenRes = await auth.getAccessToken();
+      const token = tokenRes.token;
+      if (!token) {
+        throw new Error("Failed to retrieve access token from Google OAuth client.");
+      }
+
+      const axios = require("axios");
+      await axios.get("https://www.googleapis.com/oauth2/v2/userinfo", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       cachedWorkingConfig = candidate;
       console.log("[GMAIL-API] Authenticated with GOOGLE_DRIVE OAuth client.");
       return google.gmail({ version: "v1", auth });
@@ -267,10 +277,19 @@ const validateGmailApiConfiguration = async () => {
   try {
     const candidate = collectGmailOAuthCandidates()[0];
     const auth = createOAuth2ClientForConfig(candidate);
-    await auth.getAccessToken();
-    const oauth2 = google.oauth2({ version: "v2", auth });
-    const userInfo = await oauth2.userinfo.get();
-    const accountEmail = String(userInfo.data.email || "").toLowerCase();
+    const tokenRes = await auth.getAccessToken();
+    const token = tokenRes.token;
+    if (!token) {
+      throw new Error("Failed to retrieve access token from Google OAuth client.");
+    }
+
+    const axios = require("axios");
+    const response = await axios.get("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const accountEmail = String(response.data.email || "").toLowerCase();
     const configuredSender = resolveGmailSenderEmail();
 
     if (configuredSender && accountEmail && configuredSender !== accountEmail) {
