@@ -393,8 +393,21 @@ const CollegeCard = memo(function CollegeCard({
 const CourseColleges = () => {
   const router = useRouter();
   const params = useParams();
-  const companyId = params?.companyId || params?.id;
-  const courseId = params?.courseId;
+  const companyId = useMemo(() => {
+    const routeId = params?.companyId || params?.id;
+    if (routeId && routeId !== '1') return routeId;
+    if (typeof window === 'undefined') return routeId;
+    const matches = window.location.pathname.match(/[a-f\d]{24}/ig) || [];
+    return matches[0] || routeId;
+  }, [params]);
+
+  const courseId = useMemo(() => {
+    const routeId = params?.courseId;
+    if (routeId && routeId !== '1') return routeId;
+    if (typeof window === 'undefined') return routeId;
+    const matches = window.location.pathname.match(/[a-f\d]{24}/ig) || [];
+    return matches[1] || routeId;
+  }, [params]);
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm, 300);

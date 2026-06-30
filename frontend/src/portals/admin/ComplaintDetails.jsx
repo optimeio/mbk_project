@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -12,7 +12,13 @@ import { useAuth } from '@/context/AuthContext';
 const { Option } = Select;
 
 const ComplaintDetails = () => {
-    const { id } = useParams();
+    const { id: routeId } = useParams();
+    const id = useMemo(() => {
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const match = window.location.pathname.match(/[a-f\d]{24}/i);
+        return match ? match[0] : routeId;
+    }, [routeId]);
     const router = useRouter();
     const { currentUser } = useAuth();
     const [actionValues, setActionValues] = useState({

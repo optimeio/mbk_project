@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment, useEffect, useCallback } from 'react';
+import { useState, Fragment, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 
 import { Tab, Dialog, Transition } from '@headlessui/react';
@@ -140,7 +140,13 @@ const DocPreview = ({ doc, label, handleVerifyDoc }) => (
 
 const TrainerProfile = () => {
     useRenderCountDebug("AdminTrainerProfile");
-    const { id } = useParams();
+    const { id: routeId } = useParams();
+    const id = useMemo(() => {
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const match = window.location.pathname.match(/[a-f\d]{24}/i);
+        return match ? match[0] : routeId;
+    }, [routeId]);
 
     const [trainer, setTrainer] = useState(null);
     const [loading, setLoading] = useState(true);

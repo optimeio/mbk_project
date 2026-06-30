@@ -27,13 +27,14 @@ const uploadMiddle = uploadAttendance;
 const uploadSingleImage = multer({ storage }).single('image');
 
 // Helper to upload files to trainer's specific day-folder on Google Drive
-async function uploadTrainerFileToDrive({ trainer, collegeId, dayNumber, file, isExcel }) {
+async function uploadTrainerFileToDrive({ trainer, collegeId, dayNumber, file, isExcel, folderType }) {
   try {
     const { isTrainingDriveEnabled, uploadToDriveWithRetry } = require("../modules/drive/driveGateway");
     if (!isTrainingDriveEnabled()) return null;
 
     // Fetch the freshest trainer document to ensure dayFolders are present
-    const { Trainer } = require("../models");
+    const { Trainer, College } = require("../models");
+    const { ensureTrainerCollegeHierarchy } = require("../modules/drive/driveTrainerDocuments.service");
     const freshTrainer = await Trainer.findById(trainer._id);
     if (!freshTrainer) {
       console.warn(`[DRIVE-UPLOAD] Trainer ${trainer._id} not found in DB`);
@@ -43,15 +44,68 @@ async function uploadTrainerFileToDrive({ trainer, collegeId, dayNumber, file, i
     const collegeEntry = freshTrainer.colleges?.find(c => String(c.collegeId) === String(collegeId));
     let targetFolderId = null;
 
-    if (collegeEntry && collegeEntry.dayFolders) {
+    if (collegeEntry && Array.isArray(collegeEntry.dayFolders) && collegeEntry.dayFolders.length) {
       const dayFolder = collegeEntry.dayFolders.find(df => df.day === dayNumber);
       if (dayFolder) {
-        targetFolderId = isExcel ? dayFolder.attendance : dayFolder.geo_tag;
+        if (folderType === 'day') {
+          targetFolderId = dayFolder.dayFolderId;
+        } else if (folderType === 'attendance' || isExcel) {
+          targetFolderId = dayFolder.attendance;
+        } else {
+          targetFolderId = dayFolder.geo_tag;
+        }
       }
     }
 
+    // Auto-heal: if day folder mapping is missing, build the full hierarchy
     if (!targetFolderId) {
-      targetFolderId = freshTrainer.collegeDriveFolderId || freshTrainer.driveFolderId;
+      try {
+        const collegeName = collegeEntry?.collegeName
+          || (await College.findById(collegeId).select('name').lean())?.name
+          || 'Unknown College';
+
+        console.log(`[DRIVE-UPLOAD] Auto-healing day folder structure for trainer ${freshTrainer._id}, college ${collegeName}, day ${dayNumber}`);
+        const hierarchy = await ensureTrainerCollegeHierarchy({
+          trainer: freshTrainer,
+          collegeName,
+          totalDays: 12,
+        });
+
+        const meta = (hierarchy.dayFoldersByDayNumber || {})[dayNumber] || {};
+        if (folderType === 'day') {
+          targetFolderId = meta.id || null;
+        } else if (folderType === 'attendance' || isExcel) {
+          targetFolderId = meta.attendanceFolder?.id || null;
+        } else {
+          targetFolderId = meta.geoTagFolder?.id || null;
+        }
+
+        // Persist the full day folder mapping back to the trainer document
+        if (collegeEntry && hierarchy.dayFoldersByDayNumber) {
+          collegeEntry.dayFolders = Object.keys(hierarchy.dayFoldersByDayNumber)
+            .map((dayStr) => {
+              const d = hierarchy.dayFoldersByDayNumber[dayStr] || {};
+              return {
+                day: Number(dayStr),
+                dayFolderId: d.id || null,
+                attendance: d.attendanceFolder?.id || null,
+                geo_tag: d.geoTagFolder?.id || null,
+                excel_sheet: d.excelSheetFolder?.id || null,
+              };
+            })
+            .sort((a, b) => a.day - b.day);
+          if (hierarchy.collegeFolder?.id) {
+            collegeEntry.googleDriveFolderId = hierarchy.collegeFolder.id;
+          }
+          freshTrainer.markModified('colleges');
+          await freshTrainer.save();
+          console.log(`[DRIVE-UPLOAD] Day folder structure persisted for trainer ${freshTrainer._id}`);
+        }
+      } catch (healError) {
+        console.error("[DRIVE-UPLOAD] Auto-heal failed:", healError.message);
+        // Final fallback to root folder
+        targetFolderId = freshTrainer.collegeDriveFolderId || freshTrainer.driveFolderId;
+      }
     }
 
     if (!targetFolderId) {
@@ -324,14 +378,18 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
       }) : null;
       const dayNumber = schedule?.dayNumber || attendanceRecord.dayNumber || 1;
 
-      // Keep Attendance DB record in sync with dayNumber & collegeId if missing
-      if (!attendanceRecord.dayNumber || !attendanceRecord.collegeId) {
+      // Keep Attendance DB record in sync with dayNumber, collegeId & scheduleId if missing
+      const updatePayload = {};
+      if (!attendanceRecord.dayNumber) updatePayload.dayNumber = dayNumber;
+      if (!attendanceRecord.collegeId && resolvedCollegeId) updatePayload.collegeId = resolvedCollegeId;
+      if (!attendanceRecord.scheduleId && schedule?._id) updatePayload.scheduleId = schedule._id;
+
+      if (Object.keys(updatePayload).length > 0) {
         await Attendance.findByIdAndUpdate(attendanceRecord._id, {
-          $set: {
-            dayNumber: dayNumber,
-            collegeId: resolvedCollegeId
-          }
+          $set: updatePayload
         });
+        // Also update local variable for any subsequent operations in scope
+        Object.assign(attendanceRecord, updatePayload);
       }
 
       if (trainerDoc && resolvedCollegeId) {
@@ -375,7 +433,8 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
             collegeId: resolvedCollegeId,
             dayNumber,
             file: photoFile,
-            isExcel: false
+            isExcel: false,
+            folderType: 'day'
           }).catch(err => console.error("Drive upload failed for photo:", err));
         }
 
@@ -385,13 +444,14 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
             collegeId: resolvedCollegeId,
             dayNumber,
             file: checkInFile,
-            isExcel: false
+            isExcel: false,
+            folderType: 'geo_tag'
           }).then(driveFile => {
             const fileId = driveFile?.fileId || driveFile?.driveFileId || driveFile?.id;
             if (fileId) {
-              Attendance.findByIdAndUpdate(attendanceRecord._id, {
-                $set: { "checkIn.driveFileId": fileId }
-              }).catch(err => console.error("Error updating checkIn drive ID:", err));
+               Attendance.findByIdAndUpdate(attendanceRecord._id, {
+                 $set: { "checkIn.driveFileId": fileId }
+               }).catch(err => console.error("Error updating checkIn drive ID:", err));
             }
           }).catch(err => console.error("Drive upload failed for checkIn:", err));
         }
@@ -402,13 +462,14 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
             collegeId: resolvedCollegeId,
             dayNumber,
             file: checkOutFile,
-            isExcel: false
+            isExcel: false,
+            folderType: 'geo_tag'
           }).then(driveFile => {
             const fileId = driveFile?.fileId || driveFile?.driveFileId || driveFile?.id;
             if (fileId) {
-              Attendance.findByIdAndUpdate(attendanceRecord._id, {
-                $set: { "checkOut.driveFileId": fileId }
-              }).catch(err => console.error("Error updating checkOut drive ID:", err));
+               Attendance.findByIdAndUpdate(attendanceRecord._id, {
+                 $set: { "checkOut.driveFileId": fileId }
+               }).catch(err => console.error("Error updating checkOut drive ID:", err));
             }
           }).catch(err => console.error("Drive upload failed for checkOut:", err));
         }

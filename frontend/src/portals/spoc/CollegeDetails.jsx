@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
@@ -32,7 +32,13 @@ const resolveTrainerId = (trainerField) => {
 };
 
 const CollegeDetails = () => {
-    const { id } = useParams();
+    const { id: routeId } = useParams();
+    const id = useMemo(() => {
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const match = window.location.pathname.match(/[a-f\d]{24}/i);
+        return match ? match[0] : routeId;
+    }, [routeId]);
     const router = useRouter();
     const [college, setCollege] = useState(MOCK_COLLEGE);
     const [days, setDays] = useState([]);

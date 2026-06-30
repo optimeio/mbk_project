@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -25,7 +25,13 @@ const PasswordConfirmationModal = dynamic(() => import("@/components/modals/Pass
 });
 
 const CompanyDetails = () => {
-    const { id } = useParams();
+    const { id: routeId } = useParams();
+    const id = useMemo(() => {
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const match = window.location.pathname.match(/[a-f\d]{24}/i);
+        return match ? match[0] : routeId;
+    }, [routeId]);
     const router = useRouter();
     const queryClient = useQueryClient();
     const [filterCourse, setFilterCourse] = useState('all');

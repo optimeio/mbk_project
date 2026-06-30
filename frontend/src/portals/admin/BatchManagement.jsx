@@ -30,9 +30,29 @@ const BatchManagement = () => {
     const params = useParams();
     const queryClient = useQueryClient();
 
-    const companyId = params?.companyId || params?.id;
-    const courseId = params?.courseId;
-    const collegeId = params?.collegeId;
+    const companyId = useMemo(() => {
+        const routeId = params?.companyId || params?.id;
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const matches = window.location.pathname.match(/[a-f\d]{24}/ig) || [];
+        return matches[0] || routeId;
+    }, [params]);
+
+    const courseId = useMemo(() => {
+        const routeId = params?.courseId;
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const matches = window.location.pathname.match(/[a-f\d]{24}/ig) || [];
+        return matches[1] || routeId;
+    }, [params]);
+
+    const collegeId = useMemo(() => {
+        const routeId = params?.collegeId;
+        if (routeId && routeId !== '1') return routeId;
+        if (typeof window === 'undefined') return routeId;
+        const matches = window.location.pathname.match(/[a-f\d]{24}/ig) || [];
+        return matches[2] || routeId;
+    }, [params]);
 
     const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
     const [editingBatch, setEditingBatch] = useState(null);
