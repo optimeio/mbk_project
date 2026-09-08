@@ -1,0 +1,163 @@
+/* ── Dashboard modal & popup containment (all viewports) ─────────────────── */
+:root {
+  --modal-gutter: max(0.75rem, env(safe-area-inset-left, 0px));
+  --modal-gutter-block: max(0.75rem, env(safe-area-inset-top, 0px));
+  --modal-max-height: min(
+    90dvh,
+    calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1.5rem)
+  );
+  --modal-max-width: min(calc(100vw - 1.5rem), 42rem);
+  --modal-max-width-wide: min(calc(100vw - 1.5rem), 72rem);
+}
+
+/* Scrollport: outer fixed layer that should scroll when modal is taller than viewport */
+.dashboard-modal-scrollport,
+[role="dialog"] > .fixed.inset-0.overflow-y-auto,
+[role="dialog"] > div.fixed.inset-0.z-10.overflow-y-auto {
+  box-sizing: border-box;
+  padding: var(--modal-gutter-block) var(--modal-gutter);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Centering flex wrapper inside scrollport */
+.dashboard-modal-center,
+[role="dialog"] .flex.min-h-full.items-end,
+[role="dialog"] .flex.min-h-full.items-center,
+[role="dialog"] .flex.min-h-full.justify-center {
+  box-sizing: border-box;
+  display: flex;
+  min-height: 100%;
+  width: 100%;
+  align-items: center !important;
+  justify-content: center;
+  padding: 0.75rem;
+  margin: 0 auto;
+}
+
+/* Modal panels (Headless UI, Radix, custom) */
+.dashboard-modal-panel,
+[role="dialog"] [id^="headlessui-dialog-panel"],
+[data-radix-dialog-content] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--modal-max-width);
+  max-height: var(--modal-max-height);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin-inline: auto;
+}
+
+/* Wide modals (tables, day details, etc.) */
+.dashboard-modal-panel--wide,
+[role="dialog"] .sm\:max-w-6xl,
+[role="dialog"] .max-w-6xl,
+[role="dialog"] .max-w-5xl,
+[role="dialog"] .max-w-4xl {
+  max-width: var(--modal-max-width-wide);
+}
+
+/* Custom fixed overlay modals (no role=dialog) */
+.dashboard-modal-overlay,
+.fixed.inset-0.flex.items-center.justify-center.z-50,
+.fixed.inset-0.flex.items-center.justify-center.z-\[50\],
+.fixed.inset-0.flex.items-center.justify-center.z-\[60\],
+.fixed.inset-0.z-50.flex.items-center.justify-center,
+.fixed.inset-0.z-\[60\].flex.items-center.justify-center,
+.fixed.inset-0.bg-black\/40.backdrop-blur-sm.flex.items-center.justify-center {
+  box-sizing: border-box;
+  padding: var(--modal-gutter-block) var(--modal-gutter);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-modal-overlay > .dashboard-modal-panel,
+.dashboard-modal-overlay > div:not(.absolute):not([aria-hidden="true"]),
+.fixed.inset-0.flex.items-center.justify-center > div.bg-white,
+.fixed.inset-0.flex.items-center.justify-center > div.rounded-2xl,
+.fixed.inset-0.z-50.flex.items-center.justify-center > div {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--modal-max-width);
+  max-height: var(--modal-max-height);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-inline: auto;
+}
+
+/* Backdrop layers must not capture scroll or expand layout */
+.dashboard-modal-backdrop,
+[role="dialog"] > .fixed.inset-0.bg-gray-500,
+[role="dialog"] > .fixed.inset-0.bg-gray-900,
+[role="dialog"] > .fixed.inset-0.bg-black,
+[role="dialog"] > .fixed.inset-0.bg-slate-900,
+[data-radix-dialog-overlay] {
+  box-sizing: border-box;
+}
+
+/* ── Portal content: cards, forms, tables ─────────────────────────────────── */
+[data-portal-content] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+[data-portal-content] .dashboard-card,
+[data-portal-content] [data-slot="card"] {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+[data-portal-content] form,
+[data-portal-content] .dashboard-form {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+[data-portal-content] .dashboard-table-wrap,
+[data-portal-content] .overflow-x-auto,
+[data-portal-content] table {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+[data-portal-content] .dashboard-table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-portal-content] img,
+[data-portal-content] video,
+[data-portal-content] iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+[data-portal-content] input,
+[data-portal-content] textarea,
+[data-portal-content] select,
+[data-portal-content] button {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Prevent long unbroken strings from forcing horizontal scroll */
+[data-portal-content] td,
+[data-portal-content] th,
+[data-portal-content] p,
+[data-portal-content] span,
+.dashboard-modal-panel td,
+.dashboard-modal-panel th,
+.dashboard-modal-panel p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

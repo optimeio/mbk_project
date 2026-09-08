@@ -1,0 +1,9 @@
+# Backend-only Render config (use when Root Directory is already "backend")
+services:
+  - type: web
+    name: mbk-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health

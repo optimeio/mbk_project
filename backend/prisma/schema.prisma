@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Teacher {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phone       String?
+  collegeId   String
+  college     College  @relation(fields: [collegeId], references: [id])
+  status      String   @default("ACTIVE")
+  sessions    AttendanceSession[]
+}
+
+model College {
+  id            String   @id @default(uuid())
+  collegeId     String   @unique
+  name          String
+  latitude      Float
+  longitude     Float
+  allowedRadius Int      @default(150)
+  teachers      Teacher[]
+  students      Student[]
+}
+
+model Student {
+  id          String   @id @default(uuid())
+  name        String
+  rollNo      String?
+  registerNo  String?
+  collegeId   String
+  college     College  @relation(fields: [collegeId], references: [id])
+  attendances StudentAttendance[]
+}
+
+model AttendanceSession {
+  id                String   @id @default(uuid())
+  teacherId         String
+  teacher           Teacher  @relation(fields: [teacherId], references: [id])
+  collegeId         String
+  college           College  @relation(fields: [collegeId], references: [id])
+  date              DateTime @default(now())
+  clockInTime       DateTime?
+  clockOutTime      DateTime?
+  workflowStatus    WorkflowStatus @default(PENDING)
+  gpsVerified       Boolean  @default(false)
+  clockInImageUrl   String?
+  clockOutImageUrl  String?
+  activities        StudentActivity[]
+  attendanceRecords StudentAttendance[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model StudentAttendance {
+  id           String   @id @default(uuid())
+  sessionId    String
+  session      AttendanceSession @relation(fields: [sessionId], references: [id])
+  studentId    String?
+  student      Student? @relation(fields: [studentId], references: [id])
+  status       AttendanceStatus @default(ABSENT)
+  signatureUrl String?
+  createdAt    DateTime @default(now())
+}
+
+model StudentActivity {
+  id           String   @id @default(uuid())
+  teacherId    String
+  teacher      Teacher  @relation(fields: [teacherId], references: [id])
+  collegeId    String
+  college      College  @relation(fields: [collegeId], references: [id])
+  sessionId    String
+  session      AttendanceSession @relation(fields: [sessionId], references: [id])
+  activityType ActivityType
+  description  String
+  imageUrl     String
+  latitude     Float?
+  longitude    Float?
+  createdAt    DateTime @default(now())
+}
+
+model GeoLog {
+  id          String   @id @default(uuid())
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  latitude    Float
+  longitude   Float
+  imageUrl    String?
+  actionType  GeoAction
+  createdAt   DateTime @default(now())
+}
+
+enum WorkflowStatus {
+  PENDING
+  GPS_VERIFIED
+  CLOCKED_IN
+  ATTENDANCE_SUBMITTED
+  ACTIVITIES_UPLOADED
+  CLOCKED_OUT
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+enum ActivityType {
+  WORKSHOP
+  TRAINING
+  SEMINAR
+  LAB_SESSION
+  PROJECT_REVIEW
+  PLACEMENT_TRAINING
+  GUEST_LECTURE
+  INDUSTRIAL_VISIT
+}
+
+enum GeoAction {
+  GPS_VERIFY
+  CLOCK_IN
+  CLOCK_OUT
+}

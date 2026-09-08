@@ -1,0 +1,3 @@
+@echo off
+echo Starting MBK Carrierz Portal (Frontend & Backend)...
+npm run dev

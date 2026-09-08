@@ -1,0 +1,61 @@
+(node:22976) ExperimeNDAlWarning: CommonJS module C:\Program Files\nodejs\node_modules\npm\node_modules\debug\src\node.js is loading ES Module C:\Program Files\nodejs\node_modules\npm\node_modules\supports-color\index.js using require().
+Support for loading ES Module in require() is an experimeNDAl feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+- initializing
+
+       summary               unimported v1.31.0 (node)
+────────────────────────────────────────────────
+       entry file          : src/main.jsx
+
+       unresolved imports  : 0
+       unused dependencies : 3
+       unimported files    : 31
+
+
+─────┬──────────────────────────────────────────
+     │ 3 unused dependencies
+─────┼──────────────────────────────────────────
+   1 │ axios
+   2 │ framer-motion
+   3 │ qrcode.react
+─────┴──────────────────────────────────────────
+
+
+─────┬──────────────────────────────────────────
+     │ 31 unimported files
+─────┼──────────────────────────────────────────
+   1 │ E:\Master V\M-client\src\components\admin\AdminLayout.jsx
+   2 │ E:\Master V\M-client\src\components\admin\Header.jsx
+   3 │ E:\Master V\M-client\src\components\admin\Sidebar.jsx
+   4 │ E:\Master V\M-client\src\components\auth\MSG91Login.example.jsx
+   5 │ E:\Master V\M-client\src\components\auth\MSG91OTP.example.jsx
+   6 │ E:\Master V\M-client\src\components\common\ElectricBorder.jsx
+   7 │ E:\Master V\M-client\src\components\common\Header.jsx
+   8 │ E:\Master V\M-client\src\components\common\LogoLoop.jsx
+   9 │ E:\Master V\M-client\src\components\common\StatsCard.jsx
+  10 │ E:\Master V\M-client\src\components\common\Stepper\Stepper.jsx
+  11 │ E:\Master V\M-client\src\components\common\ThemeButton.jsx
+  12 │ E:\Master V\M-client\src\components\common\ThemeCard.jsx
+  13 │ E:\Master V\M-client\src\components\common\ThemeFooter.jsx
+  14 │ E:\Master V\M-client\src\components\forms\LocationCapture.jsx
+  15 │ E:\Master V\M-client\src\components\forms\MediaUpload.jsx
+  16 │ E:\Master V\M-client\src\components\forms\SignatureCapture.jsx
+  17 │ E:\Master V\M-client\src\components\modals\ManualAttendanceModal.jsx
+  18 │ E:\Master V\M-client\src\components\modals\Setup2FA.jsx
+  19 │ E:\Master V\M-client\src\components\modals\TrainerDownloadModal.jsx
+  20 │ E:\Master V\M-client\src\components\modals\TrainerModal.jsx
+  21 │ E:\Master V\M-client\src\pages\Dashboard.jsx
+  22 │ E:\Master V\M-client\src\pages\SPOC\SpocStudents.jsx
+  23 │ E:\Master V\M-client\src\pages\SPOC\SpocTrainerReports.jsx
+  24 │ E:\Master V\M-client\src\pages\superadmin\AttendanceReport.jsx
+  25 │ E:\Master V\M-client\src\pages\superadmin\TrainerAttendance.jsx
+  26 │ E:\Master V\M-client\src\pages\trainer\AttendanceSubmit.jsx
+  27 │ E:\Master V\M-client\src\pages\trainer\TrainerAttendanceForm.jsx
+  28 │ E:\Master V\M-client\src\pages\trainer\TrainerAttendanceSubmit.jsx
+  29 │ E:\Master V\M-client\src\services\fileUploadService.js
+  30 │ E:\Master V\M-client\src\services\salaryService.js
+  31 │ E:\Master V\M-client\src\utils\locationUtils.js
+─────┴──────────────────────────────────────────
+
+
+       Inspect the results and run npx unimported -u to update ignore lists
