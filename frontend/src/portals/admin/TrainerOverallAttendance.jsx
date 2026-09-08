@@ -55,7 +55,7 @@ import {
 } from "@tanstack/react-table";
 import { List } from "react-window";
 import Link from "next/link";
-import { getSecureImageUrl } from "@/utils/imageUtils";
+import { getSecureImageUrl, isValidGoogleDriveId } from "@/utils/imageUtils";
 import useDebouncedValue from "@/hooks/useDebouncedValue";
 import { QUERY_GC_TIMES, QUERY_STALE_TIMES } from "@/shared/config/queryPolicies";
 import { mapInBatches, runOnIdle } from "@/shared/lib/mainThread";
@@ -199,7 +199,7 @@ const getCheckInEntries = (record = {}) => {
       (doc?.fileType === 'geotag' && !String(doc?.fileName || '').toLowerCase().includes('checkout') && !String(doc?.fileField || '').toLowerCase().includes('checkout'));
 
     if (isCheckInDoc) {
-      const docUrl = doc?.fileUrl || (doc?.driveFileId ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
+      const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
       if (docUrl) {
         entries.push({
           key: `doc-checkin-${doc._id || doc.driveFileId}`,
@@ -261,7 +261,7 @@ const getAttendanceFileEntries = (record = {}) => {
   // Extract from record.documents / record.scheduleDocuments
   const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
   docs.forEach((doc, idx) => {
-    const docUrl = doc?.fileUrl || doc?.url || (doc?.driveFileId ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
+    const docUrl = doc?.fileUrl || doc?.url || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
     const docName = doc?.fileName || doc?.name || `Attendance Document ${idx + 1}`;
     const lowerName = String(docName).toLowerCase();
     const isPdf = lowerName.endsWith('.pdf') || doc?.fileType === 'attendance' || doc?.fileField === 'attendancePdf';
@@ -312,7 +312,7 @@ const getStudentActivityEntries = (record = {}) => {
   const docs = Array.isArray(record?.documents) ? record.documents : [];
   docs.forEach((doc, idx) => {
     if (doc?.fileField === 'activityPhotos' || doc?.fileField === 'studentsPhoto') {
-      const docUrl = doc?.fileUrl || (doc?.driveFileId ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
+      const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
       if (docUrl) {
         activities.push({
           type: 'image',

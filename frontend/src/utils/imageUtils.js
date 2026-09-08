@@ -37,9 +37,16 @@ export const markImageUrlFailed = (url) => {
 };
 
 export const isImageUrlFailed = (url) => Boolean(url) && failedImageUrls.has(url);
+export const isValidGoogleDriveId = (id) => {
+    if (!id || typeof id !== 'string') return false;
+    if (id.startsWith('local-') || id.includes(' ') || id.includes('/') || id.includes('\\')) return false;
+    return /^[a-zA-Z0-9_-]{15,100}$/.test(id);
+};
 
 const extractGoogleDriveFileId = (value = '') => {
-    if (typeof value !== 'string') return null;
+    if (typeof value !== 'string' || !value) return null;
+    if (value.startsWith('local-')) return null;
+    if (isValidGoogleDriveId(value)) return value;
 
     const patterns = [
         /\/file\/d\/([^/?#=]+)/i,
@@ -51,7 +58,10 @@ const extractGoogleDriveFileId = (value = '') => {
     for (const pattern of patterns) {
         const match = value.match(pattern);
         if (match?.[1]) {
-            return decodeURIComponent(match[1]);
+            const extracted = decodeURIComponent(match[1]);
+            if (isValidGoogleDriveId(extracted)) {
+                return extracted;
+            }
         }
     }
 

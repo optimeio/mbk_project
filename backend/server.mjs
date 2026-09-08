@@ -238,12 +238,22 @@ import jwt from 'jsonwebtoken';
 const REQUIRE_UPLOAD_AUTH = String(process.env.REQUIRE_UPLOAD_AUTH || '').toLowerCase() === 'true';
 const JWT_SECRET = process.env.JWT_SECRET || "your_super_secret_jwt_key_change_in_production";
 
+const isValidDriveId = (id) => {
+  if (!id || typeof id !== 'string') return false;
+  if (id.startsWith('local-') || id.includes(' ') || id.includes('/') || id.includes('\\')) return false;
+  return /^[a-zA-Z0-9_-]{15,100}$/.test(id);
+};
+
 const extractDriveFileId = (value) => {
   if (!value || typeof value !== 'string') return null;
+  if (isValidDriveId(value)) return value;
   const patterns = [/\/file\/d\/([^/?#]+)/i, /\/d\/([^/?#]+)/i, /[?&]id=([^&#]+)/i];
   for (const pattern of patterns) {
     const match = value.match(pattern);
-    if (match?.[1]) return decodeURIComponent(match[1]);
+    if (match?.[1]) {
+      const extracted = decodeURIComponent(match[1]);
+      if (isValidDriveId(extracted)) return extracted;
+    }
   }
   return null;
 };
@@ -296,10 +306,10 @@ app.get('/api/uploads/trainer-documents/:filename', async (req, res, next) => {
       .select('driveFileId driveViewLink driveDownloadLink')
       .lean();
     const driveId =
-      doc?.driveFileId ||
+      (isValidDriveId(doc?.driveFileId) ? doc.driveFileId : null) ||
       extractDriveFileId(doc?.driveViewLink) ||
       extractDriveFileId(doc?.driveDownloadLink);
-    if (driveId) {
+    if (isValidDriveId(driveId)) {
       return res.redirect(302, `https://lh3.googleusercontent.com/d/${driveId}=w1200`);
     }
   } catch (e) {
@@ -323,6 +333,23 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
 
   if (filename) {
     try {
+      // 0. Search all subfolders of uploadsDir first
+      const candidateSubfolders = [
+        '',
+        'attendance/images',
+        'attendance/photos',
+        'attendance/excels',
+        'drive_fallback',
+        'trainer-documents',
+        'NDA'
+      ];
+      for (const sub of candidateSubfolders) {
+        const candidatePath = path.join(uploadsDir, sub, filename);
+        if (fs.existsSync(candidatePath)) {
+          return res.sendFile(candidatePath);
+        }
+      }
+
       const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapeRegex(filename), 'i');
 
@@ -337,8 +364,8 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
           ]
         }).select('driveFileId fileUrl').lean();
 
-        const schedDriveId = schedDoc?.driveFileId || extractDriveFileId(schedDoc?.fileUrl);
-        if (schedDriveId) {
+        const schedDriveId = extractDriveFileId(schedDoc?.driveFileId) || extractDriveFileId(schedDoc?.fileUrl);
+        if (isValidDriveId(schedDriveId)) {
           return res.redirect(302, `https://lh3.googleusercontent.com/d/${schedDriveId}=w1200`);
         }
       } catch (sdErr) {
@@ -369,9 +396,9 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
 
       if (record) {
         const driveId =
-          record?.checkOut?.driveFileId ||
-          record?.checkIn?.driveFileId ||
-          record?.driveFileId ||
+          extractDriveFileId(record?.checkOut?.driveFileId) ||
+          extractDriveFileId(record?.checkIn?.driveFileId) ||
+          extractDriveFileId(record?.driveFileId) ||
           extractDriveFileId(record?.checkInPhoto) ||
           extractDriveFileId(record?.checkInGeoImageUrl) ||
           extractDriveFileId(record?.checkInImage) ||
@@ -380,7 +407,7 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
           extractDriveFileId(record?.attendancePdfUrl) ||
           extractDriveFileId(record?.attendanceExcelUrl);
 
-        if (driveId) {
+        if (isValidDriveId(driveId)) {
           return res.redirect(302, `https://lh3.googleusercontent.com/d/${driveId}=w1200`);
         }
 
@@ -394,8 +421,8 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
             ]
           }).select('driveFileId fileUrl').lean();
 
-          const linkedDriveId = linkedSchedDoc?.driveFileId || extractDriveFileId(linkedSchedDoc?.fileUrl);
-          if (linkedDriveId) {
+          const linkedDriveId = extractDriveFileId(linkedSchedDoc?.driveFileId) || extractDriveFileId(linkedSchedDoc?.fileUrl);
+          if (isValidDriveId(linkedDriveId)) {
             return res.redirect(302, `https://lh3.googleusercontent.com/d/${linkedDriveId}=w1200`);
           }
         } catch (lErr) {
@@ -414,8 +441,8 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
           ]
         }).select('driveFileId driveViewLink driveDownloadLink').lean();
 
-        const tDriveId = tDoc?.driveFileId || extractDriveFileId(tDoc?.driveViewLink) || extractDriveFileId(tDoc?.driveDownloadLink);
-        if (tDriveId) {
+        const tDriveId = extractDriveFileId(tDoc?.driveFileId) || extractDriveFileId(tDoc?.driveViewLink) || extractDriveFileId(tDoc?.driveDownloadLink);
+        if (isValidDriveId(tDriveId)) {
           return res.redirect(302, `https://lh3.googleusercontent.com/d/${tDriveId}=w1200`);
         }
       } catch (tErr) {
@@ -428,6 +455,7 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
 
   return res.status(404).json({ success: false, message: 'File not found' });
 });
+
 
 // Simple health check (load balancers / frontend connectivity probes)
 app.get("/health", (req, res) => {
