@@ -111,10 +111,6 @@ const deriveScheduleLifecycleStatusFromAttendance = (attendance) => {
     const attendanceVerification = normalizeVerificationStatus(attendance?.verificationStatus, '');
     const geoVerification = normalizeVerificationStatus(attendance?.geoVerificationStatus, '');
 
-    if (attendanceVerification !== 'approved') {
-        return 'scheduled';
-    }
-
     if (attendanceVerification === 'approved' && geoVerification === 'approved') {
         return 'COMPLETED';
     }
@@ -123,7 +119,24 @@ const deriveScheduleLifecycleStatusFromAttendance = (attendance) => {
         return 'inprogress';
     }
 
-    return 'inprogress';
+    if (
+        attendanceVerification === 'pending'
+        || Boolean(
+            attendance?.checkIn?.time
+            || attendance?.checkInTime
+            || attendance?.checkInImage
+            || attendance?.checkInPhoto
+            || attendance?.attendancePdfUrl
+        )
+    ) {
+        return 'inprogress';
+    }
+
+    if (attendanceVerification === 'rejected') {
+        return 'scheduled';
+    }
+
+    return 'scheduled';
 };
 
 const syncScheduleLifecycleStatusFromAttendance = async ({ scheduleId, attendance }) => {

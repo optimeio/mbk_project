@@ -122,6 +122,23 @@ export const getScheduleBadge = (schedule) => {
     return { label: "Check-In Rejected", className: "bg-red-100 text-red-700" };
   }
 
+  const hasCheckInEvidence = Boolean(
+    schedule.checkInTime ||
+    schedule.checkIn?.time ||
+    schedule.checkInImage ||
+    schedule.attendanceUploaded
+  );
+  if (
+    normalizedAttendanceStatus === "pending" ||
+    normalizeStatus(schedule.attendancePresenceStatus) === "pending" ||
+    (hasCheckInEvidence && normalizedAttendanceStatus !== "approved" && normalizedAttendanceStatus !== "rejected" && !hasCompletedCheckOut)
+  ) {
+    return {
+      label: "Check-In Pending Approval",
+      className: "bg-amber-100 text-amber-800 border border-amber-200",
+    };
+  }
+
   if (schedule.geoValidationComment && normalizedGeoVerificationStatus !== "approved") {
     return { label: "Check-Out Pending", className: "bg-amber-100 text-amber-700" };
   }
@@ -273,6 +290,23 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     : Number.POSITIVE_INFINITY;
   const isWithinGracePeriod = Number.isFinite(diffDays) && diffDays >= 0 && diffDays <= 7;
 
+  const hasCheckInEvidence = Boolean(
+    schedule.checkInTime ||
+    schedule.checkIn?.time ||
+    schedule.checkInImage ||
+    schedule.attendanceUploaded
+  );
+  const isCheckInPending = (
+    !isCompleted &&
+    !isAttendanceApproved &&
+    !isAttendanceRejected &&
+    (
+      normalizedAttendanceStatus === "pending" ||
+      normalizeStatus(schedule.attendancePresenceStatus) === "pending" ||
+      hasCheckInEvidence
+    )
+  );
+
   let primaryAction = null;
 
   if (!isScheduleActionable) {
@@ -285,6 +319,12 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     primaryAction = hasCompletedCheckOut
       ? null
       : { kind: "checkout", label: "Check Out" };
+  } else if (isCheckInPending) {
+    primaryAction = {
+      kind: "checkin-pending",
+      label: "Check-In Submitted (Pending Approval)",
+      disabled: true,
+    };
   } else if (normalizedScheduleStatus === "scheduled") {
     if (isSessionClosedByTime && !isCompleted) {
       primaryAction = {
@@ -338,10 +378,11 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     isFutureDate,
     isPastDate,
     isWithinGracePeriod,
+    isCheckInPending,
     isBeforeCurrentMonth: Boolean(
       scheduleDay && firstDayOfCurrentMonth && scheduleDay < firstDayOfCurrentMonth,
     ),
-    showPastScheduleIndicator: isPastDate && !isCompleted && isScheduleActionable,
+    showPastScheduleIndicator: isPastDate && !isCompleted && !isCheckInPending && isScheduleActionable,
     shouldShowCompletedText:
       normalizedScheduleStatus === "completed"
       && !isAttendanceRejected
@@ -391,6 +432,10 @@ export const transformScheduleRecord = (
       geoVerificationStatus: schedule.geoVerificationStatus || null,
       verificationComment: schedule.verificationComment || null,
       geoValidationComment: schedule.geoValidationComment || null,
+      checkIn: schedule.checkIn || null,
+      checkInTime: schedule.checkInTime || schedule.checkIn?.time || null,
+      checkInImage: schedule.checkInImage || schedule.checkIn?.photo || null,
+      attendancePdfUrl: schedule.attendancePdfUrl || null,
       checkOut: schedule.checkOut || null,
       dayStatus: schedule.dayStatus || null,
       dayStatusLabel: schedule.dayStatusLabel || null,

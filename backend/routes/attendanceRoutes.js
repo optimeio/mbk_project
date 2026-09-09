@@ -2249,7 +2249,9 @@ const checkInHandler = async (req, res) => {
             });
         }
 
-        const schedule = await Schedule.findById(scheduleId).select(SCHEDULE_DRIVE_FOLDER_SELECT);
+        const schedule = await Schedule.findById(scheduleId).select(
+            `${SCHEDULE_DRIVE_FOLDER_SELECT} scheduledDate date rawDate dayNumber courseId trainerId collegeId`
+        );
         if (!schedule) {
             return res.status(404).json({
                 success: false,
@@ -2401,8 +2403,19 @@ const checkInHandler = async (req, res) => {
             attendanceExcelUrl
         });
 
+        const scheduledDateValue = schedule?.scheduledDate || schedule?.date || schedule?.rawDate || null;
+        const scheduledDateStr = scheduledDateValue
+            ? (scheduledDateValue instanceof Date ? scheduledDateValue.toISOString().slice(0, 10) : String(scheduledDateValue).slice(0, 10))
+            : (req.body.assignedDate || null);
+
         if (attendance) {
             checkInStage = 'updating existing attendance';
+            if (!attendance.assignedDate && scheduledDateStr) {
+                attendance.assignedDate = scheduledDateStr;
+            }
+            if (scheduledDateValue) {
+                attendance.date = new Date(scheduledDateValue);
+            }
             // Update existing record
             if (!attendance.checkInTime) {
                 attendance.checkInTime = checkInTime || new Date().toTimeString().split(' ')[0];
@@ -2478,8 +2491,9 @@ const checkInHandler = async (req, res) => {
                 collegeId,
                 courseId: courseId || null,
                 scheduleId,
-                dayNumber: dayNumber || null,
-                date: new Date(),
+                dayNumber: dayNumber || schedule?.dayNumber || null,
+                assignedDate: scheduledDateStr,
+                date: scheduledDateValue ? new Date(scheduledDateValue) : new Date(),
                 checkInTime: checkInTime || new Date().toTimeString().split(' ')[0],
                 checkIn: checkInLocation ? {
                     time: new Date(),
@@ -2521,8 +2535,13 @@ const checkInHandler = async (req, res) => {
         });
 
         checkInStage = 'updating schedule status';
-        // Update Schedule status to 'inprogress' and update subject if provided
-        const scheduleUpdate = { status: 'inprogress' };
+        // Update Schedule status to 'inprogress' and attendanceStatus to 'pending'
+        const scheduleUpdate = {
+            status: 'inprogress',
+            attendanceStatus: 'pending',
+            attendanceUploaded: true,
+            geoTagUploaded: Boolean(checkInImageUrl || checkInLocation)
+        };
         if (req.body.syllabus) {
             scheduleUpdate.subject = req.body.syllabus;
         }
@@ -3748,7 +3767,7 @@ router.get('/', async (req, res) => {
                 })
                 .populate({
                     path: 'scheduleId',
-                    select: 'subject dayNumber courseId',
+                    select: 'subject dayNumber courseId scheduledDate date rawDate',
                     populate: { path: 'courseId', select: 'name title' }
                 })
                 .sort({ date: -1, createdAt: -1 })
@@ -3858,7 +3877,7 @@ router.get('/', async (req, res) => {
             })
             .populate({
                 path: 'scheduleId',
-                select: 'dayNumber subject courseId',
+                select: 'dayNumber subject courseId scheduledDate date rawDate',
                 populate: { path: 'courseId', select: 'name title' }
             })
             .sort({ date: -1, createdAt: -1 })

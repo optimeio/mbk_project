@@ -96,6 +96,17 @@ function ScheduleList({
                         <ArrowRightOnRectangleIcon className="h-4 w-4 mr-1.5" />
                         {schedule.ui.primaryAction.label}
                       </button>
+                    ) : schedule.ui.primaryAction?.kind === "checkin-pending" ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shadow-sm">
+                          <ClockIcon className="h-4 w-4 mr-1.5 text-amber-600 animate-pulse" />
+                          {schedule.ui.primaryAction.label}
+                        </span>
+                        <p className="text-[11px] text-amber-700 font-medium">
+                          {schedule.checkInTime ? `Check-In submitted at ${schedule.checkInTime}. ` : "Check-In evidence uploaded. "}
+                          Awaiting SPOC verification before Check-Out.
+                        </p>
+                      </div>
                     ) : schedule.ui.primaryAction?.kind === "scheduled-info" ? (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
                         {schedule.ui.primaryAction.label}

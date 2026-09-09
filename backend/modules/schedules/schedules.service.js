@@ -407,7 +407,18 @@ const buildDayUploadStatus = (schedule, attendance) => {
     || isGeoVerificationRejected(attendance);
   const checkoutGeoState = deriveCheckoutGeoState(attendance);
 
-  const hasCheckIn = Boolean(attendance?.checkIn?.time);
+  const hasCheckIn = Boolean(
+    attendance?.checkIn?.time ||
+    attendance?.checkInTime ||
+    attendance?.checkInImage ||
+    attendance?.checkInPhoto ||
+    attendance?.imageUrl ||
+    attendance?.attendancePdfUrl ||
+    attendance?.attendanceExcelUrl ||
+    schedule?.checkInTime ||
+    schedule?.checkIn?.time ||
+    schedule?.attendanceUploaded
+  );
   const sessionType = schedule?.session || "FULL_DAY";
   let isPast = false;
   if (schedule?.scheduledDate) {
@@ -425,7 +436,12 @@ const buildDayUploadStatus = (schedule, attendance) => {
       }
   }
 
-  if (hasTrainerAssigned && isPast && !hasCheckIn && normalizedScheduleStatus !== "cancelled") {
+  const isAttendancePending =
+    attendance?.verificationStatus === "pending" ||
+    attendance?.status === "Pending" ||
+    hasCheckIn;
+
+  if (hasTrainerAssigned && isPast && !hasCheckIn && !isAttendancePending && normalizedScheduleStatus !== "cancelled") {
       return {
           attendanceUploaded,
           geoTagUploaded,
@@ -724,16 +740,29 @@ const deriveTrainerScheduleStatus = (schedule, attendance) => {
   const attendanceVerification = String(attendance?.verificationStatus || "").trim().toLowerCase();
   const geoVerification = String(attendance?.geoVerificationStatus || "").trim().toLowerCase();
 
-  if (attendanceVerification !== "approved" && attendance) {
-    return TRAINER_SCHEDULE_DEFAULT_STATUS;
-  }
-
   if (attendanceVerification === "approved" && geoVerification === "approved") {
     return "COMPLETED";
   }
 
   if (attendanceVerification === "approved") {
     return "inprogress";
+  }
+
+  if (
+    attendanceVerification === "pending" ||
+    Boolean(
+      attendance?.checkIn?.time ||
+      attendance?.checkInTime ||
+      attendance?.checkInImage ||
+      attendance?.attendancePdfUrl ||
+      schedule?.attendanceUploaded
+    )
+  ) {
+    return "inprogress";
+  }
+
+  if (attendanceVerification === "rejected") {
+    return TRAINER_SCHEDULE_DEFAULT_STATUS;
   }
 
   return rawStatus;
@@ -824,6 +853,10 @@ const buildTrainerSchedulesPayload = ({
       geoVerificationStatus: attendance ? attendance.geoVerificationStatus : null,
       verificationComment: attendance ? attendance.verificationComment : null,
       geoValidationComment: attendance ? attendance.geoValidationComment : null,
+      checkIn: attendance ? attendance.checkIn || null : (schedule.checkIn || null),
+      checkInTime: attendance ? attendance.checkInTime || null : null,
+      checkInImage: attendance ? attendance.checkInImage || null : null,
+      attendancePdfUrl: attendance ? attendance.attendancePdfUrl || null : null,
       checkOut: attendance ? attendance.checkOut || null : null,
     };
   });

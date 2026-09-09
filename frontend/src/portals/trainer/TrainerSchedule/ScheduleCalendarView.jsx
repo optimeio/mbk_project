@@ -207,6 +207,11 @@ function ScheduleCalendarView({ schedules, onOpenCheckIn, onOpenCheckOut, select
                         Check Out
                       </button>
                     )}
+                    {s.ui?.primaryAction?.kind === "checkin-pending" && (
+                      <span className="px-2 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 rounded-lg border border-amber-200">
+                        Pending
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

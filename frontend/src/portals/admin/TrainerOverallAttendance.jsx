@@ -733,9 +733,9 @@ const TrainerOverallAttendance = () => {
         const exportData = await mapInBatches(
           exportRows,
           (item) => ({
-            Date: item.date
-              ? dayjs(item.date).format("DD MMM YYYY")
-              : (item.assignedDate ? dayjs(item.assignedDate).format("DD MMM YYYY") : "-"),
+            Date: (item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date)
+              ? dayjs(item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date).format("DD MMM YYYY")
+              : "-",
             "Trainer Name": item.trainerId?.userId?.name || item.trainerId?.name || "Unknown",
             "Trainer ID": item.trainerId?.trainerId || "-",
             "College Name": item.collegeId?.name || "-",
@@ -797,9 +797,9 @@ const TrainerOverallAttendance = () => {
         const tableRows = await mapInBatches(
           exportRows,
           (item) => [
-            item.date
-              ? dayjs(item.date).format("DD MMM YYYY")
-              : (item.assignedDate ? dayjs(item.assignedDate).format("DD MMM YYYY") : "-"),
+            (item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date)
+              ? dayjs(item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date).format("DD MMM YYYY")
+              : "-",
             item.trainerId?.userId?.name || item.trainerId?.name || "Unknown",
             item.collegeId?.name || "-",
             item.courseId?.title ||
@@ -856,10 +856,14 @@ const TrainerOverallAttendance = () => {
       () => [
         {
           id: "date",
-          accessorFn: (row) => (row.date ? dayjs(row.date).valueOf() : (row.assignedDate ? dayjs(row.assignedDate).valueOf() : 0)),
+          accessorFn: (row) => {
+            const raw = row.assignedDate || row.scheduleId?.scheduledDate || row.scheduleId?.date || row.date;
+            return raw ? dayjs(raw).valueOf() : 0;
+          },
           header: "Date",
           cell: ({ row }) => {
-            const dateStr = row.original.date ? dayjs(row.original.date).format("DD MMM YYYY") : (row.original.assignedDate ? dayjs(row.original.assignedDate).format("DD MMM YYYY") : "-");
+            const raw = row.original.assignedDate || row.original.scheduleId?.scheduledDate || row.original.scheduleId?.date || row.original.date;
+            const dateStr = raw ? dayjs(raw).format("DD MMM YYYY") : "-";
             return (
               <Space size={6} style={{ whiteSpace: "nowrap" }}>
                 <CalendarDays size={13} color="#8c8c8c" style={{ flexShrink: 0 }} />

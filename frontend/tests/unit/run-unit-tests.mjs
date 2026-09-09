@@ -16,7 +16,10 @@ import {
 } from "../../src/portals/spoc/scheduler/schedulerUiState.js";
 import {
   buildPendingSchedules,
+  buildScheduleUiState,
+  getScheduleBadge,
   isScheduleActionableForTrainerWorkflow,
+  transformScheduleRecord,
 } from "../../src/portals/trainer/TrainerSchedule/scheduleProcessing.js";
 import {
   normalizeGeoSubmissionStatus,
@@ -737,6 +740,41 @@ const tests = [
         nonJsonBody: "<html>Bad Gateway</html>",
         message: "Server temporarily unavailable.",
       });
+    },
+  },
+  {
+    name: "trainer schedule pending check-in displays amber pending badge and suppresses past schedule indicator",
+    run: () => {
+      const scheduleWithPendingCheckIn = {
+        _id: "sched-day3",
+        status: "inprogress",
+        scheduledDate: "2026-09-02T00:00:00.000Z",
+        date: "02 Sep 2026",
+        dayNumber: 3,
+        trainerId: "trainer-123",
+        collegeId: { _id: "coll-123", name: "aabb College" },
+        courseId: { title: "Test Course" },
+        attendanceStatus: "pending",
+        attendanceUploaded: true,
+        geoTagUploaded: true,
+        checkInTime: "12:18 PM",
+        checkInImage: "https://example.com/checkin.jpg",
+        attendancePdfUrl: "https://example.com/attendance.pdf",
+      };
+
+      const transformed = transformScheduleRecord(
+        scheduleWithPendingCheckIn,
+        new Date("2026-09-09T12:00:00Z"),
+      );
+
+      assert.equal(transformed.ui.badge.label, "Check-In Pending Approval");
+      assert.match(transformed.ui.badge.className, /bg-amber-100/);
+      assert.equal(transformed.ui.showPastScheduleIndicator, false);
+      assert.equal(transformed.ui.isCheckInPending, true);
+      assert.equal(transformed.ui.primaryAction.kind, "checkin-pending");
+      assert.equal(transformed.ui.primaryAction.label, "Check-In Submitted (Pending Approval)");
+      assert.equal(transformed.checkInTime, "12:18 PM");
+      assert.equal(transformed.checkInImage, "https://example.com/checkin.jpg");
     },
   },
 ];
