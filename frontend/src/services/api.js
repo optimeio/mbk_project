@@ -6,6 +6,7 @@ import {
   isProductionFrontendHost,
   LOCAL_API_PORT_FALLBACKS,
   resetDiscoveredApiOrigin,
+  PRODUCTION_API_ORIGIN,
 } from "@/config/apiConfig";
 import { isValidAuthToken } from "@/utils/authJwt";
 import {
@@ -54,11 +55,27 @@ const resolveFileBaseUrl = () => {
   if (typeof window !== "undefined" && isProductionFrontendHost()) {
     return getApiOrigin();
   }
-  return hasExplicitOrigin ? cleanBaseUrl : "";
+  if (hasExplicitOrigin && cleanBaseUrl) {
+    return cleanBaseUrl;
+  }
+  try {
+    const origin = getApiOrigin();
+    if (origin) return origin;
+  } catch (_err) {
+    // Fall back to production origin
+  }
+  return PRODUCTION_API_ORIGIN;
 };
 
 export const API_BASE_URL = resolveApiBaseUrl();
 export const FILE_BASE_URL = resolveFileBaseUrl();
+export const getFileBaseUrl = () => {
+  try {
+    return getApiOrigin() || resolveFileBaseUrl();
+  } catch {
+    return resolveFileBaseUrl();
+  }
+};
 const API_DEBUG = process.env.NEXT_PUBLIC_ENABLE_API_DEBUG === "true";
 const debugLog = (...args) => {
   if (API_DEBUG) {
@@ -1048,7 +1065,9 @@ export const api = {
           try {
             const response = JSON.parse(xhr.responseText);
             errorMsg = response.message || errorMsg;
-          } catch {}
+          } catch (_parseErr) {
+            // Fall back to HTTP error message
+          }
           const error = new Error(errorMsg);
           error.status = xhr.status;
           reject(error);

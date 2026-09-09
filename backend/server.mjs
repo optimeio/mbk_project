@@ -448,6 +448,25 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
       } catch (tErr) {
         // Ignore
       }
+
+      // 4. Check Course image
+      try {
+        const Course = (await import('./models/Course.js')).default;
+        const cDoc = await Course.findOne({
+          $or: [
+            { image: regex },
+            { image: filename },
+            { driveFileId: filename.split('.')[0] }
+          ]
+        }).select('image driveFileId').lean();
+
+        const cDriveId = extractDriveFileId(cDoc?.driveFileId) || extractDriveFileId(cDoc?.image);
+        if (isValidDriveId(cDriveId)) {
+          return res.redirect(302, `https://lh3.googleusercontent.com/d/${cDriveId}=w1200`);
+        }
+      } catch (cErr) {
+        // Ignore
+      }
     } catch (e) {
       console.warn('Upload fallback Drive resolution error:', e?.message);
     }

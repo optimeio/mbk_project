@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { getSecureImageUrl } from "@/utils/imageUtils";
 
 /* ─── helpers ───────────────────────────────────────────────── */
 const formatCoord = (val) =>
@@ -99,6 +100,8 @@ const formatDuration = (minutes) => {
 
 const resolveImageUrl = (path) => {
   if (!path) return "";
+  const secure = getSecureImageUrl(path);
+  if (secure) return secure;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
   
   const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/api$/, "");

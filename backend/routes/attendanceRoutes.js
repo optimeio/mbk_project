@@ -3908,7 +3908,38 @@ router.get('/', async (req, res) => {
             }
         }
 
-        const syntheticRecords = unrecordedSchedules.map(s => {
+        // Deduplicate unrecorded schedules by composite key [collegeId, trainerId, dayNumber, dateStr]
+        // Also ensure slots that already have real attendance never get a synthetic "Absent" record
+        const seenSlots = new Set();
+        for (const att of allAttendance) {
+            const cId = String(att.collegeId?._id || att.collegeId || '');
+            const tId = String(att.trainerId?._id || att.trainerId || '');
+            const dayNum = att.dayNumber || 1;
+            const attDate = att.date || att.assignedDate;
+            const dStr = attDate ? (attDate instanceof Date ? attDate.toISOString().split('T')[0] : String(attDate).split('T')[0]) : '';
+            if (cId && tId) {
+                seenSlots.add(`${cId}_${tId}_${dayNum}_${dStr}`);
+                seenSlots.add(`${cId}_${tId}_${dayNum}`);
+            }
+        }
+
+        const uniqueUnrecordedSchedules = [];
+        for (const s of unrecordedSchedules) {
+            const cId = String(s.collegeId?._id || s.collegeId || '');
+            const tId = String(s.trainerId?._id || s.trainerId || '');
+            const dayNum = s.dayNumber || 1;
+            const schedDate = s.scheduledDate || s.date || new Date();
+            const dStr = schedDate ? (schedDate instanceof Date ? schedDate.toISOString().split('T')[0] : String(schedDate).split('T')[0]) : '';
+            const slotKey = `${cId}_${tId}_${dayNum}_${dStr}`;
+            const fallbackSlotKey = `${cId}_${tId}_${dayNum}`;
+
+            if (!seenSlots.has(slotKey) && !seenSlots.has(fallbackSlotKey)) {
+                seenSlots.add(slotKey);
+                uniqueUnrecordedSchedules.push(s);
+            }
+        }
+
+        const syntheticRecords = uniqueUnrecordedSchedules.map(s => {
             const schedDate = s.scheduledDate || s.date || new Date();
             const dateStr = schedDate ? (schedDate instanceof Date ? schedDate.toISOString().split('T')[0] : String(schedDate).split('T')[0]) : null;
             return {

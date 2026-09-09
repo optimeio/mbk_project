@@ -47,6 +47,7 @@ const {
   createNotificationDocument,
   createActivityLogDocument,
   createScheduleDocument,
+  findDuplicateSchedule,
   deleteScheduleDocument,
   saveScheduleDocument,
   updateAttendanceStatusByScheduleId,
@@ -1331,6 +1332,19 @@ const createScheduleFeed = async ({
   const mergedFolderFields = nmFolderFields?.dayFolderId
     ? { ...(folderFields || {}), ...nmFolderFields }
     : folderFields || {};
+
+  // Idempotency check: prevent duplicate schedule creation if one already exists
+  if (trainerId && collegeId) {
+    const existingDuplicate = await findDuplicateSchedule({
+      collegeId,
+      trainerId,
+      dayNumber,
+      scheduledDate,
+    });
+    if (existingDuplicate) {
+      return existingDuplicate;
+    }
+  }
 
   const schedule = await createScheduleLoader({
     schedulePayload: {

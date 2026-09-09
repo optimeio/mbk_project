@@ -10,12 +10,14 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
     const [selectedTrainerIds, setSelectedTrainerIds] = useState([]);
     const [trainerSchedules, setTrainerSchedules] = useState({});
     const [expandedTrainers, setExpandedTrainers] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (open) {
             setSelectedTrainerIds([]);
             setTrainerSchedules({});
             setExpandedTrainers({});
+            setIsSubmitting(false);
         }
     }, [open, college]);
 
@@ -79,7 +81,7 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
         }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         // Validate that all added schedules have both start time and end time filled in
@@ -99,8 +101,17 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
             schedules: (trainerSchedules[trainerId] || []).map(({ id, ...schedule }) => schedule)
         }));
 
-        onSave(college.id || college._id, trainersData);
-        onClose();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+
+        try {
+            await onSave(college.id || college._id, trainersData);
+            onClose();
+        } catch (err) {
+            console.error('Error assigning trainers:', err);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -258,10 +269,13 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
                                         <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                                             <button
                                                 type="button"
-                                                className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
+                                                disabled={isSubmitting}
+                                                className={`inline-flex w-full justify-center rounded-md border border-transparent px-4 py-2 text-base font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${
+                                                    isSubmitting ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                                                }`}
                                                 onClick={handleSubmit}
                                             >
-                                                Assign
+                                                {isSubmitting ? 'Assigning...' : 'Assign'}
                                             </button>
                                             <button
                                                 type="button"

@@ -192,7 +192,7 @@ const AllCoursesList = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {filteredCourses.map((course) => {
                             const companyId = course.companyId?._id || course.companyId || '';
-                            const imageUrl = getSecureImageUrl(course.image);
+                            const imageUrl = getSecureImageUrl(course.image, 'trainer-documents');
                             return (
                                 <div
                                     key={course._id}

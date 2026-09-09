@@ -7,7 +7,9 @@ const { cascadeDeleteCoursesByIds } = require('../services/hierarchyDeleteServic
 const {
     ensureCourseHierarchy,
     isTrainingDriveEnabled,
+    uploadToDriveWithRetry,
 } = require('../modules/drive/driveGateway');
+const fs = require('fs');
 
 // @route   GET /api/courses
 // @desc    Get all courses (optionally filtered by companyId)
@@ -155,6 +157,32 @@ router.post('/:id/upload-image', authenticate, upload.single('image'), async (re
             return res.status(400).json({ message: 'No image file uploaded' });
         }
         course.image = req.file.filename;
+
+        // Sync image to Google Drive if Drive integration is available
+        if (typeof uploadToDriveWithRetry === 'function') {
+            try {
+                const folderId = course.driveFolderId || process.env.GOOGLE_DRIVE_FOLDER_ID;
+                if (folderId) {
+                    const fileBuffer = req.file.buffer || (req.file.path && fs.existsSync(req.file.path) ? fs.readFileSync(req.file.path) : null);
+                    if (fileBuffer) {
+                        const driveFile = await uploadToDriveWithRetry({
+                            fileBuffer,
+                            filePath: req.file.path,
+                            fileName: req.file.filename,
+                            mimeType: req.file.mimetype || 'image/jpeg',
+                            folderId,
+                        });
+                        if (driveFile?.id) {
+                            course.driveFileId = driveFile.id;
+                            course.image = `https://lh3.googleusercontent.com/d/${driveFile.id}=w1200`;
+                        }
+                    }
+                }
+            } catch (driveErr) {
+                console.warn('[COURSE-UPLOAD] Google Drive upload failed, keeping local file:', driveErr.message);
+            }
+        }
+
         await course.save();
         res.json({ success: true, image: course.image });
     } catch (error) {

@@ -19,7 +19,8 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from '@heroicons/react/24/outline';
-import { api, FILE_BASE_URL } from '@/services/api';
+import { api, FILE_BASE_URL, getFileBaseUrl } from '@/services/api';
+import { getSecureImageUrl } from '@/utils/imageUtils';
 import { notify } from '@/lib/toast';
 import HierarchyBreadcrumb from '@/components/common/HierarchyBreadcrumb';
 import dynamic from 'next/dynamic';
@@ -186,7 +187,7 @@ const CollegeCard = memo(function CollegeCard({
             )}
             {college.studentAttendanceExcelUrl && (
               <a
-                href={`${FILE_BASE_URL}/uploads/trainer-documents/${college.studentAttendanceExcelUrl.split(/[\\/]/).pop()}?token=${accessToken}`}
+                href={getSecureImageUrl(college.studentAttendanceExcelUrl, 'trainer-documents') || `${getFileBaseUrl()}/api/uploads/trainer-documents/${college.studentAttendanceExcelUrl.split(/[\\/]/).pop()}?token=${accessToken}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}

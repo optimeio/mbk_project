@@ -117,11 +117,18 @@ const normalizeUrlKey = (url) => {
   if (!url) return '';
   let str = String(url).trim().toLowerCase();
   str = str.split('?')[0];
+
+  // Match Google Drive file ID
+  const driveMatch = str.match(/\/d\/([a-z0-9_-]{15,100})/i) || str.match(/[?&]id=([a-z0-9_-]{15,100})/i);
+  if (driveMatch?.[1]) {
+    return `drive-${driveMatch[1]}`;
+  }
+
   const parts = str.split('/');
   return parts[parts.length - 1] || str;
 };
 
-const deduplicateByUrl = (items = [], getUrlFn = (item) => item?.previewUrl || item?.url || item?.originalUrl) => {
+const deduplicateByUrl = (items = [], getUrlFn = (item) => item?.driveFileId ? `drive-${item.driveFileId}` : (item?.previewUrl || item?.url || item?.originalUrl)) => {
   const seen = new Set();
   return items.filter((item) => {
     const rawUrl = getUrlFn(item);
@@ -170,16 +177,62 @@ const getCheckInEntries = (record = {}) => {
     record?.checkInImage ||
     (isCheckInImageUrl ? rawImageUrl : null);
 
-  if (photoUrl) {
+  const sigUrl = record?.signatureUrl || record?.signature || record?.checkIn?.signatureUrl;
+
+  // Check attached documents specifically for check-in geotags & signatures
+  const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
+  
+  const checkInDocs = docs.filter((doc) => {
+    return (
+      doc?.fileField === 'checkInPhoto' ||
+      doc?.fileField === 'check_in_image' ||
+      doc?.fileField === 'clock_in_image' ||
+      (doc?.fileType === 'geotag' && !String(doc?.fileName || '').toLowerCase().includes('checkout') && !String(doc?.fileField || '').toLowerCase().includes('checkout'))
+    );
+  });
+
+  const sigDocs = docs.filter((doc) => doc?.fileField === 'signature');
+
+  // If we have attached check-in document(s) from Drive, use those as the authentic files
+  if (checkInDocs.length > 0) {
+    checkInDocs.forEach((doc) => {
+      const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
+      if (docUrl) {
+        entries.push({
+          key: `doc-checkin-${doc._id || doc.driveFileId}`,
+          url: docUrl,
+          previewUrl: getSecureImageUrl(docUrl),
+          driveFileId: doc.driveFileId,
+          label: doc.fileName || 'Check-In Geotag Photo'
+        });
+      }
+    });
+  } else if (photoUrl) {
+    // Only add generic check-in photo if no check-in document exists
     entries.push({
       key: 'checkin-photo',
       url: photoUrl,
       previewUrl: getSecureImageUrl(photoUrl),
+      driveFileId: record?.checkIn?.driveFileId || record?.driveFileId,
       label: 'Check-In Geotag Selfie'
     });
   }
-  const sigUrl = record?.signatureUrl || record?.signature || record?.checkIn?.signatureUrl;
-  if (sigUrl) {
+
+  // Handle signature: prefer signature document if available
+  if (sigDocs.length > 0) {
+    sigDocs.forEach((doc) => {
+      const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
+      if (docUrl) {
+        entries.push({
+          key: `doc-sig-${doc._id || doc.driveFileId}`,
+          url: docUrl,
+          previewUrl: getSecureImageUrl(docUrl),
+          driveFileId: doc.driveFileId,
+          label: doc.fileName || 'Trainer Signature'
+        });
+      }
+    });
+  } else if (sigUrl) {
     entries.push({
       key: 'signature',
       url: sigUrl,
@@ -187,29 +240,6 @@ const getCheckInEntries = (record = {}) => {
       label: 'Trainer Signature'
     });
   }
-
-  // Check attached documents specifically for check-in geotags & signatures
-  const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
-  docs.forEach((doc) => {
-    const isCheckInDoc =
-      doc?.fileField === 'checkInPhoto' ||
-      doc?.fileField === 'check_in_image' ||
-      doc?.fileField === 'clock_in_image' ||
-      doc?.fileField === 'signature' ||
-      (doc?.fileType === 'geotag' && !String(doc?.fileName || '').toLowerCase().includes('checkout') && !String(doc?.fileField || '').toLowerCase().includes('checkout'));
-
-    if (isCheckInDoc) {
-      const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
-      if (docUrl) {
-        entries.push({
-          key: `doc-checkin-${doc._id || doc.driveFileId}`,
-          url: docUrl,
-          previewUrl: getSecureImageUrl(docUrl),
-          label: doc.fileName || (doc?.fileField === 'signature' ? 'Trainer Signature' : 'Check-In Geotag Photo')
-        });
-      }
-    }
-  });
 
   return deduplicateByUrl(entries);
 };

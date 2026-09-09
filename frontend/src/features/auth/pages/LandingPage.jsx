@@ -1,7 +1,6 @@
 "use client";
 // Force cache-invalidation refresh
 import React, { useCallback, useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -10,12 +9,8 @@ import { AcademicCapIcon, ArrowRightIcon, ArrowTopRightOnSquareIcon, Bars3Icon, 
 import { MessageSquare as ChatBubbleLeftRightIcon } from 'lucide-react';
 import HeroSection from '@/features/auth/pages/HeroSection';
 import CTAButton from '@/components/common/CTAButton';
+import LoginModal from '@/features/auth/components/LoginModal';
 import '@/features/auth/pages/LandingPage.css';
-
-const LoginModal = dynamic(() => import('@/features/auth/components/LoginModal'), {
-    ssr: false,
-    loading: () => null,
-});
 
 const navItems = [
     { id: 'home', label: 'Home', target: 'hero-section' },

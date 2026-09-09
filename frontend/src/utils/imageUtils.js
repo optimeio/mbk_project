@@ -289,6 +289,11 @@ export const getSecureImageUrl = (path, uploadType = 'attendance') => {
         else return null;
     }
 
+    // If it's a valid Google Drive file ID directly
+    if (isValidGoogleDriveId(path)) {
+        return `https://lh3.googleusercontent.com/d/${path}=w1200`;
+    }
+
     // If it's already a full URL, return as is
     if (typeof path !== 'string') return null;
     if (path.startsWith('blob:') || path.startsWith('data:')) {
@@ -303,7 +308,7 @@ export const getSecureImageUrl = (path, uploadType = 'attendance') => {
 
     // SMART PATH PARSING
     // If path looks like "uploads/attendance/images/file.jpg", extract the structure
-    if (normalizedPath.includes('uploads/attendance/')) {
+    if (normalizedPath.includes('uploads/attendance/') || normalizedPath.includes('/attendance/')) {
         const parts = normalizedPath.split('/');
         const attendanceIndex = parts.indexOf('attendance');
         
@@ -319,13 +324,34 @@ export const getSecureImageUrl = (path, uploadType = 'attendance') => {
         }
     }
 
+    // Trainer documents / Course images detection
+    if (
+        normalizedPath.includes('trainer-documents') ||
+        uploadType === 'trainer-documents' ||
+        uploadType === 'course'
+    ) {
+        let filename = normalizedPath.includes('/') ? normalizedPath.split('/').pop() : normalizedPath;
+        const securePath = `/api/uploads/trainer-documents/${filename}`;
+        const token = getAccessToken();
+        const authQuery = token ? `?token=${token}` : '';
+        return `${getMediaPrefix()}${securePath}${authQuery}`;
+    }
+
+    // Direct /uploads/ subfolder path preserved
+    if (normalizedPath.startsWith('/uploads/') || normalizedPath.startsWith('uploads/')) {
+        const cleanUploadsPath = normalizedPath.replace(/^\/?uploads\//, '');
+        const securePath = `/api/uploads/${cleanUploadsPath}`;
+        const token = getAccessToken();
+        const authQuery = token ? `?token=${token}` : '';
+        return `${getMediaPrefix()}${securePath}${authQuery}`;
+    }
+
     // FALLBACK: Extract filename and use provided uploadType
     let filename = normalizedPath;
     if (normalizedPath.includes('/')) {
         filename = normalizedPath.split('/').pop();
     }
 
-    // Handle uploadType with slashes (e.g., 'attendance/images')
     // Construct secure API path
     const securePath = `/api/uploads/${uploadType}/${filename}`;
     

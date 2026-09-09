@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 
 # Environment
@@ -7,7 +7,11 @@ node_modules/
 !.env.example
 
 # Runtime / generated
-uploads/
+uploads/*
+!uploads/trainer-documents/
+uploads/trainer-documents/*
+!uploads/trainer-documents/1788262427837-83011b25-1892-4ab7-820d-3d01f6f51011.png
+!uploads/trainer-documents/1788263019962-1a0e1851-57f5-4d34-a853-3512f1966b2b.png
 temp/
 *.log
 *.sqlite

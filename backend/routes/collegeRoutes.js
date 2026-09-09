@@ -1521,34 +1521,60 @@ router.post('/:id/assign-trainers', authenticate, isSPOCAdmin, async (req, res) 
                         );
                         const dayFolderRefs =
                             dayFoldersByNumber?.[scheduleDayNumber] || null;
-                        const newSchedule = await Schedule.create({
+
+                        let existingSchedule = await Schedule.findOne({
                             trainerId: trainer._id,
                             collegeId: college._id,
-                            companyId: college.companyId,
-                            courseId: college.courseId,
-                            dayOfWeek: schedule.dayOfWeek,
-                            startTime: schedule.startTime,
-                            endTime: schedule.endTime,
-                            subject: schedule.subject || null,
                             dayNumber: scheduleDayNumber,
-                            ...(dayFolderRefs?.id
-                                ? {
-                                      dayFolderId: dayFolderRefs.id,
-                                      dayFolderName: `Day ${scheduleDayNumber}`,
-                                      attendanceFolderId:
-                                          dayFolderRefs.attendanceFolder?.id ||
-                                          null,
-                                      attendanceFolderName: 'Attendance',
-                                      geoTagFolderId:
-                                          dayFolderRefs.geoTagFolder?.id ||
-                                          null,
-                                      geoTagFolderName: 'Geo Tag',
-                                      driveFolderId: dayFolderRefs.id,
-                                      driveFolderName: `Day ${scheduleDayNumber}`,
-                                  }
-                                : {}),
                         });
-                        createdSchedules.push(newSchedule);
+
+                        if (existingSchedule) {
+                            existingSchedule.dayOfWeek = schedule.dayOfWeek || existingSchedule.dayOfWeek;
+                            existingSchedule.startTime = schedule.startTime || existingSchedule.startTime;
+                            existingSchedule.endTime = schedule.endTime || existingSchedule.endTime;
+                            if (schedule.subject) existingSchedule.subject = schedule.subject;
+                            if (dayFolderRefs?.id && !existingSchedule.dayFolderId) {
+                                existingSchedule.dayFolderId = dayFolderRefs.id;
+                                existingSchedule.dayFolderName = `Day ${scheduleDayNumber}`;
+                                existingSchedule.attendanceFolderId = dayFolderRefs.attendanceFolder?.id || null;
+                                existingSchedule.attendanceFolderName = 'Attendance';
+                                existingSchedule.geoTagFolderId = dayFolderRefs.geoTagFolder?.id || null;
+                                existingSchedule.geoTagFolderName = 'Geo Tag';
+                                existingSchedule.driveFolderId = dayFolderRefs.id;
+                                existingSchedule.driveFolderName = `Day ${scheduleDayNumber}`;
+                            }
+                            await existingSchedule.save();
+                            createdSchedules.push(existingSchedule);
+                        } else {
+                            const newSchedule = await Schedule.create({
+                                trainerId: trainer._id,
+                                collegeId: college._id,
+                                companyId: college.companyId,
+                                courseId: college.courseId,
+                                dayOfWeek: schedule.dayOfWeek,
+                                startTime: schedule.startTime,
+                                endTime: schedule.endTime,
+                                subject: schedule.subject || null,
+                                dayNumber: scheduleDayNumber,
+                                ...(dayFolderRefs?.id
+                                    ? {
+                                          dayFolderId: dayFolderRefs.id,
+                                          dayFolderName: `Day ${scheduleDayNumber}`,
+                                          attendanceFolderId:
+                                              dayFolderRefs.attendanceFolder?.id ||
+                                              null,
+                                          attendanceFolderName: 'Attendance',
+                                          geoTagFolderId:
+                                              dayFolderRefs.geoTagFolder?.id ||
+                                              null,
+                                          geoTagFolderName: 'Geo Tag',
+                                          driveFolderId: dayFolderRefs.id,
+                                          driveFolderName: `Day ${scheduleDayNumber}`,
+                                      }
+                                    : {}),
+                            });
+                            createdSchedules.push(newSchedule);
+                        }
                     } catch (schedErr) {
                         console.error(`[ASSIGN-TRAINERS] Failed to create schedule:`, schedErr);
                     }

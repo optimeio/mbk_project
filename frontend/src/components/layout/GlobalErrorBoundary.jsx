@@ -41,6 +41,22 @@ class GlobalErrorBoundary extends React.Component {
       componentStack: errorInfo.componentStack,
     });
 
+    // Auto-reload once on ChunkLoadError caused by new builds or cache invalidation
+    const isChunkLoadError = error?.name === 'ChunkLoadError' || /Loading chunk .* failed/i.test(error?.message);
+    if (isChunkLoadError && typeof window !== 'undefined') {
+      try {
+        const chunkRetryKey = 'chunk_reload_retry';
+        const lastRetry = window.sessionStorage.getItem(chunkRetryKey);
+        if (!lastRetry || Date.now() - Number(lastRetry) > 10000) {
+          window.sessionStorage.setItem(chunkRetryKey, String(Date.now()));
+          window.location.reload();
+          return;
+        }
+      } catch (_storageErr) {
+        // Fall back to state rendering
+      }
+    }
+
     // Notify user with error ID
     notify.error(
       `Something went wrong (${errorId}). Please refresh or contact support.`
@@ -48,6 +64,12 @@ class GlobalErrorBoundary extends React.Component {
   }
 
   handleReset = () => {
+    if (this.state.error?.name === 'ChunkLoadError' || /Loading chunk .* failed/i.test(this.state.error?.message)) {
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+        return;
+      }
+    }
     this.setState({
       hasError: false,
       error: null,

@@ -210,6 +210,28 @@ const getScheduleByIdForDelete = async ({ scheduleId } = {}) =>
 const createScheduleDocument = async ({ schedulePayload } = {}) =>
   Schedule.create(schedulePayload);
 
+const findDuplicateSchedule = async ({ collegeId, trainerId, dayNumber, scheduledDate } = {}) => {
+  const query = {
+    collegeId,
+    trainerId,
+    dayNumber: Number(dayNumber) || 1,
+  };
+  if (scheduledDate) {
+    const d = new Date(scheduledDate);
+    if (!isNaN(d.getTime())) {
+      const startOfDay = new Date(d);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(d);
+      endOfDay.setHours(23, 59, 59, 999);
+      query.$or = [
+        { scheduledDate: { $gte: startOfDay, $lte: endOfDay } },
+        { date: { $gte: startOfDay, $lte: endOfDay } },
+      ];
+    }
+  }
+  return Schedule.findOne(query);
+};
+
 const saveScheduleDocument = async ({ schedule }) => schedule.save();
 
 const deleteScheduleDocument = async ({ schedule }) => schedule.deleteOne();
@@ -433,6 +455,7 @@ module.exports = {
   getScheduleByIdForUpdate,
   getScheduleByIdForDelete,
   createScheduleDocument,
+  findDuplicateSchedule,
   saveScheduleDocument,
   deleteScheduleDocument,
   getTrainerByIdWithUser,

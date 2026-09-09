@@ -6,7 +6,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PlusIcon, PencilSquareIcon, TrashIcon, ArrowLeftIcon, ChevronDownIcon, ChevronUpIcon, EyeIcon, ArrowPathIcon, BuildingOfficeIcon, UserIcon, EnvelopeIcon, AcademicCapIcon, MapPinIcon, MagnifyingGlassIcon, FunnelIcon, DocumentArrowDownIcon, PhotoIcon } from '@heroicons/react/24/outline';
-import { api, FILE_BASE_URL } from '@/services/api';
+import { api, FILE_BASE_URL, getFileBaseUrl } from '@/services/api';
+import { getSecureImageUrl } from '@/utils/imageUtils';
 import { notify } from '@/lib/toast';
 
 const CollegeModal = dynamic(() => import("@/components/modals/CollegeModal"), {
@@ -707,7 +708,7 @@ const CompanyDetails = ({ companyId: propCompanyId } = {}) => {
                                                                     {/* Download Excel Option */}
                                                                     {college.studentAttendanceExcelUrl && (
                                                                         <a
-                                                                            href={`${FILE_BASE_URL}/uploads/trainer-documents/${college.studentAttendanceExcelUrl.split(/[\\/]/).pop()}?token=${localStorage.getItem('accessToken')}`}
+                                                                            href={getSecureImageUrl(college.studentAttendanceExcelUrl, 'trainer-documents') || `${getFileBaseUrl()}/api/uploads/trainer-documents/${college.studentAttendanceExcelUrl.split(/[\\/]/).pop()}?token=${localStorage.getItem('accessToken')}`}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 rounded-md transition-colors"
