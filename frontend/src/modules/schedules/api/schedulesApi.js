@@ -100,14 +100,18 @@ export const fetchSchedulerTrainers = async ({
   });
   const trainersData = Array.isArray(response?.data) ? response.data : [];
   return trainersData.filter((trainer) => {
-    const isApproved = (
-      trainer.status?.toUpperCase() === "APPROVED" ||
-      trainer.verificationStatus?.toUpperCase() === "APPROVED" ||
-      trainer.verificationStatus?.toUpperCase() === "VERIFIED" ||
-      trainer.registrationStatus?.toLowerCase() === "approved" ||
-      trainer.isApproved === true
-    ) && trainer.status?.toUpperCase() !== "REJECTED";
-    return isApproved && trainer.userId?.isActive !== false;
+    const isRejected = (
+      trainer.status?.toUpperCase() === "REJECTED" ||
+      trainer.verificationStatus?.toUpperCase() === "REJECTED" ||
+      trainer.userId?.isActive === false
+    );
+    const trainerName = String(
+      trainer.userId?.name ||
+      trainer.name ||
+      (trainer.firstName ? `${trainer.firstName} ${trainer.lastName || ''}` : '')
+    ).trim();
+    const isPlaceholder = !trainerName || trainerName.toLowerCase() === "pending trainer";
+    return !isRejected && !isPlaceholder;
   });
 };
 

@@ -47,6 +47,32 @@ const attendanceSchema = new mongoose.Schema({
         enum: ['Present', 'Absent', 'Leave', 'Late', 'Pending', 'cancelled'],
         default: 'Absent', // Legacy Support
     },
+    session: {
+        type: String,
+        enum: ['FN', 'AN', 'FULL_DAY'],
+        default: 'FULL_DAY',
+    },
+    isLateRequest: {
+        type: Boolean,
+        default: false,
+    },
+    lateRequestReason: {
+        type: String,
+        default: null,
+    },
+    lateRequestSubmittedAt: {
+        type: Date,
+        default: null,
+    },
+    lateRequestStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: null,
+    },
+    lateRequestAdminRemarks: {
+        type: String,
+        default: null,
+    },
     syllabus: {
         type: String,
         default: null,

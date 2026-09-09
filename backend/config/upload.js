@@ -18,6 +18,10 @@ const GEO_IMAGE_FIELDS = new Set([
     'check_out_image',
     'clock_in_image',
     'clock_out_image',
+    'checkInImage',
+    'checkOutImage',
+    'checkInPhoto',
+    'checkOutPhoto',
     'checkOutGeoImage',
     'activityPhotos',
     'checkOutSignature'
@@ -115,7 +119,11 @@ const multiStorage = multer.diskStorage({
             file.fieldname === 'check_in_image' ||
             file.fieldname === 'check_out_image' ||
             file.fieldname === 'clock_in_image' ||
-            file.fieldname === 'clock_out_image'
+            file.fieldname === 'clock_out_image' ||
+            file.fieldname === 'checkInImage' ||
+            file.fieldname === 'checkOutImage' ||
+            file.fieldname === 'checkInPhoto' ||
+            file.fieldname === 'checkOutPhoto'
         ) dir = imageDir;
         else if (file.fieldname === 'checkOutSignature') dir = signatureDir;
         cb(null, dir);
@@ -218,7 +226,11 @@ const uploadFields = multer({
     { name: 'check_in_image', maxCount: 1 },
     { name: 'check_out_image', maxCount: 1 },
     { name: 'clock_in_image', maxCount: 1 },
-    { name: 'clock_out_image', maxCount: 1 }
+    { name: 'clock_out_image', maxCount: 1 },
+    { name: 'checkInImage', maxCount: 1 },
+    { name: 'checkOutImage', maxCount: 1 },
+    { name: 'checkInPhoto', maxCount: 1 },
+    { name: 'checkOutPhoto', maxCount: 1 }
 ]);
 
 // Wrapped middleware to handle Multer errors and return proper HTTP codes (413/400)

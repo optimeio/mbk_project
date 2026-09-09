@@ -3767,7 +3767,7 @@ router.get('/', async (req, res) => {
                 })
                 .populate({
                     path: 'scheduleId',
-                    select: 'subject dayNumber courseId scheduledDate date rawDate',
+                    select: 'subject dayNumber courseId scheduledDate date rawDate session startTime endTime',
                     populate: { path: 'courseId', select: 'name title' }
                 })
                 .sort({ date: -1, createdAt: -1 })
@@ -3877,7 +3877,7 @@ router.get('/', async (req, res) => {
             })
             .populate({
                 path: 'scheduleId',
-                select: 'dayNumber subject courseId scheduledDate date rawDate',
+                select: 'dayNumber subject courseId scheduledDate date rawDate session startTime endTime',
                 populate: { path: 'courseId', select: 'name title' }
             })
             .sort({ date: -1, createdAt: -1 })
@@ -5084,6 +5084,355 @@ router.post('/student-records', authenticate, uploadAttendance, async (req, res)
     } catch (error) {
         console.error('Error uploading student records:', error);
         return res.status(500).json({ success: false, message: 'Failed to upload student records', error: error.message });
+    }
+});
+
+// POST /attendance/late-request - Trainer submits late attendance request with all 4 proofs
+router.post('/late-request', authenticate, uploadAttendance, async (req, res) => {
+    try {
+        const { scheduleId, session, reason, lateRequestReason } = req.body;
+        const requestReason = String(reason || lateRequestReason || '').trim();
+
+        if (!scheduleId) {
+            return res.status(400).json({ success: false, message: 'Schedule ID is required' });
+        }
+
+        if (!requestReason) {
+            return res.status(400).json({ success: false, message: 'Reason for late attendance request is required' });
+        }
+
+        const schedule = await Schedule.findById(scheduleId)
+            .populate('collegeId')
+            .populate('courseId')
+            .populate('trainerId');
+
+        if (!schedule) {
+            return res.status(404).json({ success: false, message: 'Schedule not found' });
+        }
+
+        // Verify trainer identity if role is trainer
+        let trainerId = schedule.trainerId?._id || schedule.trainerId;
+        if (req.user?.role === 'trainer') {
+            const trainerDoc = await Trainer.findOne({ userId: req.user.id });
+            if (trainerDoc) {
+                trainerId = trainerDoc._id;
+            }
+        }
+
+        // Check the 4 mandatory proofs:
+        // 1. Check-In photo
+        const checkInFile =
+            req.files?.checkInImage?.[0] ||
+            req.files?.checkInPhoto?.[0] ||
+            req.files?.check_in_image?.[0] ||
+            req.files?.clock_in_image?.[0] ||
+            req.files?.photo?.[0];
+
+        // 2. Student Attendance Document (PDF / Excel / Sheet)
+        const studentAttendanceFile =
+            req.files?.attendancePdf?.[0] ||
+            req.files?.attendanceExcel?.[0] ||
+            req.files?.attendanceDocument?.[0] ||
+            req.files?.attendanceFile?.[0] ||
+            req.files?.studentsPhoto?.[0];
+
+        // 3. Student Activities (Photos)
+        const activityFiles = req.files?.activityPhotos || [];
+
+        // 4. Check-Out photo
+        const checkOutFile =
+            req.files?.checkOutImage?.[0] ||
+            req.files?.checkOutPhoto?.[0] ||
+            req.files?.check_out_image?.[0] ||
+            req.files?.clock_out_image?.[0] ||
+            req.files?.checkOutGeoImage?.[0];
+
+        const missingProofs = [];
+        if (!checkInFile) missingProofs.push('Check-In Photo');
+        if (!studentAttendanceFile) missingProofs.push('Student Attendance (PDF/Excel)');
+        if (!activityFiles.length) missingProofs.push('Student Classroom Activities Photos');
+        if (!checkOutFile) missingProofs.push('Check-Out Photo');
+
+        if (missingProofs.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing mandatory uploads: ${missingProofs.join(', ')}`,
+                missingProofs
+            });
+        }
+
+        // Find existing attendance or create new
+        let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
+        if (!attendance) {
+            attendance = new Attendance({
+                scheduleId,
+                trainerId,
+                collegeId: schedule.collegeId?._id || schedule.collegeId,
+                courseId: schedule.courseId?._id || schedule.courseId,
+                batchId: schedule.batchId || null,
+                dayNumber: schedule.dayNumber,
+                assignedDate: normalizeAssignedDateInput(schedule.scheduledDate),
+                date: schedule.scheduledDate || new Date(),
+            });
+        }
+
+        // Update late request details
+        attendance.session = session || schedule.session || 'FULL_DAY';
+        attendance.isLateRequest = true;
+        attendance.lateRequestReason = requestReason;
+        attendance.lateRequestSubmittedAt = new Date();
+        attendance.lateRequestStatus = 'pending';
+        attendance.status = 'Pending';
+        attendance.attendanceStatus = 'PRESENT';
+        attendance.verificationStatus = 'pending';
+        attendance.geoVerificationStatus = 'pending';
+        attendance.checkOutVerificationStatus = 'PENDING_CHECKOUT';
+
+        // 1. Store Check-In Evidence
+        const checkInPath = checkInFile.path;
+        attendance.imageUrl = checkInPath;
+        attendance.checkInPhoto = checkInPath;
+        attendance.checkInTime = attendance.checkInTime || new Date().toISOString();
+        if (!attendance.checkIn) {
+            attendance.checkIn = {
+                time: new Date(),
+                location: {
+                    address: schedule.collegeLocation?.address || null,
+                    lat: schedule.collegeLocation?.lat || null,
+                    lng: schedule.collegeLocation?.lng || null,
+                }
+            };
+        } else {
+            attendance.checkIn.time = attendance.checkIn.time || new Date();
+        }
+
+        // 2. Store Student Attendance Evidence
+        const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
+        if (docExt === '.pdf') {
+            attendance.attendancePdfUrl = studentAttendanceFile.path;
+        } else if (['.xls', '.xlsx', '.csv'].includes(docExt)) {
+            attendance.attendanceExcelUrl = studentAttendanceFile.path;
+        } else {
+            attendance.studentsPhotoUrl = studentAttendanceFile.path;
+        }
+
+        // 3. Store Student Activity Photos
+        const newActivityPaths = activityFiles.map((file) => file.path);
+        attendance.activityPhotos = [
+            ...(attendance.activityPhotos || []),
+            ...newActivityPaths
+        ];
+
+        // 4. Store Check-Out Evidence
+        const checkOutPath = checkOutFile.path;
+        attendance.checkOutGeoImageUrl = checkOutPath;
+        attendance.checkOutGeoImageUrls = [
+            ...(attendance.checkOutGeoImageUrls || []),
+            checkOutPath
+        ];
+        attendance.checkOutTime = attendance.checkOutTime || new Date().toISOString();
+        if (!attendance.checkOut) {
+            attendance.checkOut = {
+                time: new Date(),
+                finalStatus: 'PENDING',
+                location: {
+                    address: schedule.collegeLocation?.address || null,
+                    lat: schedule.collegeLocation?.lat || null,
+                    lng: schedule.collegeLocation?.lng || null,
+                },
+                photos: [{
+                    url: checkOutPath,
+                    uploadedAt: new Date(),
+                    validationStatus: 'pending',
+                }]
+            };
+        } else {
+            attendance.checkOut.time = attendance.checkOut.time || new Date();
+            attendance.checkOut.photos = [
+                ...(attendance.checkOut.photos || []),
+                {
+                    url: checkOutPath,
+                    uploadedAt: new Date(),
+                    validationStatus: 'pending',
+                }
+            ];
+        }
+
+        await attendance.save();
+
+        // Update schedule flags
+        schedule.status = 'inprogress';
+        schedule.attendanceUploaded = true;
+        schedule.geoTagUploaded = true;
+        schedule.dayStatus = 'pending';
+        await schedule.save();
+
+        if (trainerId) {
+            try {
+                await invalidateTrainerScheduleCaches([trainerId]);
+            } catch (cacheErr) {
+                console.warn('Cache invalidation warning:', cacheErr.message);
+            }
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: 'Late attendance request submitted successfully. Awaiting Admin verification.',
+            attendance
+        });
+    } catch (error) {
+        console.error('Error submitting late attendance request:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to submit late attendance request',
+            error: error.message
+        });
+    }
+});
+
+// GET /attendance/late-requests - Admin / SPOC list all late attendance requests
+router.get('/late-requests', authenticate, async (req, res) => {
+    try {
+        const { status, collegeId, trainerId, page = 1, limit = 25 } = req.query;
+        const filter = { isLateRequest: true };
+
+        if (status && status !== 'all') {
+            filter.lateRequestStatus = status;
+        }
+        if (collegeId) {
+            filter.collegeId = collegeId;
+        }
+        if (trainerId) {
+            filter.trainerId = trainerId;
+        }
+
+        const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+        const queryLimit = parseInt(limit, 10);
+
+        const [requests, total] = await Promise.all([
+            Attendance.find(filter)
+                .populate({
+                    path: 'trainerId',
+                    populate: { path: 'userId', select: 'name email phone' },
+                    select: 'name trainerId email phone userId'
+                })
+                .populate('collegeId', 'name location city')
+                .populate('courseId', 'title name code')
+                .populate('scheduleId', 'scheduledDate dayNumber session startTime endTime status subject venue')
+                .sort({ lateRequestSubmittedAt: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(queryLimit),
+            Attendance.countDocuments(filter)
+        ]);
+
+        return res.json({
+            success: true,
+            requests,
+            pagination: {
+                total,
+                page: parseInt(page, 10),
+                limit: queryLimit,
+                totalPages: Math.ceil(total / queryLimit)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching late requests:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch late requests',
+            error: error.message
+        });
+    }
+});
+
+// PUT /attendance/late-requests/:id/verify - Admin verifies (approves / rejects) late attendance request
+router.put('/late-requests/:id/verify', authenticate, async (req, res) => {
+    try {
+        const { action, remarks } = req.body;
+        if (!['approve', 'reject'].includes(action)) {
+            return res.status(400).json({ success: false, message: 'Action must be approve or reject' });
+        }
+
+        const attendance = await Attendance.findById(req.params.id)
+            .populate('scheduleId')
+            .populate('trainerId');
+
+        if (!attendance) {
+            return res.status(404).json({ success: false, message: 'Attendance request not found' });
+        }
+
+        const isApprove = action === 'approve';
+
+        attendance.lateRequestStatus = isApprove ? 'approved' : 'rejected';
+        attendance.lateRequestAdminRemarks = remarks || null;
+        attendance.verificationComment = remarks || (isApprove ? 'Late request approved by Admin' : 'Late request rejected by Admin');
+        attendance.verifiedBy = req.user.id;
+        attendance.verifiedAt = new Date();
+
+        if (isApprove) {
+            attendance.status = 'Present';
+            attendance.attendanceStatus = 'PRESENT';
+            attendance.verificationStatus = 'approved';
+            attendance.geoVerificationStatus = 'approved';
+            attendance.checkOutVerificationStatus = 'VERIFIED';
+            if (attendance.checkOut) {
+                attendance.checkOut.finalStatus = 'COMPLETED';
+            }
+        } else {
+            attendance.status = 'Absent';
+            attendance.attendanceStatus = 'ABSENT';
+            attendance.verificationStatus = 'rejected';
+            attendance.geoVerificationStatus = 'rejected';
+            attendance.checkOutVerificationStatus = 'REJECTED';
+        }
+
+        await attendance.save();
+
+        if (attendance.scheduleId) {
+            const schedule = await Schedule.findById(attendance.scheduleId._id || attendance.scheduleId);
+            if (schedule) {
+                if (isApprove) {
+                    schedule.status = 'completed';
+                    schedule.dayStatus = 'completed';
+                } else {
+                    schedule.dayStatus = 'pending';
+                }
+                schedule.remarks = remarks || schedule.remarks;
+                await schedule.save();
+
+                try {
+                    await syncScheduleDayState({
+                        scheduleId: schedule._id,
+                        schedule,
+                        attendance,
+                        dayStatusOverride: isApprove ? 'completed' : 'pending'
+                    });
+                } catch (syncErr) {
+                    console.warn('Sync warning on late request verification:', syncErr.message);
+                }
+            }
+        }
+
+        if (attendance.trainerId) {
+            try {
+                await invalidateTrainerScheduleCaches([attendance.trainerId._id || attendance.trainerId]);
+            } catch (cacheErr) {
+                console.warn('Cache invalidation warning:', cacheErr.message);
+            }
+        }
+
+        return res.json({
+            success: true,
+            message: `Late attendance request ${isApprove ? 'approved' : 'rejected'} successfully`,
+            attendance
+        });
+    } catch (error) {
+        console.error('Error verifying late attendance request:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to verify late request',
+            error: error.message
+        });
     }
 });
 

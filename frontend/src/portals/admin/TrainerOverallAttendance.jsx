@@ -86,9 +86,9 @@ const ATTENDANCE_EXPORT_PAGE_SIZE = 100;
 const MAX_ATTENDANCE_EXPORT_PAGES = 30;
 const ATTENDANCE_ROW_HEIGHT = 80;
 const ATTENDANCE_TABLE_HEIGHT = 650;
-const ATTENDANCE_TABLE_MIN_WIDTH = 1540;
+const ATTENDANCE_TABLE_MIN_WIDTH = 1630;
 const ATTENDANCE_GRID_TEMPLATE =
-  "120px 90px 170px 220px 150px 110px 95px 150px 135px 135px 155px";
+  "120px 90px 90px 170px 220px 150px 110px 95px 150px 135px 135px 155px";
 
 const SORT_ICONS = {
   asc: " \u2191",
@@ -389,6 +389,37 @@ const getGeoStatusMeta = (recordOrStatus) => {
         return { label: 'Pending', color: 'gold' };
     }
     return { label: 'Not Submitted', color: 'default' };
+};
+
+const resolveSessionMeta = (record = {}) => {
+  const rawSession = String(
+    record.session ||
+    record.scheduleId?.session ||
+    record.schedule?.session ||
+    ''
+  ).trim().toUpperCase();
+
+  if (rawSession === 'FN' || rawSession === 'FORENOON' || rawSession === 'MORNING') {
+    return { label: 'FN', color: 'blue' };
+  }
+  if (rawSession === 'AN' || rawSession === 'AFTERNOON' || rawSession === 'EVENING') {
+    return { label: 'AN', color: 'purple' };
+  }
+  if (rawSession === 'FULL_DAY' || rawSession === 'FULL DAY' || rawSession === 'ALL_DAY') {
+    return { label: 'Full Day', color: 'green' };
+  }
+
+  const startTime = record.startTime || record.scheduleId?.startTime || '';
+  if (startTime) {
+    const match = String(startTime).match(/^(\d{1,2})/);
+    if (match) {
+      const hour = parseInt(match[1], 10);
+      if (hour < 12) return { label: 'FN', color: 'blue' };
+      if (hour >= 12) return { label: 'AN', color: 'purple' };
+    }
+  }
+
+  return { label: rawSession || 'Full Day', color: 'default' };
 };
 
 const toFiniteNumber = (value) => {
@@ -751,6 +782,7 @@ const TrainerOverallAttendance = () => {
             "Check-Out": formatTimeLabel(item.checkOutTime || item.checkOut?.time),
             Status: item.status || "-",
             "Assigned Day": item.dayNumber || item.scheduleId?.dayNumber || "-",
+            Session: resolveSessionMeta(item).label,
             "Geo Verification": getGeoStatusMeta(item).label,
           }),
           { batchSize: 300 },
@@ -785,6 +817,8 @@ const TrainerOverallAttendance = () => {
         const doc = new jsPDF("l", "mm", "a4");
         const tableColumn = [
           "Date",
+          "Day",
+          "Session",
           "Trainer",
           "College",
           "Course",
@@ -792,7 +826,6 @@ const TrainerOverallAttendance = () => {
           "Check-Out",
           "Status",
           "Geo",
-          "Day",
         ];
         const tableRows = await mapInBatches(
           exportRows,
@@ -800,6 +833,8 @@ const TrainerOverallAttendance = () => {
             (item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date)
               ? dayjs(item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date).format("DD MMM YYYY")
               : "-",
+            item.dayNumber || item.scheduleId?.dayNumber || "-",
+            resolveSessionMeta(item).label,
             item.trainerId?.userId?.name || item.trainerId?.name || "Unknown",
             item.collegeId?.name || "-",
             item.courseId?.title ||
@@ -813,7 +848,6 @@ const TrainerOverallAttendance = () => {
             formatTimeLabel(item.checkOutTime || item.checkOut?.time),
             item.status || "-",
             getGeoStatusMeta(item).label,
-            item.dayNumber || item.scheduleId?.dayNumber || "-",
           ],
           { batchSize: 300 },
         );
@@ -881,6 +915,28 @@ const TrainerOverallAttendance = () => {
             return (
               <Tag color="purple" style={{ fontWeight: 600, fontSize: "12px", margin: 0, whiteSpace: "nowrap" }}>
                 {dayNum ? `Day ${dayNum}` : "-"}
+              </Tag>
+            );
+          },
+        },
+        {
+          id: "session",
+          accessorFn: (row) => resolveSessionMeta(row).label,
+          header: "Session",
+          cell: ({ row }) => {
+            const meta = resolveSessionMeta(row.original);
+            return (
+              <Tag
+                color={meta.color}
+                style={{
+                  fontWeight: 600,
+                  fontSize: "11px",
+                  margin: 0,
+                  whiteSpace: "nowrap",
+                  textTransform: "uppercase"
+                }}
+              >
+                {meta.label}
               </Tag>
             );
           },

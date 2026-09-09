@@ -73,12 +73,17 @@ const resolveSpocTrainerRowId = (trainer = {}) => {
 };
 
 const isApprovedTrainer = (trainer) => {
-  const verification = String(trainer?.verificationStatus || "")
-    .trim()
-    .toUpperCase();
-  const isVerified = verification === "VERIFIED" || verification === "APPROVED";
+  const status = String(trainer?.status || "").trim().toUpperCase();
+  const verification = String(trainer?.verificationStatus || "").trim().toUpperCase();
+  const isRejected = status === "REJECTED" || verification === "REJECTED";
   const isActive = trainer?.userId?.isActive !== false;
-  return isVerified && isActive;
+  const trainerName = String(
+    trainer?.userId?.name ||
+    trainer?.name ||
+    (trainer?.firstName ? `${trainer.firstName} ${trainer.lastName || ''}` : '')
+  ).trim();
+  const isPlaceholder = !trainerName || trainerName.toLowerCase() === "pending trainer";
+  return !isRejected && isActive && !isPlaceholder;
 };
 
 const buildTrainerSearchIndex = (trainer = {}) =>

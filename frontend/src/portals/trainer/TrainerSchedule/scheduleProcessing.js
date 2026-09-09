@@ -311,20 +311,26 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
 
   if (!isScheduleActionable) {
     primaryAction = null;
+  } else if (schedule.isLateRequest || schedule.attendance?.isLateRequest || schedule.attendance?.lateRequestStatus === "pending") {
+    primaryAction = {
+      kind: "late-request-pending",
+      label: "Late Attendance Requested (Pending Approval)",
+      disabled: true,
+    };
   } else if (isAttendanceRejected) {
     primaryAction = { kind: "checkin", label: "Re-Check In" };
-  } else if (isGeoPending) {
-    primaryAction = { kind: "checkout", label: "Re-Check Out" };
-  } else if (isAttendanceApproved && !isCompleted) {
-    primaryAction = hasCompletedCheckOut
-      ? null
-      : { kind: "checkout", label: "Check Out" };
   } else if (isCheckInPending) {
     primaryAction = {
       kind: "checkin-pending",
       label: "Check-In Submitted (Pending Approval)",
       disabled: true,
     };
+  } else if (isGeoPending) {
+    primaryAction = { kind: "checkout", label: "Re-Check Out" };
+  } else if (isAttendanceApproved && !isCompleted) {
+    primaryAction = hasCompletedCheckOut
+      ? null
+      : { kind: "checkout", label: "Check Out" };
   } else if (normalizedScheduleStatus === "scheduled") {
     if (isSessionClosedByTime && !isCompleted) {
       primaryAction = {

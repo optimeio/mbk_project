@@ -3,7 +3,10 @@ import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { App as AntdApp } from 'antd';
 
-import { CalendarDaysIcon, ListBulletIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, ListBulletIcon, ClockIcon } from '@heroicons/react/24/outline';
+import dayjs from 'dayjs';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+dayjs.extend(isSameOrAfter);
 import scheduleService from '@/services/scheduleService';
 import { getTrainerProfile, fetchTrainersPage } from '@/services/trainerService';
 import { getTrainingColleges } from '@/services/trainingCollegeService';
@@ -48,6 +51,11 @@ const CheckInModal = dynamic(() => import("./TrainerSchedule/CheckInModal"), {
 });
 
 const CheckOutModal = dynamic(() => import("./TrainerSchedule/CheckOutModal"), {
+    ssr: false,
+    loading: () => null,
+});
+
+const LateAttendanceRequestModal = dynamic(() => import("./TrainerSchedule/LateAttendanceRequestModal"), {
     ssr: false,
     loading: () => null,
 });
@@ -538,6 +546,7 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
     // Attendance submission modal
     const [showCheckInModal, setShowCheckInModal] = useState(false);
     const [showCheckOutModal, setShowCheckOutModal] = useState(false);
+    const [showLateRequestModal, setShowLateRequestModal] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     const [isSubmittingCheckOut, setIsSubmittingCheckOut] = useState(false);
 
@@ -1320,6 +1329,30 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
         setShowCheckInModal(false);
     }, []);
 
+    const openLateRequestModal = useCallback((schedule) => {
+        setSelectedSchedule(schedule);
+        setShowLateRequestModal(true);
+    }, []);
+
+    const closeLateRequestModal = useCallback(() => {
+        setShowLateRequestModal(false);
+    }, []);
+
+    const upcomingSchedules = useMemo(() => {
+        const today = dayjs().startOf('day');
+        return filteredSchedules
+            .filter((s) => {
+                const dateVal = s.scheduledDate || s.date;
+                if (!dateVal) return false;
+                return dayjs(dateVal).isSameOrAfter(today, 'day') || s.ui?.isFutureDate;
+            })
+            .sort((a, b) => {
+                const dateA = dayjs(a.scheduledDate || a.date).valueOf();
+                const dateB = dayjs(b.scheduledDate || b.date).valueOf();
+                return dateA - dateB;
+            });
+    }, [filteredSchedules]);
+
     const fetchStudentsForCollege = useCallback(async (collegeId) => {
         const normalizedCollegeId = String(collegeId || '').trim();
         if (!normalizedCollegeId) {
@@ -2099,6 +2132,16 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                         List
                     </button>
                     <button
+                        onClick={() => setView('upcoming')}
+                        className={`flex-1 sm:flex-none px-4 py-2.5 text-sm font-medium flex items-center justify-center border-l border-gray-300 ${view === 'upcoming'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50'
+                            }`}
+                    >
+                        <ClockIcon className="h-4 w-4 mr-2" />
+                        Upcoming Sessions
+                    </button>
+                    <button
                         onClick={() => setView('calendar')}
                         className={`flex-1 sm:flex-none px-4 py-2.5 text-sm font-medium flex items-center justify-center border-l border-gray-300 ${view === 'calendar'
                             ? 'bg-indigo-600 text-white'
@@ -2137,6 +2180,38 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                             schedules={filteredSchedules}
                             onOpenCheckIn={openCheckInModal}
                             onOpenCheckOut={openCheckOutModal}
+                            onOpenLateRequest={openLateRequestModal}
+                            onDelete={handleDelete}
+                        />
+                    )}
+                </div>
+            )}
+
+            {/* Upcoming Sessions View */}
+            {view === 'upcoming' && (
+                <div className="space-y-4">
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-sm font-bold text-indigo-900">Upcoming Assigned Sessions</h2>
+                            <p className="text-xs text-indigo-700">Future scheduled classes and sessions assigned to you.</p>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-600 text-white">
+                            {upcomingSchedules.length} Session{upcomingSchedules.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
+
+                    {upcomingSchedules.length === 0 ? (
+                        <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
+                            <ClockIcon className="mx-auto h-12 w-12 text-gray-300" />
+                            <h3 className="mt-2 text-sm font-semibold text-gray-800">No Upcoming Sessions</h3>
+                            <p className="mt-1 text-xs text-gray-500">You have no upcoming sessions scheduled for this period.</p>
+                        </div>
+                    ) : (
+                        <ScheduleList
+                            schedules={upcomingSchedules}
+                            onOpenCheckIn={openCheckInModal}
+                            onOpenCheckOut={openCheckOutModal}
+                            onOpenLateRequest={openLateRequestModal}
                             onDelete={handleDelete}
                         />
                     )}
@@ -2195,6 +2270,14 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                     uploadedGeoImageCount={uploadedGeoImageCount}
                     uploadingCheckOutSlot={uploadingCheckOutSlot}
                     uploadingCheckOutPhase={uploadingCheckOutPhase}
+                />
+            )}
+            {showLateRequestModal && selectedSchedule && (
+                <LateAttendanceRequestModal
+                    selectedSchedule={selectedSchedule}
+                    onClose={closeLateRequestModal}
+                    onSuccess={() => refreshScheduleData({ force: true })}
+                    showToast={showToast}
                 />
             )}
         </MobileTrainerLayout>

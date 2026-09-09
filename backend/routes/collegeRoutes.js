@@ -1014,6 +1014,9 @@ router.post('/', authenticate, isSPOCAdmin, async (req, res) => {
         if (!company && req.user?.id) {
             company = await Company.findOne({ userId: req.user.id });
         }
+        if (!company && normalizeRole(req.user?.role) === 'superadmin') {
+            company = await Company.findOne().sort({ createdAt: 1 });
+        }
 
         if (!company) {
             console.error('Company not found for user:', req.user?.id);
@@ -1224,6 +1227,20 @@ router.post('/', authenticate, isSPOCAdmin, async (req, res) => {
         res.status(201).json(college);
     } catch (error) {
         console.error(error);
+        if (error.code === 11000) {
+            const normalizedCollegeName = String(req.body?.name || '').trim();
+            const existingCollege = await College.findOne({
+                name: { $regex: new RegExp(`^${escapeRegExp(normalizedCollegeName)}$`, 'i') }
+            });
+            if (existingCollege) {
+                return res.status(200).json({
+                    ...existingCollege.toObject(),
+                    duplicate: true,
+                    message: 'College with this name already exists. Existing record returned.',
+                });
+            }
+            return res.status(409).json({ message: 'A college with this name or code already exists.' });
+        }
         const fs = require('fs');
         fs.appendFileSync('error_log.txt', `${new Date().toISOString()} - Error in POST /api/colleges: ${error.stack}\n`);
         res.status(500).json({ message: 'Server error', error: error.message });
