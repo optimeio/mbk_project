@@ -140,18 +140,18 @@ export default function TrainerAttendanceRequests() {
 
   const columns = [
     {
-      title: "Request Raised",
+      title: <span style={{ whiteSpace: "nowrap" }}>Request Raised</span>,
       dataIndex: "lateRequestSubmittedAt",
       key: "lateRequestSubmittedAt",
-      width: 160,
+      width: 150,
       render: (val, record) => {
         const dateVal = val || record.checkIn?.time || record.checkInTime || record.createdAt;
         return (
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "#1f2937" }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#1f2937", whiteSpace: "nowrap" }}>
               {dateVal ? dayjs(dateVal).format("DD MMM YYYY") : "-"}
             </div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>
+            <div style={{ fontSize: 11, color: "#6b7280", whiteSpace: "nowrap" }}>
               {dateVal ? dayjs(dateVal).format("hh:mm A") : "-"}
             </div>
           </div>
@@ -159,9 +159,9 @@ export default function TrainerAttendanceRequests() {
       },
     },
     {
-      title: "Scheduled Session",
+      title: <span style={{ whiteSpace: "nowrap" }}>Scheduled Session</span>,
       key: "scheduleInfo",
-      width: 180,
+      width: 170,
       render: (_, record) => {
         const sched = record.scheduleId || {};
         const schedDate = sched.scheduledDate || record.date;
@@ -174,7 +174,7 @@ export default function TrainerAttendanceRequests() {
 
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <div style={{ fontWeight: 600, fontSize: 12, color: "#374151" }}>
+            <div style={{ fontWeight: 600, fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
               {schedDate ? dayjs(schedDate).format("DD MMM YYYY") : "-"}
             </div>
             <Space orientation="horizontal" size={4}>
@@ -188,7 +188,7 @@ export default function TrainerAttendanceRequests() {
       },
     },
     {
-      title: "Trainer",
+      title: <span style={{ whiteSpace: "nowrap" }}>Trainer</span>,
       key: "trainer",
       width: 180,
       render: (_, record) => {
@@ -196,29 +196,29 @@ export default function TrainerAttendanceRequests() {
         const id = record.trainerId?.trainerId || "-";
         return (
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{name}</div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: "#111827", wordBreak: "break-word" }}>{name}</div>
             <div style={{ fontSize: 11, color: "#9ca3af" }}>ID: {id}</div>
           </div>
         );
       },
     },
     {
-      title: "College & Course",
+      title: <span style={{ whiteSpace: "nowrap" }}>College & Course</span>,
       key: "collegeCourse",
-      width: 210,
+      width: 220,
       render: (_, record) => {
         const collegeName = record.collegeId?.name || "-";
         const courseName = record.courseId?.title || record.courseId?.name || record.scheduleId?.subject || "-";
         return (
           <div>
-            <div style={{ fontWeight: 600, fontSize: 12, color: "#1f2937", lineHeight: 1.3 }}>{collegeName}</div>
-            <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{courseName}</div>
+            <div style={{ fontWeight: 600, fontSize: 12, color: "#1f2937", lineHeight: 1.3, wordBreak: "break-word" }}>{collegeName}</div>
+            <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2, wordBreak: "break-word" }}>{courseName}</div>
           </div>
         );
       },
     },
     {
-      title: "Reason / Topic",
+      title: <span style={{ whiteSpace: "nowrap" }}>Reason / Topic</span>,
       dataIndex: "lateRequestReason",
       key: "lateRequestReason",
       width: 200,
@@ -234,6 +234,7 @@ export default function TrainerAttendanceRequests() {
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: "vertical",
                 overflow: "hidden",
+                wordBreak: "break-word",
               }}
             >
               {displayVal}
@@ -243,17 +244,19 @@ export default function TrainerAttendanceRequests() {
       },
     },
     {
-      title: "Proofs",
+      title: <span style={{ whiteSpace: "nowrap" }}>Proofs</span>,
       key: "proofs",
-      width: 170,
+      width: 180,
       render: (_, record) => {
-        const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkIn?.photo);
-        const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl);
+        const checkInImg = record.imageUrl || record.checkInPhoto || record.checkIn?.photo;
+        const hasCheckIn = Boolean(checkInImg);
+        const validStudentsPhoto = record.studentsPhotoUrl && record.studentsPhotoUrl !== checkInImg ? record.studentsPhotoUrl : null;
+        const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || validStudentsPhoto);
         const activityCount = Array.isArray(record.activityPhotos) ? record.activityPhotos.length : 0;
         const hasCheckOut = Boolean(record.checkOutGeoImageUrl || record.checkOut?.photos?.length);
 
         return (
-          <Space direction="vertical" size={2}>
+          <div className="flex flex-col gap-1">
             <Space size={4}>
               <Tag color={hasCheckIn ? "cyan" : "default"} style={{ margin: 0, fontSize: 10 }}>
                 Check-In {hasCheckIn ? "✓" : "✗"}
@@ -270,15 +273,15 @@ export default function TrainerAttendanceRequests() {
                 Check-Out {hasCheckOut ? "✓" : "✗"}
               </Tag>
             </Space>
-          </Space>
+          </div>
         );
       },
     },
     {
-      title: "Status",
+      title: <span style={{ whiteSpace: "nowrap" }}>Status</span>,
       dataIndex: "lateRequestStatus",
       key: "lateRequestStatus",
-      width: 120,
+      width: 130,
       render: (val, record) => {
         const norm = String(val || record.verificationStatus || record.status || "pending").toLowerCase();
         if (norm === "approved" || norm === "present") {
@@ -291,7 +294,7 @@ export default function TrainerAttendanceRequests() {
       },
     },
     {
-      title: "Action",
+      title: <span style={{ whiteSpace: "nowrap" }}>Action</span>,
       key: "action",
       width: 130,
       render: (_, record) => (
@@ -535,7 +538,7 @@ export default function TrainerAttendanceRequests() {
                     >
                       Download Excel Roster
                     </Button>
-                  ) : selectedRecord.studentsPhotoUrl ? (
+                  ) : selectedRecord.studentsPhotoUrl && selectedRecord.studentsPhotoUrl !== selectedRecord.imageUrl && selectedRecord.studentsPhotoUrl !== selectedRecord.checkInPhoto ? (
                     <Image
                       src={getSecureImageUrl(selectedRecord.studentsPhotoUrl)}
                       alt="Student Sheet"

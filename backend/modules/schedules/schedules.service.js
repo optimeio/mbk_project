@@ -710,6 +710,10 @@ const buildDepartmentDaysPayload = ({
       geoTag: attendance?.latitude != null && attendance?.longitude != null
         ? `${attendance.latitude}, ${attendance.longitude}`
         : null,
+      attendance: attendance || null,
+      attendanceStatus: attendance?.attendanceStatus || attendance?.status || (attendance?.checkInTime ? "PRESENT" : null),
+      isLateRequest: Boolean(attendance?.isLateRequest),
+      lateRequestStatus: attendance?.lateRequestStatus || null,
     };
   });
 };

@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  UploadCloud,
   Users,
   X,
   XCircle,
@@ -32,6 +33,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
 import { getSecureImageUrl } from "@/utils/imageUtils";
+import LateAttendanceRequestModal from "../TrainerSchedule/LateAttendanceRequestModal";
 
 /* ─── helpers ───────────────────────────────────────────────── */
 const formatCoord = (val) =>
@@ -58,11 +60,9 @@ const formatTime = (timeStr, fallbackDate) => {
 
   if (typeof target === "string") {
     const trimmed = target.trim();
-    // If it's already a simple time format like "10:05 AM" or "09:30"
     if (/^\d{1,2}:\d{2}(\s?[APap][Mm])?$/.test(trimmed)) {
       return trimmed;
     }
-    // If it is an ISO string or date parseable string
     try {
       const d = new Date(trimmed);
       if (!isNaN(d.getTime())) {
@@ -134,6 +134,18 @@ const STATUS_CONFIG = {
     icon: XCircle,
     label: "Absent",
   },
+  PendingApproval: {
+    badge: "bg-amber-50 text-amber-700 border-amber-200 ring-amber-600/10",
+    dot: "bg-amber-500",
+    icon: Clock3,
+    label: "Awaiting Admin Approval",
+  },
+  MissingProofs: {
+    badge: "bg-purple-50 text-purple-700 border-purple-200 ring-purple-600/10",
+    dot: "bg-purple-500",
+    icon: AlertCircle,
+    label: "Missing Proofs",
+  },
   Leave: {
     badge: "bg-amber-50 text-amber-700 border-amber-200 ring-amber-600/10",
     dot: "bg-amber-500",
@@ -175,6 +187,7 @@ function TrainerAttendanceHistory() {
   const [verifFilter, setVerifFilter] = useState("ALL");
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [requestModalSchedule, setRequestModalSchedule] = useState(null);
 
   const trainerId =
     currentUser?.trainerProfileId ||
@@ -230,10 +243,8 @@ function TrainerAttendanceHistory() {
     fetchHistoryAndSchedules();
   }, [fetchHistoryAndSchedules]);
 
-  /* ── Merged Attendance Records (incorporating missed past schedules as Absent) ──── */
+  /* ── Merged Attendance Records (incorporating all assigned schedules) ──── */
   const mergedRecords = useMemo(() => {
-    const todayYMD = new Date().toISOString().split("T")[0];
-
     const toYMD = (dateStr) => {
       if (!dateStr) return "";
       try {
@@ -255,44 +266,35 @@ function TrainerAttendanceHistory() {
       const schedYMD = toYMD(schedDate);
       if (!schedYMD) return;
 
-      // Check past schedules (before today)
-      if (schedYMD < todayYMD) {
-        const hasMatchingAttendance = records.some((r) => {
-          const rSchedId = String(
-            (typeof r.scheduleId === "object" ? r.scheduleId?._id : r.scheduleId) || ""
-          );
-          if (sId && rSchedId && sId === rSchedId) {
-            return true;
-          }
-          // If attendance record has no scheduleId attached, match by Date and Day Number
-          if (!rSchedId) {
-            const rYMD = toYMD(r.date || r.assignedDate || r.checkInTime || r.createdAt);
-            const rDay = Number(r.dayNumber || 1);
-            const sDay = Number(sched.dayNumber || 1);
-            if (rYMD === schedYMD && rDay === sDay) {
-              return true;
-            }
-          }
-          return false;
-        });
-
-        if (!hasMatchingAttendance) {
-          combined.push({
-            _id: `absent-sched-${sId || schedYMD}-${sched.dayNumber || 1}`,
-            scheduleId: sched,
-            collegeId: sched.collegeId || (sched.collegeName ? { name: sched.collegeName } : null),
-            courseId: sched.courseId || (sched.courseTitle ? { name: sched.courseTitle } : null),
-            date: schedDate,
-            dayNumber: sched.dayNumber || 1,
-            status: "Absent",
-            attendanceStatus: "Absent",
-            verificationStatus: "approved",
-            isSyntheticAbsent: true,
-            checkInTime: null,
-            checkOutTime: null,
-            remarks: "Trainer did not check-in for scheduled class",
-          });
+      const hasMatchingAttendance = records.some((r) => {
+        const rSchedId = String(
+          (typeof r.scheduleId === "object" ? r.scheduleId?._id : r.scheduleId) || ""
+        );
+        if (sId && rSchedId && sId === rSchedId) {
+          return true;
         }
+        const rYMD = toYMD(r.date || r.assignedDate || r.checkInTime || r.createdAt);
+        const rDay = Number(r.dayNumber || 1);
+        const sDay = Number(sched.dayNumber || 1);
+        return rYMD === schedYMD && rDay === sDay;
+      });
+
+      if (!hasMatchingAttendance) {
+        combined.push({
+          _id: `sched-item-${sId || schedYMD}-${sched.dayNumber || 1}`,
+          scheduleId: sched,
+          collegeId: sched.collegeId || (sched.collegeName ? { name: sched.collegeName } : null),
+          courseId: sched.courseId || (sched.courseTitle ? { name: sched.courseTitle } : null),
+          date: schedDate,
+          dayNumber: sched.dayNumber || 1,
+          status: "Absent",
+          attendanceStatus: "Absent",
+          verificationStatus: "pending",
+          isSyntheticSchedule: true,
+          checkInTime: null,
+          checkOutTime: null,
+          remarks: "Scheduled session without attendance record",
+        });
       }
     });
 
@@ -403,11 +405,11 @@ function TrainerAttendanceHistory() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/trainer/schedule"
+                href="/trainer/upcoming-schedule"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20 sm:text-sm"
               >
                 <Calendar className="h-4 w-4" />
-                <span>Schedule</span>
+                <span>Upcoming Schedule</span>
               </Link>
             </div>
           </div>
@@ -641,25 +643,44 @@ function TrainerAttendanceHistory() {
           {!loading && !error && filteredRecords.length > 0 && (
             <div className="space-y-4">
               {filteredRecords.map((record, idx) => {
-                const rawStatus = String(record.status || record.attendanceStatus || "Pending").trim();
-                const normalizedStatus =
-                  rawStatus.toLowerCase() === "present"
-                    ? "Present"
-                    : rawStatus.toLowerCase() === "absent"
-                    ? "Absent"
-                    : "Pending";
-                const statusCfg = STATUS_CONFIG[normalizedStatus] || STATUS_CONFIG.Pending;
+                const lateReqNorm = String(record.lateRequestStatus || "").toLowerCase();
+                const verifNorm = String(record.verificationStatus || "").toLowerCase();
+                const statusNorm = String(record.status || record.attendanceStatus || "").toLowerCase();
+
+                const isPendingApproval = lateReqNorm === "pending" || (record.isLateRequest && verifNorm === "pending") || (verifNorm === "pending" && statusNorm === "pending" && !record.isSyntheticSchedule);
+                const isApprovedPresent = lateReqNorm === "approved" || verifNorm === "approved" || statusNorm === "present";
+                const isRejected = lateReqNorm === "rejected" || verifNorm === "rejected";
+
+                const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkIn?.time || record.checkInTime);
+                const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl);
+                const hasActivities = Boolean(Array.isArray(record.activityPhotos) && record.activityPhotos.length > 0);
+                const hasCheckOut = Boolean(record.checkOutGeoImageUrl || (Array.isArray(record.checkOut?.photos) && record.checkOut.photos.length > 0));
+
+                const isMissingProofs = !record.isSyntheticSchedule && !isPendingApproval && !isApprovedPresent && !(hasCheckIn && hasStudentDoc && hasActivities && hasCheckOut);
+
+                let activeStatusKey = "Pending";
+                if (isPendingApproval) {
+                  activeStatusKey = "PendingApproval";
+                } else if (isApprovedPresent) {
+                  activeStatusKey = "Present";
+                } else if (isMissingProofs) {
+                  activeStatusKey = "MissingProofs";
+                } else if (isRejected || statusNorm === "absent" || record.isSyntheticSchedule) {
+                  activeStatusKey = "Absent";
+                }
+
+                const statusCfg = STATUS_CONFIG[activeStatusKey] || STATUS_CONFIG.Pending;
                 const StatusIcon = statusCfg.icon;
 
-                const rawVerif = String(record.verificationStatus || "pending").toLowerCase();
-                const verifCfg = VERIF_CONFIG[rawVerif] || VERIF_CONFIG.pending;
+                const verifCfg = VERIF_CONFIG[verifNorm] || VERIF_CONFIG.pending;
 
-                const collegeName = record.collegeId?.name || "Assigned College";
+                const collegeName = record.collegeId?.name || record.scheduleId?.collegeName || "Assigned College";
                 const collegeLocation = record.collegeId?.city || record.collegeId?.state || "";
                 const courseName =
                   record.courseId?.name ||
                   record.courseId?.title ||
                   record.scheduleId?.subject ||
+                  record.scheduleId?.courseName ||
                   "General Training";
                 const dayNum = record.dayNumber || record.scheduleId?.dayNumber || 1;
                 const duration = formatDuration(record.workingDurationMinutes);
@@ -703,7 +724,7 @@ function TrainerAttendanceHistory() {
                         <span
                           className={`hidden rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize sm:inline-block ${verifCfg.badge}`}
                         >
-                          {verifCfg.label}
+                          {isPendingApproval ? "Awaiting Review" : verifCfg.label}
                         </span>
                       </div>
                     </div>
@@ -833,10 +854,15 @@ function TrainerAttendanceHistory() {
                         </div>
                       </div>
 
-                      {/* Bottom row: Remarks & Full details button */}
+                      {/* Bottom row: Remarks, Request Action & Full details button */}
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
                         <div className="text-slate-500">
-                          {record.remarks ? (
+                          {record.lateRequestReason ? (
+                            <span>
+                              <strong className="font-semibold text-slate-700">Late Request Reason:</strong>{" "}
+                              {record.lateRequestReason}
+                            </span>
+                          ) : record.remarks ? (
                             <span>
                               <strong className="font-semibold text-slate-700">Remarks:</strong>{" "}
                               {record.remarks}
@@ -846,14 +872,46 @@ function TrainerAttendanceHistory() {
                           )}
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setSelectedRecord(record)}
-                          className="inline-flex items-center gap-1 font-semibold text-[#0f3f5c] hover:text-[#1a6b9e]"
-                        >
-                          <span>Inspect Full Details</span>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isPendingApproval ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-sm">
+                              <Clock3 className="h-3.5 w-3.5 text-amber-600" />
+                              Awaiting Admin Approval
+                            </span>
+                          ) : isApprovedPresent ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                              Present / Verified
+                            </span>
+                          ) : isMissingProofs ? (
+                            <button
+                              type="button"
+                              onClick={() => setRequestModalSchedule(record.scheduleId || record)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition active:scale-95 cursor-pointer"
+                            >
+                              <UploadCloud className="h-3.5 w-3.5" />
+                              Upload Missing Proofs
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setRequestModalSchedule(record.scheduleId || record)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#0f3f5c] hover:bg-[#1a6b9e] text-white shadow-sm transition active:scale-95 cursor-pointer"
+                            >
+                              <Clock className="h-3.5 w-3.5" />
+                              Request Late Attendance
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecord(record)}
+                            className="inline-flex items-center gap-1 font-semibold text-[#0f3f5c] hover:text-[#1a6b9e]"
+                          >
+                            <span>Inspect Full Details</span>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -863,6 +921,22 @@ function TrainerAttendanceHistory() {
           )}
         </div>
       </section>
+
+      {/* ── Modal: Late Attendance & Missing Proofs Request Modal ──── */}
+      {requestModalSchedule && (
+        <LateAttendanceRequestModal
+          selectedSchedule={
+            requestModalSchedule._id || requestModalSchedule.id
+              ? requestModalSchedule
+              : requestModalSchedule.scheduleId || requestModalSchedule
+          }
+          onClose={() => setRequestModalSchedule(null)}
+          onSuccess={() => {
+            fetchHistoryAndSchedules();
+            setRequestModalSchedule(null);
+          }}
+        />
+      )}
 
       {/* ── Modal: Record Full Inspection Drawer / Modal ─────────── */}
       {selectedRecord && (

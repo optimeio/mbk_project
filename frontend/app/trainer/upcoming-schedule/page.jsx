@@ -8,13 +8,13 @@ const TrainerUpcomingSchedule = dynamic(
   {
     loading: () => (
       <PortalLoadingState
-        title="Loading Upcoming Schedule"
-        description="Fetching your assigned sessions..."
+        title="Loading Schedule"
+        description="Fetching your upcoming training sessions..."
       />
     ),
   }
 );
 
-export default function TrainerSchedulePage() {
+export default function UpcomingSchedulePage() {
   return <TrainerUpcomingSchedule />;
 }

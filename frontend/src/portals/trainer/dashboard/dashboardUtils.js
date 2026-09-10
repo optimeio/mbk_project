@@ -1,4 +1,5 @@
 import scheduleService from "@/services/scheduleService";
+import { api } from "@/services/api";
 
 const DASHBOARD_SCHEDULE_SUMMARY_TTL_MS = 45_000;
 const trainerScheduleSummaryCache = new Map();
@@ -106,19 +107,31 @@ export const buildScheduleItem = (schedule = {}) => {
     }
   }
 
-  const rawStatus = String(schedule?.attendanceStatus || schedule?.status || "").trim().toLowerCase();
+  const att = schedule?.attendance || schedule?.attendanceRecord || {};
+  const lateRequestStatus = schedule?.lateRequestStatus || att?.lateRequestStatus;
+  const verificationStatus = schedule?.verificationStatus || att?.verificationStatus;
+  const isLateRequest = Boolean(schedule?.isLateRequest || att?.isLateRequest);
+  const hasUploadedImage = Boolean(
+    schedule?.imageUrl || schedule?.checkInImage ||
+    att?.imageUrl || att?.checkInImage
+  );
+
+  const rawStatus = String(schedule?.attendanceStatus || schedule?.status || att?.status || att?.attendanceStatus || "").trim().toLowerCase();
   const isClockedOutOrPresent = Boolean(
     rawStatus === "approved" ||
     rawStatus === "completed" ||
     rawStatus === "present" ||
-    schedule?.attendance?.checkOutTime ||
-    schedule?.attendance?.checkOut?.time ||
-    schedule?.attendance?.status === "Present" ||
-    schedule?.attendanceRecord?.checkOutTime ||
-    schedule?.attendanceRecord?.status === "Present"
+    schedule?.checkInTime ||
+    schedule?.checkOutTime ||
+    att?.checkInTime ||
+    att?.checkOutTime ||
+    att?.checkOut?.time ||
+    att?.status === "Present"
   );
 
-  let computedStatus = isClockedOutOrPresent
+  let computedStatus = isLateRequest || lateRequestStatus === "pending"
+    ? "pending"
+    : isClockedOutOrPresent
     ? "completed"
     : isTimeOut
     ? "timeout"
@@ -152,6 +165,10 @@ export const buildScheduleItem = (schedule = {}) => {
     rawDate: schedule?.scheduledDate,
     dayNumber: schedule?.dayNumber || "1",
     status: computedStatus,
+    lateRequestStatus,
+    verificationStatus,
+    isLateRequest,
+    hasUploadedImage,
   };
 };
 
@@ -187,10 +204,17 @@ export const signalTrainerDashboardRefresh = (trainerId) => {
 export const getStatusMeta = (status = "") => {
   const normalized = String(status || "").trim().toLowerCase();
 
-  if (normalized === "approved" || normalized === "completed") {
+  if (normalized === "approved" || normalized === "completed" || normalized === "present") {
     return {
-      label: "Completed",
-      className: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+      label: "Present",
+      className: "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold",
+    };
+  }
+
+  if (normalized === "pending") {
+    return {
+      label: "Awaiting Admin Approval",
+      className: "bg-amber-50 text-amber-800 border border-amber-200 font-bold",
     };
   }
 
@@ -248,9 +272,27 @@ export const formatTimeAgo = (dateStr) => {
   return new Date(dateStr).toLocaleDateString();
 };
 
+/**
+ * Merge schedules with attendance records so the dashboard shows correct statuses.
+ * - If admin approved → "present"
+ * - If trainer uploaded (pending admin review) → "pending"
+ * - If no upload / no attendance record → "absent" (show Request button)
+ */
+const toYMD = (dateStr) => {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
+
 export const buildTrainerDashboardScheduleSummary = (
   currentSchedules = [],
   previousSchedules = [],
+  attendanceRecords = [],
 ) => {
   const mergedSchedules = new Map();
 
@@ -271,6 +313,20 @@ export const buildTrainerDashboardScheduleSummary = (
   allSchedules.forEach((schedule) => {
     const scheduleDate = new Date(schedule?.scheduledDate);
     scheduleDate.setHours(0, 0, 0, 0);
+    const schedYMD = toYMD(schedule?.scheduledDate);
+    const sId = String(schedule?._id || schedule?.id || "");
+
+    // Find matching attendance record for this schedule
+    const matchingAtt = attendanceRecords.find((r) => {
+      const rSchedId = String(
+        (typeof r.scheduleId === "object" ? r.scheduleId?._id : r.scheduleId) || ""
+      );
+      if (sId && rSchedId && sId === rSchedId) return true;
+      const rYMD = toYMD(r.date || r.assignedDate || r.checkInTime || r.createdAt);
+      const rDay = Number(r.dayNumber || 1);
+      const sDay = Number(schedule?.dayNumber || 1);
+      return rYMD === schedYMD && rDay === sDay;
+    });
 
     const collegeKey =
       schedule?.collegeId?._id ||
@@ -284,39 +340,76 @@ export const buildTrainerDashboardScheduleSummary = (
       uniqueColleges.add(collegeKey);
     }
 
-    const formatted = buildScheduleItem(schedule);
-    const normalizedStatus = String(
-      schedule?.attendanceStatus || schedule?.status || "",
-    )
-      .trim()
-      .toLowerCase();
+    // Determine real status from attendance record
+    let resolvedStatus;
+    let resolvedLateRequestStatus;
+    let resolvedVerificationStatus;
+    let resolvedIsLateRequest = false;
+    let hasUploadedImage = false;
 
-    const isCompletedOrClosed =
-      formatted.isTimeOut ||
-      formatted.status === "completed" ||
-      formatted.status === "timeout" ||
-      normalizedStatus === "approved" ||
-      normalizedStatus === "completed" ||
-      normalizedStatus === "present";
+    if (matchingAtt) {
+      const lateReqNorm = String(matchingAtt.lateRequestStatus || "").toLowerCase();
+      const verifNorm = String(matchingAtt.verificationStatus || "").toLowerCase();
+      const statusNorm = String(matchingAtt.status || matchingAtt.attendanceStatus || "").toLowerCase();
 
-    if (scheduleDate > today || (scheduleDate.getTime() === today.getTime() && !isCompletedOrClosed)) {
-      nextItems.push(formatted);
+      resolvedLateRequestStatus = matchingAtt.lateRequestStatus;
+      resolvedVerificationStatus = matchingAtt.verificationStatus;
+      resolvedIsLateRequest = Boolean(matchingAtt.isLateRequest);
+      hasUploadedImage = Boolean(
+        matchingAtt.imageUrl || matchingAtt.checkInImage ||
+        matchingAtt.checkInTime || matchingAtt.checkIn?.time
+      );
+
+      // Status priority: approved > pending upload > absent
+      if (lateReqNorm === "approved" || verifNorm === "approved" || statusNorm === "present") {
+        resolvedStatus = "completed"; // present/approved
+      } else if (
+        lateReqNorm === "pending" ||
+        (matchingAtt.isLateRequest && lateReqNorm !== "rejected") ||
+        (verifNorm === "pending" && hasUploadedImage)
+      ) {
+        resolvedStatus = "pending"; // uploaded, awaiting approval
+      } else if (hasUploadedImage) {
+        resolvedStatus = "pending"; // has check-in image = pending review
+      } else {
+        resolvedStatus = "timeout"; // no upload = absent
+      }
     } else {
-      recentItems.push(formatted);
+      // No attendance record: use schedule-derived status
+      const formatted = buildScheduleItem(schedule);
+      resolvedStatus = formatted.status;
+      resolvedLateRequestStatus = formatted.lateRequestStatus;
+      resolvedVerificationStatus = formatted.verificationStatus;
+      resolvedIsLateRequest = formatted.isLateRequest;
+      hasUploadedImage = false;
     }
 
-    if (
-      normalizedStatus === "approved" ||
-      normalizedStatus === "completed" ||
-      normalizedStatus === "present" ||
-      formatted.status === "completed"
-    ) {
+    const formatted = buildScheduleItem(schedule);
+    const item = {
+      ...formatted,
+      status: resolvedStatus,
+      lateRequestStatus: resolvedLateRequestStatus,
+      verificationStatus: resolvedVerificationStatus,
+      isLateRequest: resolvedIsLateRequest,
+      hasUploadedImage,
+      hasAttendanceRecord: Boolean(matchingAtt),
+      attendanceId: matchingAtt?._id || matchingAtt?.id,
+    };
+
+    const isCompletedOrClosed =
+      resolvedStatus === "completed" ||
+      resolvedStatus === "pending" || // pending approval = past session
+      String(schedule?.attendanceStatus || schedule?.status || "").toLowerCase() === "present";
+
+    if (scheduleDate > today || (scheduleDate.getTime() === today.getTime() && !item.isTimeOut && !isCompletedOrClosed)) {
+      nextItems.push(item);
+    } else {
+      recentItems.push(item);
+    }
+
+    if (resolvedStatus === "completed") {
       completedCount += 1;
-    } else if (
-      normalizedStatus === "pending" ||
-      normalizedStatus === "scheduled" ||
-      (!normalizedStatus && scheduleDate < today)
-    ) {
+    } else if (resolvedStatus === "pending") {
       pendingCount += 1;
     }
   });
@@ -356,7 +449,8 @@ export const fetchTrainerDashboardScheduleSummary = async (trainerId) => {
     const previousDate = new Date();
     previousDate.setMonth(previousDate.getMonth() - 1);
 
-    const [currentRes, previousRes] = await Promise.all([
+    // Fetch schedules AND attendance records in parallel for accurate status
+    const [currentRes, previousRes, attendanceRes] = await Promise.all([
       scheduleService.getTrainerSchedule(trainerId, {
         month: currentDate.getMonth() + 1,
         year: currentDate.getFullYear(),
@@ -365,11 +459,24 @@ export const fetchTrainerDashboardScheduleSummary = async (trainerId) => {
         month: previousDate.getMonth() + 1,
         year: previousDate.getFullYear(),
       }),
+      api.get(`/attendance/trainer/${trainerId}`).catch(() => null),
     ]);
+
+    const extractArray = (raw) => {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw.data)) return raw.data;
+      if (Array.isArray(raw.data?.data)) return raw.data.data;
+      if (Array.isArray(raw.schedules)) return raw.schedules;
+      return [];
+    };
+
+    const attendanceRecords = extractArray(attendanceRes);
 
     const summary = buildTrainerDashboardScheduleSummary(
       currentRes?.data || [],
       previousRes?.data || [],
+      attendanceRecords,
     );
 
     trainerScheduleSummaryCache.set(cacheKey, {

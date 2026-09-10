@@ -158,6 +158,6 @@
 .dashboard-modal-panel td,
 .dashboard-modal-panel th,
 .dashboard-modal-panel p {
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }

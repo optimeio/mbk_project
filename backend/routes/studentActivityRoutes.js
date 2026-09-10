@@ -203,7 +203,6 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
         },
       };
       attendancePayload.imageUrl = checkInImageUrl;
-      attendancePayload.studentsPhotoUrl = attendancePayload.studentsPhotoUrl || checkInImageUrl;
     }
 
     if (checkOutImageUrl) {
@@ -247,7 +246,6 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
 
       if (checkInImageUrl) {
         attendanceRecord.imageUrl = checkInImageUrl;
-        attendanceRecord.studentsPhotoUrl = attendanceRecord.studentsPhotoUrl || checkInImageUrl;
         attendanceRecord.checkIn = {
           time: attendanceRecord.checkIn?.time || new Date(),
           location: {

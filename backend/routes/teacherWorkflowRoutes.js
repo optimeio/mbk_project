@@ -426,7 +426,6 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
           checkInPhoto: checkInUrl,
           checkInImage: checkInUrl,
           checkInGeoImageUrl: checkInUrl,
-          studentsPhotoUrl: checkInUrl, // Default photo
           verificationStatus: "pending",
           geoVerificationStatus: "pending",
           finalStatus: "PENDING"

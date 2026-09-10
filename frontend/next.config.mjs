@@ -43,7 +43,10 @@ const nextConfig = {
   },
 
   // Static export for Hostinger deployment (generates out/ directory during production build)
-  output: process.env.NODE_ENV === 'production' || process.env.NEXT_EXPORT === 'true' ? 'export' : undefined,
+  // NOTE: Do NOT use NODE_ENV here — .env sets NODE_ENV=production for the backend,
+  // which bleeds into next dev config and activates export mode, breaking the dev server.
+  // Use NEXT_EXPORT=true explicitly when building for static deployment.
+  output: process.env.NEXT_EXPORT === 'true' ? 'export' : undefined,
 
   // Trailing slashes ensure /login/ → /login/index.html on Hostinger
   trailingSlash: true,

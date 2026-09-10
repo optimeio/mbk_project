@@ -192,7 +192,7 @@ const listTrainerAttendanceDocs = async ({ scheduleIds = [] } = {}) => {
 
   return Attendance.find({ scheduleId: { $in: scheduleIds } })
     .select(
-      "scheduleId assignedDate date images finalStatus verificationStatus geoVerificationStatus verificationComment geoValidationComment checkIn checkInTime checkInImage checkInPhoto checkOut status createdAt attendancePdfUrl attendanceExcelUrl studentsPhotoUrl signatureUrl checkOutGeoImageUrl checkOutGeoImageUrls activityPhotos activityVideos driveAssets",
+      "scheduleId assignedDate date images finalStatus verificationStatus geoVerificationStatus verificationComment geoValidationComment checkIn checkInTime checkInImage checkInPhoto checkOut status createdAt attendancePdfUrl attendanceExcelUrl studentsPhotoUrl signatureUrl checkOutGeoImageUrl checkOutGeoImageUrls activityPhotos activityVideos driveAssets isLateRequest lateRequestStatus lateRequestReason attendanceStatus",
     )
     .sort({ scheduleId: 1, createdAt: -1 })
     .lean();

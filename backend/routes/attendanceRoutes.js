@@ -5119,7 +5119,22 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             }
         }
 
-        // Check the 4 mandatory proofs:
+        // Find existing attendance or create new
+        let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
+        if (!attendance) {
+            attendance = new Attendance({
+                scheduleId,
+                trainerId,
+                collegeId: schedule.collegeId?._id || schedule.collegeId,
+                courseId: schedule.courseId?._id || schedule.courseId,
+                batchId: schedule.batchId || null,
+                dayNumber: schedule.dayNumber,
+                assignedDate: normalizeAssignedDateInput(schedule.scheduledDate),
+                date: schedule.scheduledDate || new Date(),
+            });
+        }
+
+        // Check the 4 mandatory proofs (either uploaded now or existing on record):
         // 1. Check-In photo
         const checkInFile =
             req.files?.checkInImage?.[0] ||
@@ -5147,32 +5162,22 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             req.files?.clock_out_image?.[0] ||
             req.files?.checkOutGeoImage?.[0];
 
+        const hasCheckIn = Boolean(checkInFile || attendance.imageUrl || attendance.checkInPhoto);
+        const hasStudentDoc = Boolean(studentAttendanceFile || attendance.attendancePdfUrl || attendance.attendanceExcelUrl || attendance.studentsPhotoUrl);
+        const hasActivities = Boolean((activityFiles && activityFiles.length > 0) || (attendance.activityPhotos && attendance.activityPhotos.length > 0));
+        const hasCheckOut = Boolean(checkOutFile || attendance.checkOutGeoImageUrl || (attendance.checkOut && attendance.checkOut.photos && attendance.checkOut.photos.length > 0));
+
         const missingProofs = [];
-        if (!checkInFile) missingProofs.push('Check-In Photo');
-        if (!studentAttendanceFile) missingProofs.push('Student Attendance (PDF/Excel)');
-        if (!activityFiles.length) missingProofs.push('Student Classroom Activities Photos');
-        if (!checkOutFile) missingProofs.push('Check-Out Photo');
+        if (!hasCheckIn) missingProofs.push('Check-In Photo');
+        if (!hasStudentDoc) missingProofs.push('Student Attendance (PDF/Excel)');
+        if (!hasActivities) missingProofs.push('Student Classroom Activities Photos');
+        if (!hasCheckOut) missingProofs.push('Check-Out Photo');
 
         if (missingProofs.length > 0) {
             return res.status(400).json({
                 success: false,
                 message: `Missing mandatory uploads: ${missingProofs.join(', ')}`,
                 missingProofs
-            });
-        }
-
-        // Find existing attendance or create new
-        let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
-        if (!attendance) {
-            attendance = new Attendance({
-                scheduleId,
-                trainerId,
-                collegeId: schedule.collegeId?._id || schedule.collegeId,
-                courseId: schedule.courseId?._id || schedule.courseId,
-                batchId: schedule.batchId || null,
-                dayNumber: schedule.dayNumber,
-                assignedDate: normalizeAssignedDateInput(schedule.scheduledDate),
-                date: schedule.scheduledDate || new Date(),
             });
         }
 
@@ -5188,50 +5193,48 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         attendance.geoVerificationStatus = 'pending';
         attendance.checkOutVerificationStatus = 'PENDING_CHECKOUT';
 
-        // 1. Store Check-In Evidence
-        const checkInPath = checkInFile.path;
-        attendance.imageUrl = checkInPath;
-        attendance.checkInPhoto = checkInPath;
-        attendance.checkInTime = attendance.checkInTime || new Date().toISOString();
-        if (!attendance.checkIn) {
-            attendance.checkIn = {
-                time: new Date(),
-                location: {
-                    address: schedule.collegeLocation?.address || null,
-                    lat: schedule.collegeLocation?.lat || null,
-                    lng: schedule.collegeLocation?.lng || null,
-                }
-            };
-        } else {
-            attendance.checkIn.time = attendance.checkIn.time || new Date();
+        // 1. Store Check-In Evidence (if new file uploaded)
+        if (checkInFile) {
+            const checkInPath = checkInFile.path;
+            attendance.imageUrl = checkInPath;
+            attendance.checkInPhoto = checkInPath;
+            attendance.checkInTime = attendance.checkInTime || new Date().toISOString();
+            if (!attendance.checkIn) {
+                attendance.checkIn = {
+                    time: new Date(),
+                    location: {
+                        address: schedule.collegeLocation?.address || null,
+                        lat: schedule.collegeLocation?.lat || null,
+                        lng: schedule.collegeLocation?.lng || null,
+                    }
+                };
+            }
         }
 
-        // 2. Store Student Attendance Evidence
-        const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
-        if (docExt === '.pdf') {
-            attendance.attendancePdfUrl = studentAttendanceFile.path;
-        } else if (['.xls', '.xlsx', '.csv'].includes(docExt)) {
-            attendance.attendanceExcelUrl = studentAttendanceFile.path;
-        } else {
-            attendance.studentsPhotoUrl = studentAttendanceFile.path;
+        // 2. Store Student Attendance Evidence (if new file uploaded)
+        if (studentAttendanceFile) {
+            const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
+            if (docExt === '.pdf') {
+                attendance.attendancePdfUrl = studentAttendanceFile.path;
+            } else if (['.xls', '.xlsx', '.csv'].includes(docExt)) {
+                attendance.attendanceExcelUrl = studentAttendanceFile.path;
+            } else {
+                attendance.studentsPhotoUrl = studentAttendanceFile.path;
+            }
         }
 
-        // 3. Store Student Activity Photos
-        const newActivityPaths = activityFiles.map((file) => file.path);
-        attendance.activityPhotos = [
-            ...(attendance.activityPhotos || []),
-            ...newActivityPaths
-        ];
+        // 3. Store Student Activity Photos (if new files uploaded)
+        if (activityFiles && activityFiles.length > 0) {
+            const newActivityPaths = activityFiles.map((file) => file.path);
+            attendance.activityPhotos = newActivityPaths;
+        }
 
-        // 4. Store Check-Out Evidence
-        const checkOutPath = checkOutFile.path;
-        attendance.checkOutGeoImageUrl = checkOutPath;
-        attendance.checkOutGeoImageUrls = [
-            ...(attendance.checkOutGeoImageUrls || []),
-            checkOutPath
-        ];
-        attendance.checkOutTime = attendance.checkOutTime || new Date().toISOString();
-        if (!attendance.checkOut) {
+        // 4. Store Check-Out Evidence (if new file uploaded)
+        if (checkOutFile) {
+            const checkOutPath = checkOutFile.path;
+            attendance.checkOutGeoImageUrl = checkOutPath;
+            attendance.checkOutGeoImageUrls = [checkOutPath];
+            attendance.checkOutTime = new Date().toISOString();
             attendance.checkOut = {
                 time: new Date(),
                 finalStatus: 'PENDING',
@@ -5246,16 +5249,6 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                     validationStatus: 'pending',
                 }]
             };
-        } else {
-            attendance.checkOut.time = attendance.checkOut.time || new Date();
-            attendance.checkOut.photos = [
-                ...(attendance.checkOut.photos || []),
-                {
-                    url: checkOutPath,
-                    uploadedAt: new Date(),
-                    validationStatus: 'pending',
-                }
-            ];
         }
 
         await attendance.save();
@@ -5294,35 +5287,30 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
 router.get('/late-requests', authenticate, async (req, res) => {
     try {
         const { status, collegeId, trainerId, page = 1, limit = 25 } = req.query;
-        const filter = {};
 
-        if (status === 'pending') {
-            filter.$or = [
-                { lateRequestStatus: 'pending' },
-                { isLateRequest: true, lateRequestStatus: { $nin: ['approved', 'rejected'] } },
-                { verificationStatus: 'pending' },
-                { status: { $in: ['Pending', 'pending'] } }
-            ];
-        } else if (status === 'approved') {
-            filter.$or = [
-                { lateRequestStatus: 'approved' },
-                { verificationStatus: 'approved' },
-                { status: { $in: ['Present', 'present'] } }
-            ];
-        } else if (status === 'rejected') {
-            filter.$or = [
-                { lateRequestStatus: 'rejected' },
-                { verificationStatus: 'rejected' },
-                { status: { $in: ['Absent', 'absent'] } }
-            ];
-        } else {
-            // 'all' or empty
-            filter.$or = [
+        // Base filter: MUST be a late attendance request
+        const filter = {
+            $or: [
                 { isLateRequest: true },
                 { lateRequestStatus: { $in: ['pending', 'approved', 'rejected'] } },
-                { verificationStatus: { $in: ['pending', 'approved', 'rejected'] } },
-                { status: { $in: ['Pending', 'pending'] } }
+                { lateRequestSubmittedAt: { $exists: true, $ne: null } },
+                { lateRequestReason: { $exists: true, $ne: '' } }
+            ]
+        };
+
+        if (status === 'pending') {
+            filter.$and = [
+                {
+                    $or: [
+                        { lateRequestStatus: 'pending' },
+                        { lateRequestStatus: { $nin: ['approved', 'rejected'] } }
+                    ]
+                }
             ];
+        } else if (status === 'approved') {
+            filter.lateRequestStatus = 'approved';
+        } else if (status === 'rejected') {
+            filter.lateRequestStatus = 'rejected';
         }
 
         if (collegeId) {
@@ -5401,8 +5389,14 @@ router.put('/late-requests/:id/verify', authenticate, async (req, res) => {
             attendance.verificationStatus = 'approved';
             attendance.geoVerificationStatus = 'approved';
             attendance.checkOutVerificationStatus = 'VERIFIED';
+            attendance.finalStatus = 'COMPLETED';
             if (attendance.checkOut) {
                 attendance.checkOut.finalStatus = 'COMPLETED';
+                if (Array.isArray(attendance.checkOut.photos)) {
+                    attendance.checkOut.photos.forEach((p) => {
+                        if (p) p.validationStatus = 'verified';
+                    });
+                }
             }
         } else {
             attendance.status = 'Absent';
@@ -5410,6 +5404,7 @@ router.put('/late-requests/:id/verify', authenticate, async (req, res) => {
             attendance.verificationStatus = 'rejected';
             attendance.geoVerificationStatus = 'rejected';
             attendance.checkOutVerificationStatus = 'REJECTED';
+            attendance.finalStatus = 'PENDING';
         }
 
         await attendance.save();

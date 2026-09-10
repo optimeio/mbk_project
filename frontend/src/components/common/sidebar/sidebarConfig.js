@@ -52,7 +52,7 @@ export const roleLinks = {
   Trainer: [
     { label: "Dashboard",          href: "/trainer/dashboard",            icon: Home },
     { label: "Trainer Activities", href: "/trainer/activities",           icon: ClipboardList },
-    { label: "Schedule",           href: "/trainer/schedule",             icon: CalendarClock },
+    { label: "Upcoming Schedule",  href: "/trainer/upcoming-schedule",    icon: CalendarClock },
     { label: "My Attendance",      href: "/trainer/attendance",           icon: BadgeCheck },
     { label: "Payslips",           href: "/trainer/payslips",             icon: Receipt },
     { label: "Complaints",         href: "/trainer/complaints",           icon: MessageSquareMore },

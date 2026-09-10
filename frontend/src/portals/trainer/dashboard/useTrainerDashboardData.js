@@ -15,6 +15,7 @@ import {
   clearTrainerDashboardSnapshot,
 } from "./dashboardUtils";
 import { clearPortalDataBundle } from "@/utils/portalDataPrefetch";
+import { api } from "@/services/api";
 
 const EMPTY_STATS = {
   upcoming: 0,
@@ -71,7 +72,7 @@ const writeTrainerDashboardSnapshot = (snapshotKey, data) => {
   }
 };
 
-const fetchTrainerDashboardData = async (currentUser) => {
+const fetchTrainerDashboardData = async (currentUser, portalSchedules) => {
   const initialTrainerId =
     currentUser?.id || currentUser?._id || currentUser?.userId || null;
 
@@ -80,7 +81,10 @@ const fetchTrainerDashboardData = async (currentUser) => {
     return null;
   });
 
-  const scheduleTask = initialTrainerId
+  // If portal already gave us schedules, skip refetching them and just get attendance
+  const scheduleTask = portalSchedules
+    ? Promise.resolve({ portalProvided: true })
+    : initialTrainerId
     ? fetchTrainerDashboardScheduleSummary(initialTrainerId).catch(
         (scheduleError) => {
           console.warn(
@@ -92,7 +96,7 @@ const fetchTrainerDashboardData = async (currentUser) => {
       )
     : Promise.resolve(null);
 
-  const [profileRes, initialScheduleSnapshot] = await Promise.all([
+  const [profileRes, scheduleResult] = await Promise.all([
     profileTask,
     scheduleTask,
   ]);
@@ -109,9 +113,33 @@ const fetchTrainerDashboardData = async (currentUser) => {
     };
   }
 
+  // If portal provided schedules, build summary with attendance records
+  if (portalSchedules && scheduleResult?.portalProvided) {
+    const extractArray = (raw) => {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw.data)) return raw.data;
+      if (Array.isArray(raw.data?.data)) return raw.data.data;
+      return [];
+    };
+    const attendanceRes = await api.get(`/attendance/trainer/${trainerId}`).catch(() => null);
+    const attendanceRecords = extractArray(attendanceRes);
+    const summary = buildTrainerDashboardScheduleSummary(
+      portalSchedules.current || [],
+      portalSchedules.previous || [],
+      attendanceRecords,
+    );
+    return {
+      profileData: trainerProfile,
+      upcomingSchedules: summary.upcomingSchedules || [],
+      recentActivities: summary.recentActivities || [],
+      stats: summary.stats || EMPTY_STATS,
+    };
+  }
+
   const scheduleSnapshot =
-    initialScheduleSnapshot && String(initialTrainerId) === String(trainerId)
-      ? initialScheduleSnapshot
+    scheduleResult && !scheduleResult.portalProvided && String(initialTrainerId) === String(trainerId)
+      ? scheduleResult
       : await fetchTrainerDashboardScheduleSummary(trainerId);
 
   return {
@@ -143,16 +171,12 @@ export default function useTrainerDashboardData(currentUser) {
   const portalDashboard =
     portalRole === "Trainer" && dashboardData ? dashboardData : null;
 
-  const portalSummary = useMemo(() => {
-    if (!portalDashboard) {
-      return null;
-    }
-
-    return buildTrainerDashboardScheduleSummary(
-      portalDashboard.currentMonthSchedule || [],
-      portalDashboard.previousMonthSchedule || [],
-    );
-  }, [portalDashboard]);
+  // Build portal schedule refs for the query if available
+  // Memoized to avoid new object reference on each render causing extra refetches
+  const portalSchedules = useMemo(() => portalDashboard ? {
+    current: portalDashboard.currentMonthSchedule || [],
+    previous: portalDashboard.previousMonthSchedule || [],
+  } : null, [portalDashboard]);
 
   const fallbackQuery = useQuery({
     queryKey: [
@@ -160,8 +184,8 @@ export default function useTrainerDashboardData(currentUser) {
       "dashboard-fallback",
       resolvedCurrentUserId,
     ],
-    queryFn: () => fetchTrainerDashboardData(currentUser),
-    enabled: hasValidSession && !portalDashboard,
+    queryFn: () => fetchTrainerDashboardData(currentUser, portalSchedules),
+    enabled: hasValidSession,
     initialData: cachedDashboardSnapshot || undefined,
     staleTime: 90_000,
     gcTime: 5 * 60_000,
@@ -191,42 +215,25 @@ export default function useTrainerDashboardData(currentUser) {
     };
   }, [dashboardSnapshotStorageKey, fallbackQuery, resolvedCurrentUserId]);
 
+  // Always write snapshot from fallback query data (it includes real attendance statuses)
   useEffect(() => {
-    if (portalDashboard) {
-      return;
-    }
     if (!fallbackQuery.data) {
       return;
     }
-
     writeTrainerDashboardSnapshot(dashboardSnapshotStorageKey, fallbackQuery.data);
-  }, [dashboardSnapshotStorageKey, fallbackQuery.data, portalDashboard]);
+  }, [dashboardSnapshotStorageKey, fallbackQuery.data]);
 
-  useEffect(() => {
-    if (!portalDashboard) {
-      return;
-    }
-
-    writeTrainerDashboardSnapshot(dashboardSnapshotStorageKey, {
-      profileData: portalDashboard.profile || null,
-      upcomingSchedules: portalSummary?.upcomingSchedules || [],
-      recentActivities: portalSummary?.recentActivities || [],
-      stats: portalSummary?.stats || EMPTY_STATS,
-    });
-  }, [dashboardSnapshotStorageKey, portalDashboard, portalSummary]);
-
-  const profileData = portalDashboard?.profile || fallbackQuery.data?.profileData || null;
-  const upcomingSchedules =
-    portalSummary?.upcomingSchedules || fallbackQuery.data?.upcomingSchedules || [];
-  const recentActivities =
-    portalSummary?.recentActivities || fallbackQuery.data?.recentActivities || [];
-  const stats = portalSummary?.stats || fallbackQuery.data?.stats || EMPTY_STATS;
+  // Always use fallback query data (which is attendance-enriched, always enabled)
+  const profileData = fallbackQuery.data?.profileData || portalDashboard?.profile || null;
+  const upcomingSchedules = fallbackQuery.data?.upcomingSchedules || [];
+  const recentActivities = fallbackQuery.data?.recentActivities || [];
+  const stats = fallbackQuery.data?.stats || EMPTY_STATS;
   const hasFallbackDashboardData =
     Boolean(fallbackQuery.data?.profileData) ||
     (fallbackQuery.data?.upcomingSchedules || []).length > 0 ||
     (fallbackQuery.data?.recentActivities || []).length > 0;
 
-  const loading = !portalDashboard && !hasFallbackDashboardData && (
+  const loading = !hasFallbackDashboardData && (
     portalLoading || fallbackQuery.isPending
   );
 

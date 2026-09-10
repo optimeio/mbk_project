@@ -17,6 +17,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { api } from "@/services/api";
 
+import { getSecureImageUrl } from "@/utils/imageUtils";
+
 function LateAttendanceRequestModal({
   selectedSchedule,
   onClose,
@@ -34,6 +36,22 @@ function LateAttendanceRequestModal({
   const [checkOutPreview, setCheckOutPreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState("");
+
+  const att = selectedSchedule?.attendance || selectedSchedule?.attendanceRecord || {};
+
+  const existingCheckInUrl = selectedSchedule?.imageUrl || selectedSchedule?.checkInPhoto || att?.imageUrl || att?.checkInPhoto;
+  const existingStudentDocUrl = selectedSchedule?.attendancePdfUrl || selectedSchedule?.attendanceExcelUrl || selectedSchedule?.studentsPhotoUrl || att?.attendancePdfUrl || att?.attendanceExcelUrl || att?.studentsPhotoUrl;
+  const existingActivityPhotos = Array.isArray(selectedSchedule?.activityPhotos) && selectedSchedule.activityPhotos.length > 0
+    ? selectedSchedule.activityPhotos
+    : Array.isArray(att?.activityPhotos) && att.activityPhotos.length > 0
+    ? att.activityPhotos
+    : [];
+  const existingCheckOutUrl = selectedSchedule?.checkOutGeoImageUrl || selectedSchedule?.checkOut?.photos?.[0]?.url || att?.checkOutGeoImageUrl || att?.checkOut?.photos?.[0]?.url;
+
+  const hasCheckIn = Boolean(checkInImage || existingCheckInUrl);
+  const hasStudentDoc = Boolean(studentDoc || existingStudentDocUrl);
+  const hasActivities = Boolean(activityPhotos.length > 0 || existingActivityPhotos.length > 0);
+  const hasCheckOut = Boolean(checkOutImage || existingCheckOutUrl);
 
   useEffect(() => {
     setMounted(true);
@@ -112,25 +130,25 @@ function LateAttendanceRequestModal({
       return;
     }
 
-    if (!checkInImage) {
+    if (!hasCheckIn) {
       if (showToast) showToast("warning", "Mandatory: Please upload the Check-In photo.");
       else alert("Mandatory: Please upload the Check-In photo.");
       return;
     }
 
-    if (!studentDoc) {
+    if (!hasStudentDoc) {
       if (showToast) showToast("warning", "Mandatory: Please upload the Student Attendance Sheet (PDF/Excel).");
       else alert("Mandatory: Please upload the Student Attendance Sheet (PDF/Excel).");
       return;
     }
 
-    if (activityPhotos.length === 0) {
+    if (!hasActivities) {
       if (showToast) showToast("warning", "Mandatory: Please upload at least one Student Activities photo.");
       else alert("Mandatory: Please upload at least one Student Activities photo.");
       return;
     }
 
-    if (!checkOutImage) {
+    if (!hasCheckOut) {
       if (showToast) showToast("warning", "Mandatory: Please upload the Check-Out photo.");
       else alert("Mandatory: Please upload the Check-Out photo.");
       return;
@@ -145,26 +163,30 @@ function LateAttendanceRequestModal({
       formData.append("reason", reason.trim());
       formData.append("session", selectedSchedule?.session || "FULL_DAY");
 
-      // 1. Check-In photo
-      formData.append("checkInImage", checkInImage);
-
-      // 2. Student attendance sheet
-      const docName = (studentDoc.name || "").toLowerCase();
-      if (docName.endsWith(".pdf")) {
-        formData.append("attendancePdf", studentDoc);
-      } else if (docName.endsWith(".xls") || docName.endsWith(".xlsx") || docName.endsWith(".csv")) {
-        formData.append("attendanceExcel", studentDoc);
-      } else {
-        formData.append("attendanceDocument", studentDoc);
+      if (checkInImage) {
+        formData.append("checkInImage", checkInImage);
       }
 
-      // 3. Student activities
-      activityPhotos.forEach((file) => {
-        formData.append("activityPhotos", file);
-      });
+      if (studentDoc) {
+        const docName = (studentDoc.name || "").toLowerCase();
+        if (docName.endsWith(".pdf")) {
+          formData.append("attendancePdf", studentDoc);
+        } else if (docName.endsWith(".xls") || docName.endsWith(".xlsx") || docName.endsWith(".csv")) {
+          formData.append("attendanceExcel", studentDoc);
+        } else {
+          formData.append("attendanceDocument", studentDoc);
+        }
+      }
 
-      // 4. Check-Out photo
-      formData.append("checkOutImage", checkOutImage);
+      if (activityPhotos.length > 0) {
+        activityPhotos.forEach((file) => {
+          formData.append("activityPhotos", file);
+        });
+      }
+
+      if (checkOutImage) {
+        formData.append("checkOutImage", checkOutImage);
+      }
 
       const response = await api.post("/attendance/late-request", formData);
 
@@ -258,25 +280,25 @@ function LateAttendanceRequestModal({
                   <ClockIcon className="h-3.5 w-3.5 text-amber-600" />
                   Request Raised At
                 </span>
-                <p className="font-bold text-amber-700 mt-1 text-[11px]">{currentDateTime}</p>
+                <p className="font-bold text-amber-700 mt-1">{currentDateTime}</p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-600 pt-1 border-t border-indigo-100/60 gap-1">
-              <div className="flex items-center gap-1 font-semibold text-gray-800">
-                <BuildingLibraryIcon className="h-4 w-4 text-gray-500" />
+            <div className="pt-2 border-t border-indigo-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 font-semibold text-gray-800">
+                <BuildingLibraryIcon className="h-4 w-4 text-indigo-600" />
                 <span>{collegeName}</span>
               </div>
               <div className="text-gray-500">
-                Course: <span className="font-semibold text-gray-700">{courseName}</span>
+                Course: <span className="font-medium text-gray-700">{courseName}</span>
               </div>
             </div>
           </div>
 
-          <form id="late-attendance-form" onSubmit={handleSubmit} className="space-y-5">
-            {/* Reason Input */}
+          <form id="late-attendance-form" onSubmit={handleSubmit} className="space-y-4">
+            {/* Reason Text Area */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
                 Reason for Attendance Request <span className="text-red-500">*</span>
               </label>
               <textarea
@@ -293,7 +315,7 @@ function LateAttendanceRequestModal({
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 flex items-start gap-2.5">
               <ExclamationCircleIcon className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                All 4 proofs below are <strong>mandatory</strong> for the Admin to verify and approve your attendance request.
+                Please upload any missing proofs below. Proofs already uploaded for this session are marked as <strong>Already Uploaded</strong> and do not need to be re-uploaded unless you wish to replace them.
               </p>
             </div>
 
@@ -304,14 +326,18 @@ function LateAttendanceRequestModal({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <CameraIcon className="h-4 w-4 text-indigo-600" />
-                    1. Check-In Photo <span className="text-red-500">*</span>
+                    1. Check-In Photo {!existingCheckInUrl && <span className="text-red-500">*</span>}
                   </span>
                   {checkInImage ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> Attached
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> New File Selected
+                    </span>
+                  ) : existingCheckInUrl ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> Already Uploaded
                     </span>
                   ) : (
-                    <span className="text-[10px] text-gray-400">Required</span>
+                    <span className="text-[10px] text-red-500 font-semibold">Required</span>
                   )}
                 </div>
                 <input
@@ -322,7 +348,14 @@ function LateAttendanceRequestModal({
                 />
                 {checkInPreview ? (
                   <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
-                    <img src={checkInPreview} alt="Check-In" className="w-full h-full object-cover" />
+                    <img src={checkInPreview} alt="Check-In New" className="w-full h-full object-cover" />
+                  </div>
+                ) : existingCheckInUrl ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300">
+                      <img src={getSecureImageUrl(existingCheckInUrl)} alt="Check-In Existing" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-[10px] text-gray-500 font-medium">Current Check-In Image</span>
                   </div>
                 ) : null}
               </div>
@@ -332,14 +365,18 @@ function LateAttendanceRequestModal({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <DocumentArrowUpIcon className="h-4 w-4 text-blue-600" />
-                    2. Student Attendance <span className="text-red-500">*</span>
+                    2. Student Attendance {!existingStudentDocUrl && <span className="text-red-500">*</span>}
                   </span>
                   {studentDoc ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> Attached
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> New File Selected
+                    </span>
+                  ) : existingStudentDocUrl ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> Already Uploaded
                     </span>
                   ) : (
-                    <span className="text-[10px] text-gray-400">PDF / Excel</span>
+                    <span className="text-[10px] text-red-500 font-semibold">PDF / Excel</span>
                   )}
                 </div>
                 <input
@@ -352,6 +389,15 @@ function LateAttendanceRequestModal({
                   <p className="text-[11px] text-gray-600 truncate bg-white px-2 py-1 rounded border border-gray-200">
                     {studentDoc.name}
                   </p>
+                ) : existingStudentDocUrl ? (
+                  <a
+                    href={getSecureImageUrl(existingStudentDocUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-indigo-600 underline font-medium block truncate mt-1"
+                  >
+                    View Existing Roster Document
+                  </a>
                 ) : null}
               </div>
 
@@ -360,14 +406,18 @@ function LateAttendanceRequestModal({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <PhotoIcon className="h-4 w-4 text-purple-600" />
-                    3. Student Classroom Activities <span className="text-red-500">*</span>
+                    3. Student Classroom Activities {existingActivityPhotos.length === 0 && <span className="text-red-500">*</span>}
                   </span>
                   {activityPhotos.length > 0 ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length} photo(s)
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length} New Photo(s)
+                    </span>
+                  ) : existingActivityPhotos.length > 0 ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {existingActivityPhotos.length} Uploaded
                     </span>
                   ) : (
-                    <span className="text-[10px] text-gray-400">Class photos</span>
+                    <span className="text-[10px] text-red-500 font-semibold">Class photos</span>
                   )}
                 </div>
                 <input
@@ -392,6 +442,14 @@ function LateAttendanceRequestModal({
                       </div>
                     ))}
                   </div>
+                ) : existingActivityPhotos.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {existingActivityPhotos.map((photoUrl, i) => (
+                      <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300">
+                        <img src={getSecureImageUrl(photoUrl)} alt={`Existing Activity ${i + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
                 ) : null}
               </div>
 
@@ -400,14 +458,18 @@ function LateAttendanceRequestModal({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <CameraIcon className="h-4 w-4 text-emerald-600" />
-                    4. Check-Out Photo <span className="text-red-500">*</span>
+                    4. Check-Out Photo {!existingCheckOutUrl && <span className="text-red-500">*</span>}
                   </span>
                   {checkOutImage ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> Attached
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> New File Selected
+                    </span>
+                  ) : existingCheckOutUrl ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> Already Uploaded
                     </span>
                   ) : (
-                    <span className="text-[10px] text-gray-400">Required</span>
+                    <span className="text-[10px] text-red-500 font-semibold">Required</span>
                   )}
                 </div>
                 <input
@@ -418,7 +480,14 @@ function LateAttendanceRequestModal({
                 />
                 {checkOutPreview ? (
                   <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
-                    <img src={checkOutPreview} alt="Check-Out" className="w-full h-full object-cover" />
+                    <img src={checkOutPreview} alt="Check-Out New" className="w-full h-full object-cover" />
+                  </div>
+                ) : existingCheckOutUrl ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300">
+                      <img src={getSecureImageUrl(existingCheckOutUrl)} alt="Check-Out Existing" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-[10px] text-gray-500 font-medium">Current Check-Out Image</span>
                   </div>
                 ) : null}
               </div>

@@ -149,19 +149,50 @@ function TrainerDashboardSchedulesSection({
             <div className="space-y-3">
               {recentActivities.map((activity) => {
                 const statusMeta = getStatusMeta(activity.status);
-                const isAbsentOrTimeout =
-                  activity.status === "absent" ||
-                  activity.status === "timeout" ||
-                  activity.status === "expired" ||
-                  activity.isTimeOut;
+
+                // Determine display state based on merged attendance data
+                const isAdminApproved = activity.status === "completed";
+                const isPendingApproval = activity.status === "pending";
+                const isAbsent =
+                  !isAdminApproved &&
+                  !isPendingApproval &&
+                  (activity.status === "timeout" ||
+                    activity.status === "absent" ||
+                    activity.isTimeOut ||
+                    !activity.hasAttendanceRecord);
+
+                // Only show request button if session is past AND no upload exists
+                const canRequestAttendance = isAbsent && !activity.hasUploadedImage;
 
                 const handleActivityClick = () => {
-                  if (activity.id) {
-                    router.push(`/trainer/schedule?openRequest=${encodeURIComponent(activity.id)}`);
-                  } else {
-                    router.push('/trainer/schedule');
-                  }
+                  router.push("/trainer/attendance");
                 };
+
+                // Determine badge to show
+                let badgeEl;
+                if (isAdminApproved) {
+                  badgeEl = (
+                    <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-emerald-600" />
+                      Present
+                    </span>
+                  );
+                } else if (isPendingApproval) {
+                  badgeEl = (
+                    <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      <Clock className="mr-1 h-3.5 w-3.5 text-amber-600" />
+                      Awaiting Admin Approval
+                    </span>
+                  );
+                } else {
+                  badgeEl = (
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusMeta.className}`}
+                    >
+                      {statusMeta.label}
+                    </span>
+                  );
+                }
 
                 return (
                   <div
@@ -195,12 +226,8 @@ function TrainerDashboardSchedulesSection({
                     </div>
 
                     <div className="flex items-center gap-2.5 self-end md:self-center shrink-0">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusMeta.className}`}
-                      >
-                        {statusMeta.label}
-                      </span>
-                      {isAbsentOrTimeout && (
+                      {badgeEl}
+                      {canRequestAttendance && (
                         <button
                           type="button"
                           onClick={(e) => {
