@@ -5132,6 +5132,16 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                 assignedDate: normalizeAssignedDateInput(schedule.scheduledDate),
                 date: schedule.scheduledDate || new Date(),
             });
+        } else {
+            if (!attendance.courseId && schedule.courseId) {
+                attendance.courseId = schedule.courseId?._id || schedule.courseId;
+            }
+            if (!attendance.collegeId && schedule.collegeId) {
+                attendance.collegeId = schedule.collegeId?._id || schedule.collegeId;
+            }
+            if (!attendance.dayNumber && schedule.dayNumber) {
+                attendance.dayNumber = schedule.dayNumber;
+            }
         }
 
         // Check the 4 mandatory proofs (either uploaded now or existing on record):
@@ -5323,7 +5333,7 @@ router.get('/late-requests', authenticate, async (req, res) => {
         const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
         const queryLimit = parseInt(limit, 10);
 
-        const [requests, total] = await Promise.all([
+        const [rawRequests, total] = await Promise.all([
             Attendance.find(filter)
                 .populate({
                     path: 'trainerId',
@@ -5332,12 +5342,65 @@ router.get('/late-requests', authenticate, async (req, res) => {
                 })
                 .populate('collegeId', 'name location city')
                 .populate('courseId', 'title name code')
-                .populate('scheduleId', 'scheduledDate dayNumber session startTime endTime status subject venue')
+                .populate({
+                    path: 'scheduleId',
+                    populate: [
+                        { path: 'courseId', select: 'title name code' },
+                        { path: 'collegeId', select: 'name location city' }
+                    ],
+                    select: 'scheduledDate dayNumber session startTime endTime status subject venue courseId collegeId'
+                })
                 .sort({ lateRequestSubmittedAt: -1, createdAt: -1 })
                 .skip(skip)
                 .limit(queryLimit),
             Attendance.countDocuments(filter)
         ]);
+
+        const requests = rawRequests.map(doc => {
+            const item = doc.toObject ? doc.toObject() : { ...doc };
+
+            // 1. Resolve Course (fallback to scheduleId.courseId if attendance.courseId is missing)
+            if (!item.courseId || (!item.courseId.title && !item.courseId.name)) {
+                if (item.scheduleId?.courseId) {
+                    item.courseId = item.scheduleId.courseId;
+                }
+            }
+
+            // 2. Resolve College (fallback to scheduleId.collegeId if missing)
+            if (!item.collegeId || !item.collegeId.name) {
+                if (item.scheduleId?.collegeId) {
+                    item.collegeId = item.scheduleId.collegeId;
+                }
+            }
+
+            // 3. Resolve Request Raised At timestamp
+            if (!item.lateRequestSubmittedAt) {
+                item.lateRequestSubmittedAt = item.updatedAt || item.createdAt || item.date || new Date();
+            }
+
+            // 4. Resolve Day Number & Session
+            if (!item.dayNumber && item.scheduleId?.dayNumber) {
+                item.dayNumber = item.scheduleId.dayNumber;
+            }
+            if (!item.session && item.scheduleId?.session) {
+                item.session = item.scheduleId.session;
+            }
+
+            // 5. Proofs normalization
+            const checkInImg = item.imageUrl || item.checkInPhoto || item.checkInImage || item.checkIn?.photo || null;
+            item.imageUrl = checkInImg;
+            item.checkInPhoto = checkInImg;
+
+            const checkOutImg = item.checkOutGeoImageUrl || item.checkOut?.photos?.[0]?.url || (Array.isArray(item.checkOutGeoImageUrls) ? item.checkOutGeoImageUrls[0] : null) || null;
+            item.checkOutGeoImageUrl = checkOutImg;
+
+            // Ensure activityPhotos is an array
+            if (!Array.isArray(item.activityPhotos)) {
+                item.activityPhotos = [];
+            }
+
+            return item;
+        });
 
         return res.json({
             success: true,
