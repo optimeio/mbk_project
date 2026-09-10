@@ -32,22 +32,38 @@ function ScheduleList({
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-md">
       <ul className="divide-y divide-gray-200">
-        {schedules.map((schedule) => (
-          <li key={schedule.id}>
-            <div className="px-4 py-4 sm:px-6 hover:bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-indigo-600 truncate">Day {schedule.dayNumber}</p>
-                    <div className="ml-2 flex-shrink-0 flex items-center space-x-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                        {schedule.session || "FULL_DAY"}
-                      </span>
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${schedule.ui.badgeClass}`}>
-                        {schedule.ui.badgeText}
-                      </span>
+        {schedules.map((schedule) => {
+          const isAbsentOrExpired =
+            schedule?.ui?.badgeText === "Absent" ||
+            schedule?.status === "absent" ||
+            schedule?.status === "timeout" ||
+            schedule?.status === "expired" ||
+            schedule?.ui?.primaryAction?.kind === "expired-info" ||
+            schedule?.ui?.primaryAction?.kind === "late-request";
+
+          return (
+            <li key={schedule.id}>
+              <div
+                onClick={() => {
+                  if (isAbsentOrExpired && onOpenLateRequest) {
+                    onOpenLateRequest(schedule);
+                  }
+                }}
+                className={`px-4 py-4 sm:px-6 hover:bg-gray-50 ${isAbsentOrExpired ? "cursor-pointer hover:bg-indigo-50/40" : ""}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-indigo-600 truncate">Day {schedule.dayNumber}</p>
+                      <div className="ml-2 flex-shrink-0 flex items-center space-x-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                          {schedule.session || "FULL_DAY"}
+                        </span>
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${schedule.ui.badgeClass}`}>
+                          {schedule.ui.badgeText}
+                        </span>
+                      </div>
                     </div>
-                  </div>
                   <div className="mt-2 sm:flex sm:justify-between">
                     <div className="sm:flex">
                       <p className="flex items-center text-sm font-semibold text-gray-700 mr-6">
@@ -189,7 +205,8 @@ function ScheduleList({
               </div>
             </div>
           </li>
-        ))}
+        );
+      })}
       </ul>
     </div>
   );

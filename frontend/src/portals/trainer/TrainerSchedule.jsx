@@ -556,15 +556,58 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
     // Auto-open Late Attendance Request modal if query param is provided (only once per ID)
     useEffect(() => {
         const openRequestId = searchParams?.get('openRequest') || searchParams?.get('scheduleId');
-        if (openRequestId && filteredSchedules.length > 0 && handledAutoOpenIdRef.current !== openRequestId) {
-            const target = filteredSchedules.find((s) => String(s.id || s._id) === String(openRequestId));
-            if (target) {
-                handledAutoOpenIdRef.current = openRequestId;
-                setSelectedSchedule(target);
-                setShowLateRequestModal(true);
-            }
+        if (!openRequestId || handledAutoOpenIdRef.current === openRequestId) {
+            return;
         }
-    }, [searchParams, filteredSchedules]);
+
+        // 1. Search across all loaded schedule pools (filtered, schedules, pending)
+        const pool = [...(filteredSchedules || []), ...(schedules || []), ...(pendingSchedules || [])];
+        const target = pool.find((s) => {
+            const idStr = String(s?.id || s?._id || s?.scheduleId || s?.rawSchedule?._id || s?.schedule?._id || '');
+            return idStr === String(openRequestId);
+        });
+
+        if (target) {
+            handledAutoOpenIdRef.current = openRequestId;
+            setSelectedSchedule(target);
+            setShowLateRequestModal(true);
+            return;
+        }
+
+        // 2. Fallback: If not found in current month's loaded arrays and loading completed, fetch schedule directly via API
+        if (!loading) {
+            let isCancelled = false;
+            scheduleService.getSchedule(openRequestId)
+                .then((res) => {
+                    if (isCancelled) return;
+                    const rawData = res?.schedule || res?.data || res;
+                    if (rawData && (rawData._id || rawData.id)) {
+                        handledAutoOpenIdRef.current = openRequestId;
+                        const processedList = processCurrentSchedules([rawData]);
+                        const processed = processedList[0] || {
+                            id: rawData._id || rawData.id,
+                            dayNumber: rawData.dayNumber || "1",
+                            college: rawData.collegeId?.name || rawData.collegeName || "Assigned College",
+                            course: rawData.courseId?.title || rawData.courseName || "Course",
+                            session: rawData.session || "FULL_DAY",
+                            timingLabel: rawData.timingLabel || "09:00 AM - 01:00 PM",
+                            dateLabel: rawData.scheduledDate ? new Date(rawData.scheduledDate).toLocaleDateString() : "Scheduled Date",
+                            rawSchedule: rawData,
+                            ui: { primaryAction: { kind: "late-request", label: "Request Attendance" } }
+                        };
+                        setSelectedSchedule(processed);
+                        setShowLateRequestModal(true);
+                    }
+                })
+                .catch((err) => {
+                    console.warn("Could not fetch schedule for late request modal:", err);
+                });
+
+            return () => {
+                isCancelled = true;
+            };
+        }
+    }, [searchParams, filteredSchedules, schedules, pendingSchedules, loading, processCurrentSchedules]);
 
     // Check-In Data
     const [attendanceData, setAttendanceData] = useState({
