@@ -363,6 +363,8 @@ const CreateScheduleModal = ({ open, onClose, onSuccess, associations = {} }) =>
         dayNumber: Number(dayNumber) || 1,
         scheduledDate,
         session,
+        startTime: session === "AN" ? "13:00" : "09:00",
+        endTime: session === "FN" ? "13:00" : "17:00",
         subject: subject || undefined,
       };
 

@@ -1206,7 +1206,7 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
 
     const query = {
       trainerId,
-      status: { $ne: "cancelled" },
+      status: { $nin: ["cancelled", "CANCELLED"] },
       isActive: { $ne: false },
       $or: [
         { scheduledDate: { $gte: startOfDay, $lte: endOfDay } },
@@ -1228,30 +1228,40 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
 
     if (!existingSchedules.length) return null;
 
+    const parseTimeToMinutes = (timeStr, isEnd) => {
+      if (!timeStr) return isEnd ? 17 * 60 : 9 * 60;
+      const str = String(timeStr).trim().toUpperCase();
+      const match = str.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      if (!match) return isEnd ? 17 * 60 : 9 * 60;
+
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10) || 0;
+      const period = match[3] ? match[3].toUpperCase() : null;
+
+      if (period === "PM" && hours < 12) hours += 12;
+      if (period === "AM" && hours === 12) hours = 0;
+
+      return hours * 60 + minutes;
+    };
+
     const getSessionBounds = (sessionType, startStr, endStr) => {
-      if (sessionType === 'FN') return { start: 9 * 60, end: 13 * 60 };
-      if (sessionType === 'AN') return { start: 13 * 60, end: 17 * 60 };
-      if (sessionType === 'FULL_DAY') return { start: 9 * 60, end: 17 * 60 };
-      
-      const parseTimeToMinutes = (timeStr, isEnd) => {
-        if (!timeStr) return isEnd ? 17 * 60 : 9 * 60;
-        const str = String(timeStr).trim().toUpperCase();
-        const match = str.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-        if (!match) return isEnd ? 17 * 60 : 9 * 60;
+      const normalizedSession = String(sessionType || "").trim().toUpperCase();
+      if (normalizedSession === 'FN') return { start: 9 * 60, end: 13 * 60 };
+      if (normalizedSession === 'AN') return { start: 13 * 60, end: 17 * 60 };
 
-        let hours = parseInt(match[1], 10);
-        const minutes = parseInt(match[2], 10) || 0;
-        const period = match[3] ? match[3].toUpperCase() : null;
+      if (startStr && endStr) {
+        const parsedStart = parseTimeToMinutes(startStr, false);
+        const parsedEnd = parseTimeToMinutes(endStr, true);
+        if (parsedStart < parsedEnd) {
+          return { start: parsedStart, end: parsedEnd };
+        }
+      }
 
-        if (period === "PM" && hours < 12) hours += 12;
-        if (period === "AM" && hours === 12) hours = 0;
-
-        return hours * 60 + minutes;
-      };
+      if (normalizedSession === 'FULL_DAY') return { start: 9 * 60, end: 17 * 60 };
       
       return {
-        start: parseTimeToMinutes(startStr, false),
-        end: parseTimeToMinutes(endStr, true)
+        start: 9 * 60,
+        end: 17 * 60
       };
     };
 
@@ -1375,6 +1385,10 @@ const createScheduleFeed = async ({
     ? { ...(folderFields || {}), ...nmFolderFields }
     : folderFields || {};
 
+  const resolvedSession = session || "FULL_DAY";
+  const defaultStartTime = resolvedSession === "AN" ? "13:00" : "09:00";
+  const defaultEndTime = resolvedSession === "FN" ? "13:00" : "17:00";
+
   // Idempotency check: prevent duplicate schedule creation if one already exists
   if (trainerId && collegeId) {
     const existingDuplicate = await findDuplicateScheduleLoader({
@@ -1382,6 +1396,7 @@ const createScheduleFeed = async ({
       trainerId,
       dayNumber,
       scheduledDate,
+      session: resolvedSession,
     });
     if (existingDuplicate) {
       return existingDuplicate;
@@ -1398,9 +1413,9 @@ const createScheduleFeed = async ({
       collegeLocation: college?.location || {},
       dayNumber,
       scheduledDate,
-      startTime: startTime || "09:00",
-      endTime: endTime || "17:00",
-      session: session || "FULL_DAY",
+      startTime: startTime || defaultStartTime,
+      endTime: endTime || defaultEndTime,
+      session: resolvedSession,
       subject,
       venue,
       remarks,
@@ -2527,7 +2542,15 @@ const updateScheduleFeed = async ({
   if (payload?.scheduledDate !== undefined) schedule.scheduledDate = payload.scheduledDate;
   if (payload?.startTime !== undefined) schedule.startTime = payload.startTime;
   if (payload?.endTime !== undefined) schedule.endTime = payload.endTime;
-  if (payload?.session !== undefined) schedule.session = payload.session;
+  if (payload?.session !== undefined) {
+    schedule.session = payload.session;
+    if (payload?.startTime === undefined) {
+      schedule.startTime = payload.session === "AN" ? "13:00" : "09:00";
+    }
+    if (payload?.endTime === undefined) {
+      schedule.endTime = payload.session === "FN" ? "13:00" : "17:00";
+    }
+  }
   
   if (schedule.trainerId && schedule.scheduledDate && (payload?.trainerId !== undefined || payload?.scheduledDate !== undefined || payload?.startTime !== undefined || payload?.endTime !== undefined || payload?.session !== undefined)) {
     const conflictResult = await checkTrainerScheduleConflict({

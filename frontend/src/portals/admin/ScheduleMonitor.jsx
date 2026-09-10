@@ -556,6 +556,7 @@ const ScheduleMonitor = () => {
                     setSelectedSchedule(null);
                 }}
                 schedule={selectedSchedule}
+                associations={associations}
                 trainers={associations.trainers}
                 onSaveSuccess={handleRefetch}
             />

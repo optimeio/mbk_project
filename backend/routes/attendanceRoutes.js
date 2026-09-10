@@ -95,6 +95,10 @@ const {
     normalizeVerificationStatus,
 } = require('../modules/attendance/attendance.sideeffects');
 
+const {
+    uploadTrainerSessionFileToDrive,
+} = require('../services/trainerSessionDriveUploadService');
+
 const ALLOWED_GEO_RANGE_METERS = Math.max(
     0,
     Number.parseInt(process.env.ATTENDANCE_GEO_ALLOWED_RANGE_METERS || '300', 10) || 300
@@ -5203,11 +5207,31 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         attendance.geoVerificationStatus = 'pending';
         attendance.checkOutVerificationStatus = 'PENDING_CHECKOUT';
 
+        // Helper: attempt Drive upload and return previewUrl; fall back to local path if Drive not enabled
+        const tryDriveUpload = async (file, folderType) => {
+            try {
+                const result = await uploadTrainerSessionFileToDrive({
+                    trainer: schedule.trainerId,
+                    collegeId: schedule.collegeId?._id || schedule.collegeId,
+                    scheduleId: schedule._id,
+                    attendanceId: attendance._id,
+                    dayNumber: schedule.dayNumber || 1,
+                    session: session || schedule.session || 'FN',
+                    folderType,
+                    file,
+                });
+                return result?.previewUrl || result?.fileUrl || file.path || null;
+            } catch (driveErr) {
+                console.warn('[LATE-REQUEST] Drive upload warning:', driveErr.message);
+                return file.path || null;
+            }
+        };
+
         // 1. Store Check-In Evidence (if new file uploaded)
         if (checkInFile) {
-            const checkInPath = checkInFile.path;
-            attendance.imageUrl = checkInPath;
-            attendance.checkInPhoto = checkInPath;
+            const storedUrl = await tryDriveUpload(checkInFile, 'checkIn');
+            attendance.imageUrl = storedUrl || checkInFile.path;
+            attendance.checkInPhoto = storedUrl || checkInFile.path;
             attendance.checkInTime = attendance.checkInTime || new Date().toISOString();
             if (!attendance.checkIn) {
                 attendance.checkIn = {
@@ -5224,26 +5248,35 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         // 2. Store Student Attendance Evidence (if new file uploaded)
         if (studentAttendanceFile) {
             const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
+            const isExcel = ['.xls', '.xlsx', '.csv'].includes(docExt);
+            const storedUrl = await tryDriveUpload(studentAttendanceFile, 'attendance');
             if (docExt === '.pdf') {
-                attendance.attendancePdfUrl = studentAttendanceFile.path;
-            } else if (['.xls', '.xlsx', '.csv'].includes(docExt)) {
-                attendance.attendanceExcelUrl = studentAttendanceFile.path;
+                attendance.attendancePdfUrl = storedUrl || studentAttendanceFile.path;
+            } else if (isExcel) {
+                attendance.attendanceExcelUrl = storedUrl || studentAttendanceFile.path;
             } else {
-                attendance.studentsPhotoUrl = studentAttendanceFile.path;
+                attendance.studentsPhotoUrl = storedUrl || studentAttendanceFile.path;
             }
         }
 
-        // 3. Store Student Activity Photos (if new files uploaded)
+        // 3. Store Student Activity Photos - APPEND new photos, do NOT overwrite existing
         if (activityFiles && activityFiles.length > 0) {
-            const newActivityPaths = activityFiles.map((file) => file.path);
-            attendance.activityPhotos = newActivityPaths;
+            const uploadedActivityUrls = [];
+            for (const actFile of activityFiles) {
+                const storedUrl = await tryDriveUpload(actFile, 'studentActivities');
+                uploadedActivityUrls.push(storedUrl || actFile.path);
+            }
+            // Append to existing photos — do not replace to avoid Drive duplicates
+            const existing = Array.isArray(attendance.activityPhotos) ? attendance.activityPhotos : [];
+            attendance.activityPhotos = [...existing, ...uploadedActivityUrls];
         }
 
         // 4. Store Check-Out Evidence (if new file uploaded)
         if (checkOutFile) {
-            const checkOutPath = checkOutFile.path;
-            attendance.checkOutGeoImageUrl = checkOutPath;
-            attendance.checkOutGeoImageUrls = [checkOutPath];
+            const storedUrl = await tryDriveUpload(checkOutFile, 'checkOut');
+            const checkOutStoredPath = storedUrl || checkOutFile.path;
+            attendance.checkOutGeoImageUrl = checkOutStoredPath;
+            attendance.checkOutGeoImageUrls = [checkOutStoredPath];
             attendance.checkOutTime = new Date().toISOString();
             attendance.checkOut = {
                 time: new Date(),
@@ -5254,7 +5287,7 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                     lng: schedule.collegeLocation?.lng || null,
                 },
                 photos: [{
-                    url: checkOutPath,
+                    url: checkOutStoredPath,
                     uploadedAt: new Date(),
                     validationStatus: 'pending',
                 }]

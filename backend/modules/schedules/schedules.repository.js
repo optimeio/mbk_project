@@ -210,7 +210,7 @@ const getScheduleByIdForDelete = async ({ scheduleId } = {}) =>
 const createScheduleDocument = async ({ schedulePayload } = {}) =>
   Schedule.create(schedulePayload);
 
-const findDuplicateSchedule = async ({ collegeId, trainerId, dayNumber, scheduledDate } = {}) => {
+const findDuplicateSchedule = async ({ collegeId, trainerId, dayNumber, scheduledDate, session } = {}) => {
   if (!collegeId || !trainerId) return null;
   const mongoose = require("mongoose");
   if (!mongoose.Types.ObjectId.isValid(collegeId) || !mongoose.Types.ObjectId.isValid(trainerId)) {
@@ -221,7 +221,14 @@ const findDuplicateSchedule = async ({ collegeId, trainerId, dayNumber, schedule
     collegeId,
     trainerId,
     dayNumber: Number(dayNumber) || 1,
+    status: { $nin: ["cancelled", "CANCELLED"] },
+    isActive: { $ne: false },
   };
+
+  if (session) {
+    query.session = session;
+  }
+
   if (scheduledDate) {
     const d = new Date(scheduledDate);
     if (!isNaN(d.getTime())) {

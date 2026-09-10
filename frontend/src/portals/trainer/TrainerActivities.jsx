@@ -214,6 +214,31 @@ export default function TrainerActivities() {
   const searchParams = useSearchParams();
   const targetScheduleId = searchParams?.get('scheduleId') || '';
 
+  // Helper: Is current IST time past 1:00 PM (FN session close)?
+  const isFNSessionClosedNow = () => {
+    const now = new Date();
+    const istHour = Number(
+      new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).format(now)
+    );
+    return istHour >= 13;
+  };
+
+  // Helper: Detect if a schedule session is FN
+  const isSessionFN = (info) => {
+    const s = String(info?.session || info?.sessionType || '').toUpperCase().trim();
+    if (s === 'FN') return true;
+    // Derive from startTime (e.g. '09:00 AM')
+    const startRaw = String(info?.startTime || info?.time || '').trim().toUpperCase().split('-')[0].trim();
+    const match = startRaw.match(/(\d{1,2}):(\d{2})(?:\s*([AP]M))?/);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      if (match[3] === 'PM' && h < 12) h += 12;
+      if (match[3] === 'AM' && h === 12) h = 0;
+      return h < 13;
+    }
+    return false;
+  };
+
   const checkTodayAttendanceStatus = useCallback(async () => {
     try {
       const statusUrl = targetScheduleId
@@ -245,6 +270,16 @@ export default function TrainerActivities() {
         } else {
           setStep(2);
         }
+      } else if (res.hasScheduleToday && res.scheduleInfo) {
+        // Not yet clocked in — check if FN session is already closed
+        const fnOnly = isSessionFN(res.scheduleInfo);
+        if (fnOnly && isFNSessionClosedNow()) {
+          toast('FN session closed at 1:00 PM. Redirecting to your dashboard.', {
+            icon: '🕐',
+            duration: 4000,
+          });
+          setTimeout(() => { if (!cancelledRef.current) router.push('/trainer/dashboard'); }, 1500);
+        }
       }
     } catch (err) {
       if (cancelledRef.current) return;
@@ -253,7 +288,7 @@ export default function TrainerActivities() {
     } finally {
       if (!cancelledRef.current) setScheduleChecked(true);
     }
-  }, [targetScheduleId]);
+  }, [targetScheduleId, router]);
 
   const fetchCurrentAssignment = useCallback(async () => {
     setLoading(true);
@@ -284,6 +319,16 @@ export default function TrainerActivities() {
     captureLocation();
     return () => { cancelledRef.current = true; };
   }, [captureLocation, checkTodayAttendanceStatus, fetchCurrentAssignment]);
+
+  // Auto-redirect to dashboard when no schedule today
+  useEffect(() => {
+    if (scheduleChecked && hasScheduleToday === false) {
+      const timer = setTimeout(() => {
+        if (!cancelledRef.current) router.push('/trainer/dashboard');
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [scheduleChecked, hasScheduleToday, router]);
 
   // Validate geofence
   useEffect(() => {
@@ -523,7 +568,7 @@ export default function TrainerActivities() {
     );
   }
 
-  // No schedule gate
+  // No schedule gate – auto-redirect to dashboard after brief display
   if (hasScheduleToday === false) {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12">
@@ -535,7 +580,7 @@ export default function TrainerActivities() {
             No Active Schedule for Today
           </h1>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
-            You do not have an active session assigned for today. If you have an unassigned class, please contact your SPOC coordinator.
+            You do not have an active session assigned for today. Redirecting to your dashboard…
           </p>
           <div className="mt-6 flex items-center justify-center gap-3">
             <button
@@ -543,7 +588,7 @@ export default function TrainerActivities() {
               onClick={() => router.push('/trainer/dashboard')}
               className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition shadow-sm"
             >
-              Back to Dashboard
+              Go to Dashboard
             </button>
             <button
               type="button"

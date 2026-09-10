@@ -287,7 +287,10 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
   const sessionEndObj = parseScheduleEndTime(scheduleDateRaw, endTimeVal);
 
   const startHour = sessionStartObj ? sessionStartObj.getHours() : 9;
-  const sessionLabel = startHour < 13 ? "FN Session" : "AN Session";
+  // FN = Forenoon (starts before 13:00), AN = Afternoon (starts 13:00+)
+  const isFNSession = startHour < 13;
+  const sessionLabel = isFNSession ? "FN Session" : "AN Session";
+  const sessionType = schedule.session ? String(schedule.session).toUpperCase().trim() : (isFNSession ? "FN" : "AN");
 
   // 1-hour check-in cutoff window (e.g. 9:00 AM -> cutoff at 10:00 AM)
   const checkInCutoffObj = sessionStartObj
@@ -295,7 +298,20 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     : null;
 
   const isPastCutoffTime = isToday && checkInCutoffObj ? now > checkInCutoffObj : false;
-  const isSessionClosedByTime = isToday && sessionEndObj ? now >= sessionEndObj : false;
+
+  // FN session hard-closes at 13:00 IST regardless of stored endTime
+  // AN/FULL_DAY session uses parsed sessionEndObj
+  let isSessionClosedByTime = false;
+  if (isToday) {
+    if (isFNSession || sessionType === "FN") {
+      // FN hard-close: 1:00 PM (13:00)
+      const fnCloseHour = new Date(now);
+      fnCloseHour.setHours(13, 0, 0, 0);
+      isSessionClosedByTime = now >= fnCloseHour;
+    } else if (sessionEndObj) {
+      isSessionClosedByTime = now >= sessionEndObj;
+    }
+  }
 
   const diffDays = scheduleDay && today
     ? Math.floor((today.getTime() - scheduleDay.getTime()) / DAY_IN_MS)
@@ -319,11 +335,19 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     )
   );
 
+  // Detect submitted late-request from any possible field location
+  const lateRequestAlreadySubmitted = (
+    schedule.isLateRequest === true ||
+    String(schedule.lateRequestStatus || "").toLowerCase() === "pending" ||
+    schedule.attendance?.isLateRequest === true ||
+    String(schedule.attendance?.lateRequestStatus || "").toLowerCase() === "pending"
+  );
+
   let primaryAction = null;
 
   if (!isScheduleActionable) {
     primaryAction = null;
-  } else if (schedule.isLateRequest || schedule.attendance?.isLateRequest || schedule.attendance?.lateRequestStatus === "pending") {
+  } else if (lateRequestAlreadySubmitted) {
     primaryAction = {
       kind: "late-request-pending",
       label: "Attendance Requested (Pending Approval)",
