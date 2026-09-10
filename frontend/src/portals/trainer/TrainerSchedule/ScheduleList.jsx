@@ -94,6 +94,12 @@ function ScheduleList({
                       </p>
                     </div>
                   ) : null}
+                  {schedule.rescheduleReason ? (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 w-fit">
+                      <span className="font-semibold">🔁 Rescheduled:</span>
+                      <span>{schedule.rescheduleReason}</span>
+                    </div>
+                  ) : null}
                   <div className="mt-3 flex items-center justify-between">
                     {schedule.ui.primaryAction?.kind === "checkin" ? (
                       <button

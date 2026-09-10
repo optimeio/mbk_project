@@ -748,6 +748,10 @@ const deriveTrainerScheduleStatus = (schedule, attendance) => {
     return "COMPLETED";
   }
 
+  if (rawStatus === "COMPLETED") {
+    return TRAINER_SCHEDULE_DEFAULT_STATUS;
+  }
+
   if (attendanceVerification === "approved") {
     return "inprogress";
   }
@@ -1292,6 +1296,7 @@ const createScheduleFeed = async ({
   sendInAppNotificationLoader,
   createTrainerAdminChannelsLoader = autoCreateTrainerAdminChannels,
   invalidateTrainerScheduleCachesLoader = invalidateTrainerScheduleCaches,
+  findDuplicateScheduleLoader = findDuplicateSchedule,
 } = {}) => {
   const {
     trainerId,
@@ -1372,7 +1377,7 @@ const createScheduleFeed = async ({
 
   // Idempotency check: prevent duplicate schedule creation if one already exists
   if (trainerId && collegeId) {
-    const existingDuplicate = await findDuplicateSchedule({
+    const existingDuplicate = await findDuplicateScheduleLoader({
       collegeId,
       trainerId,
       dayNumber,

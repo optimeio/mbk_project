@@ -162,7 +162,11 @@ export const getScheduleBadge = (schedule) => {
     return { label: "Absent", className: "bg-rose-100 text-rose-800 border border-rose-200" };
   }
 
-  if (schedule.status === "scheduled") {
+  if (normalizedStatus === "rescheduled" || schedule.status === "RESCHEDULED" || (schedule.rescheduleReason && !isCompleted && !hasCompletedCheckOut)) {
+    return { label: "Rescheduled", className: "bg-amber-100 text-amber-800 border border-amber-300" };
+  }
+
+  if (schedule.status === "scheduled" || normalizedStatus === "assigned") {
     return { label: "Scheduled", className: "bg-indigo-50 text-indigo-700" };
   }
 
@@ -339,7 +343,11 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     primaryAction = hasCompletedCheckOut
       ? null
       : { kind: "checkout", label: "Check Out" };
-  } else if (normalizedScheduleStatus === "scheduled") {
+  } else if (
+    normalizedScheduleStatus === "scheduled" ||
+    normalizedScheduleStatus === "rescheduled" ||
+    normalizedScheduleStatus === "assigned"
+  ) {
     if (isSessionClosedByTime && !isCompleted) {
       primaryAction = {
         kind: "expired-info",

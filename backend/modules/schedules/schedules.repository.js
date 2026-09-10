@@ -211,6 +211,12 @@ const createScheduleDocument = async ({ schedulePayload } = {}) =>
   Schedule.create(schedulePayload);
 
 const findDuplicateSchedule = async ({ collegeId, trainerId, dayNumber, scheduledDate } = {}) => {
+  if (!collegeId || !trainerId) return null;
+  const mongoose = require("mongoose");
+  if (!mongoose.Types.ObjectId.isValid(collegeId) || !mongoose.Types.ObjectId.isValid(trainerId)) {
+    return null;
+  }
+
   const query = {
     collegeId,
     trainerId,

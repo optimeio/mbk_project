@@ -44,7 +44,11 @@ const attendanceSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Present', 'Absent', 'Leave', 'Late', 'Pending', 'cancelled'],
+        enum: [
+            'Present', 'Absent', 'Leave', 'Late', 'Pending', 'cancelled', 'canceled',
+            'present', 'absent', 'leave', 'late', 'pending',
+            'clocked_in', 'completed', 'COMPLETED', 'approved', 'rejected', 'in_progress', 'IN_PROGRESS'
+        ],
         default: 'Absent', // Legacy Support
     },
     session: {
@@ -79,7 +83,12 @@ const attendanceSchema = new mongoose.Schema({
     },
     attendanceStatus: {
         type: String,
-        enum: ['PRESENT', 'ABSENT'],
+        enum: [
+            'PRESENT', 'ABSENT', 'LATE', 'LEAVE', 'PENDING', 'CANCELLED',
+            'Present', 'Absent', 'Late', 'Leave', 'Pending', 'Cancelled',
+            'approved', 'rejected', 'in_progress', 'IN_PROGRESS', 'pending'
+        ],
+        default: null,
     },
     studentsPresent: {
         type: Number,

@@ -733,6 +733,14 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                         </div>
                                                     </div>
 
+                                                    {/* Reschedule Banner */}
+                                                    {day.rescheduleReason && (
+                                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800 flex items-start gap-2 shadow-sm mb-4">
+                                                            <span className="font-bold whitespace-nowrap">🔁 Rescheduled:</span>
+                                                            <span>{day.rescheduleReason}</span>
+                                                        </div>
+                                                    )}
+
                                                     {/* Check In / Check Out Timeline (if exists) */}
                                                     {(day.checkInTime || day.checkOutTime) && (
                                                         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
