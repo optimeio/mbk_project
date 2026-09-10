@@ -5290,15 +5290,41 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
     }
 });
 
-// GET /attendance/late-requests - Admin / SPOC list all late attendance requests
+// GET /attendance/late-requests - Admin / SPOC list all late & pending attendance requests
 router.get('/late-requests', authenticate, async (req, res) => {
     try {
         const { status, collegeId, trainerId, page = 1, limit = 25 } = req.query;
-        const filter = { isLateRequest: true };
+        const filter = {};
 
-        if (status && status !== 'all') {
-            filter.lateRequestStatus = status;
+        if (status === 'pending') {
+            filter.$or = [
+                { lateRequestStatus: 'pending' },
+                { isLateRequest: true, lateRequestStatus: { $nin: ['approved', 'rejected'] } },
+                { verificationStatus: 'pending' },
+                { status: { $in: ['Pending', 'pending'] } }
+            ];
+        } else if (status === 'approved') {
+            filter.$or = [
+                { lateRequestStatus: 'approved' },
+                { verificationStatus: 'approved' },
+                { status: { $in: ['Present', 'present'] } }
+            ];
+        } else if (status === 'rejected') {
+            filter.$or = [
+                { lateRequestStatus: 'rejected' },
+                { verificationStatus: 'rejected' },
+                { status: { $in: ['Absent', 'absent'] } }
+            ];
+        } else {
+            // 'all' or empty
+            filter.$or = [
+                { isLateRequest: true },
+                { lateRequestStatus: { $in: ['pending', 'approved', 'rejected'] } },
+                { verificationStatus: { $in: ['pending', 'approved', 'rejected'] } },
+                { status: { $in: ['Pending', 'pending'] } }
+            ];
         }
+
         if (collegeId) {
             filter.collegeId = collegeId;
         }
@@ -5365,7 +5391,7 @@ router.put('/late-requests/:id/verify', authenticate, async (req, res) => {
 
         attendance.lateRequestStatus = isApprove ? 'approved' : 'rejected';
         attendance.lateRequestAdminRemarks = remarks || null;
-        attendance.verificationComment = remarks || (isApprove ? 'Late request approved by Admin' : 'Late request rejected by Admin');
+        attendance.verificationComment = remarks || (isApprove ? 'Attendance request approved by Admin' : 'Attendance request rejected by Admin');
         attendance.verifiedBy = req.user.id;
         attendance.verifiedAt = new Date();
 
@@ -5394,8 +5420,10 @@ router.put('/late-requests/:id/verify', authenticate, async (req, res) => {
                 if (isApprove) {
                     schedule.status = 'completed';
                     schedule.dayStatus = 'completed';
+                    schedule.attendanceStatus = 'approved';
                 } else {
                     schedule.dayStatus = 'pending';
+                    schedule.attendanceStatus = 'rejected';
                 }
                 schedule.remarks = remarks || schedule.remarks;
                 await schedule.save();

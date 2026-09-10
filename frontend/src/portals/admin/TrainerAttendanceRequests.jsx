@@ -145,7 +145,7 @@ export default function TrainerAttendanceRequests() {
       key: "lateRequestSubmittedAt",
       width: 160,
       render: (val, record) => {
-        const dateVal = val || record.createdAt;
+        const dateVal = val || record.checkIn?.time || record.checkInTime || record.createdAt;
         return (
           <div>
             <div style={{ fontWeight: 600, fontSize: 13, color: "#1f2937" }}>
@@ -218,26 +218,29 @@ export default function TrainerAttendanceRequests() {
       },
     },
     {
-      title: "Reason",
+      title: "Reason / Topic",
       dataIndex: "lateRequestReason",
       key: "lateRequestReason",
       width: 200,
-      render: (val) => (
-        <Tooltip title={val}>
-          <div
-            style={{
-              fontSize: 12,
-              color: "#4b5563",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {val || "-"}
-          </div>
-        </Tooltip>
-      ),
+      render: (val, record) => {
+        const displayVal = val || (record.syllabus ? `Topic: ${record.syllabus}` : "Attendance verification requested");
+        return (
+          <Tooltip title={displayVal}>
+            <div
+              style={{
+                fontSize: 12,
+                color: "#4b5563",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {displayVal}
+            </div>
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Proofs",
@@ -276,12 +279,12 @@ export default function TrainerAttendanceRequests() {
       dataIndex: "lateRequestStatus",
       key: "lateRequestStatus",
       width: 120,
-      render: (val) => {
-        const norm = String(val || "pending").toLowerCase();
-        if (norm === "approved") {
+      render: (val, record) => {
+        const norm = String(val || record.verificationStatus || record.status || "pending").toLowerCase();
+        if (norm === "approved" || norm === "present") {
           return <Tag color="success" icon={<CheckCircle2 size={12} style={{ marginRight: 3 }} />}>Approved</Tag>;
         }
-        if (norm === "rejected") {
+        if (norm === "rejected" || norm === "absent") {
           return <Tag color="error" icon={<XCircle size={12} style={{ marginRight: 3 }} />}>Rejected</Tag>;
         }
         return <Tag color="warning" icon={<Clock size={12} style={{ marginRight: 3 }} />}>Pending Review</Tag>;
@@ -458,7 +461,7 @@ export default function TrainerAttendanceRequests() {
             {/* Trainer Justification Reason */}
             <div>
               <Text strong style={{ fontSize: 13, color: "#374151" }}>
-                Trainer Reason for Late Request:
+                Trainer Reason / Topic:
               </Text>
               <div
                 style={{
@@ -472,7 +475,7 @@ export default function TrainerAttendanceRequests() {
                   lineHeight: 1.5,
                 }}
               >
-                {selectedRecord.lateRequestReason || "No reason provided"}
+                {selectedRecord.lateRequestReason || (selectedRecord.syllabus ? `Topic: ${selectedRecord.syllabus}` : "Attendance verification requested")}
               </div>
             </div>
 

@@ -23,20 +23,76 @@ import {
   CalendarDays,
   X,
   BookOpen,
-  Activity
+  Activity,
+  Maximize2,
+  Sparkles,
+  Info,
+  ShieldCheck,
+  ChevronRight,
+  UploadCloud
 } from 'lucide-react';
-import { Upload, Button, message } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+
 const getApiErrorMessage = (err, fallback = 'Something went wrong.') => {
   return err?.response?.message || err?.data?.message || err?.message || fallback;
 };
 
 const STEPS = [
-  { num: 1, label: 'Check-In',           icon: MapPin },
-  { num: 2, label: 'Student Attendance',  icon: Users },
-  { num: 3, label: 'Student Activities',  icon: Activity },
-  { num: 4, label: 'Check-Out',           icon: LogOut },
+  { num: 1, label: 'Check-In',           icon: MapPin,   color: 'from-emerald-500 to-teal-600' },
+  { num: 2, label: 'Student Attendance',  icon: Users,    color: 'from-amber-500 to-orange-600' },
+  { num: 3, label: 'Student Activities',  icon: Activity, color: 'from-sky-500 to-indigo-600' },
+  { num: 4, label: 'Check-Out',           icon: LogOut,   color: 'from-rose-500 to-red-600' },
 ];
+
+const REFERENCE_GUIDES = {
+  1: {
+    title: 'Reference: Geotagged Check-In Selfie',
+    subtitle: 'Sample photo taken upon arrival at college entrance with GPS Map Camera timestamp.',
+    image: '/reference-images/checkin-reference.jpg',
+    badge: 'Check-In Photo Format',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+    points: [
+      'Take a clear, smiling selfie in front of the college building/entrance.',
+      'Ensure GPS Map Camera overlay is enabled (showing College Name, Date, Time like 10:24 AM, and Coordinates).',
+      'Wear your official Trainer ID badge visibly.',
+    ],
+  },
+  2: {
+    title: 'Reference: Signed Student Attendance Sheet',
+    subtitle: 'Official college attendance sheet format with signatures.',
+    image: '/reference-images/student-attendance-reference.jpg',
+    badge: 'Attendance Sheet Format',
+    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+    points: [
+      'Include Header: College Name, Trainer Name, Course Name, Department & Date.',
+      'Clear student list with Roll No, Name, and Present / Absent markings.',
+      'Mandatory Signatures: Trainer Signature, SCOP Signature, and HOD Signature with official seal.',
+    ],
+  },
+  3: {
+    title: 'Reference: Classroom Teaching & Activities',
+    subtitle: 'Photo capturing the live classroom session and syllabus progress.',
+    image: '/reference-images/students-activity-reference.jpg',
+    badge: 'Classroom Activity Photo',
+    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800',
+    points: [
+      'Show the trainer actively teaching at the blackboard or projector.',
+      'Include students seated and engaged in the classroom.',
+      'GPS Map Camera overlay should show timestamp (e.g. 1:25 PM) and college details.',
+    ],
+  },
+  4: {
+    title: 'Reference: Geotagged Check-Out Selfie',
+    subtitle: 'Sample photo taken at the end of the day when completing sessions.',
+    image: '/reference-images/checkout-reference.jpg',
+    badge: 'Check-Out Photo Format',
+    badgeColor: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
+    points: [
+      'Take a clear selfie at the college entrance when departing.',
+      'GPS Map Camera overlay must show evening time (e.g. 5:24 PM) and college coordinates.',
+      'Ensure all student attendance and activity logs were submitted before checking out.',
+    ],
+  },
+};
 
 const formatTime = (value) => {
   if (!value) return '';
@@ -49,8 +105,8 @@ const formatTime = (value) => {
 
 const compressImage = async (imageFile) => {
   const options = {
-    maxSizeMB: 1, // Target size under 1MB
-    maxWidthOrHeight: 1280, // Web-optimized dimensions
+    maxSizeMB: 1,
+    maxWidthOrHeight: 1280,
     useWebWorker: true,
   };
   try {
@@ -61,36 +117,10 @@ const compressImage = async (imageFile) => {
       lastModified: Date.now(),
     });
   } catch (error) {
-    console.warn("Client-side compression failed, using original file:", error);
+    console.warn("Client-side compression fallback to original:", error);
     return imageFile;
   }
 };
-
-const StudentCard = React.memo(({ student, index, onToggle }) => {
-  const isPresent = student.status === 'Present';
-  return (
-    <div
-      onClick={() => onToggle(index)}
-      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition select-none ${
-        isPresent
-          ? "bg-emerald-50/55 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
-          : "bg-card border-border text-slate-600 dark:text-slate-400 shadow-sm"
-      }`}
-    >
-      <div>
-        <p className="text-xs font-mono font-bold text-slate-400 dark:text-slate-500">{student.rollNo}</p>
-        <p className="text-base font-bold text-slate-800 dark:text-slate-200">{student.name}</p>
-      </div>
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-        isPresent
-          ? "bg-emerald-100 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
-          : "bg-muted dark:bg-slate-900 border-border text-slate-500 dark:text-slate-400"
-      }`}>
-        {student.status}
-      </span>
-    </div>
-  );
-});
 
 export default function TrainerActivities() {
   const { currentUser } = useAuth();
@@ -100,12 +130,16 @@ export default function TrainerActivities() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Lightbox Modal state
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [lightboxTitle, setLightboxTitle] = useState('');
+
   // Schedule gate
   const [hasScheduleToday, setHasScheduleToday] = useState(null);
   const [scheduleInfo, setScheduleInfo] = useState(null);
   const [scheduleChecked, setScheduleChecked] = useState(false);
 
-  // Assignment
+  // Assignment & Geofence
   const [assignment, setAssignment] = useState(null);
   const [assignmentError, setAssignmentError] = useState(null);
   const [distance, setDistance] = useState(null);
@@ -119,32 +153,32 @@ export default function TrainerActivities() {
   // Session
   const [attendanceId, setAttendanceId] = useState(null);
 
-  // ── Step 1: Check-In ──────────────────────────────────
-  const [checkInFile, setCheckInFile] = useState([]);
+  // Step 1: Check-In
+  const [checkInFile, setCheckInFile] = useState(null);
   const [checkInPreview, setCheckInPreview] = useState(null);
 
-  // ── Step 2: Student Attendance ────────────────────────
+  // Step 2: Student Attendance
   const [attendanceFile, setAttendanceFile] = useState(null);
   const [attendanceFilePreview, setAttendanceFilePreview] = useState(null);
 
-  // ── Step 3: Student Activities ────────────────────────
+  // Step 3: Student Activities
   const [activityTitle, setActivityTitle] = useState('');
   const [activityDesc, setActivityDesc] = useState('');
   const [activityImages, setActivityImages] = useState([]);
   const [activityPreviews, setActivityPreviews] = useState([]);
 
-  // ── Step 4: Check-Out ─────────────────────────────────
-  const [checkOutFile, setCheckOutFile] = useState([]);
+  // Step 4: Check-Out
+  const [checkOutFile, setCheckOutFile] = useState(null);
   const [checkOutPreview, setCheckOutPreview] = useState(null);
 
   // Summary
   const [summaryData, setSummaryData] = useState(null);
 
-  // --- Location Handling ---
+  // Location Handling
   const captureLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationStatus("error");
-      setLocationError("Geolocation is not supported by this device.");
+      setLocationError("Geolocation is not supported by this browser.");
       return;
     }
 
@@ -160,36 +194,22 @@ export default function TrainerActivities() {
         };
         setCoords(currentCoords);
         setLocationStatus("ready");
-        toast.success("GPS Location verified");
       },
       (err) => {
         const msgs = {
-          1: "Location permissions denied. Please enable GPS permissions.",
-          2: "GPS signal lost. Please check device location settings.",
-          3: "Location check timed out. Retrying...",
+          1: "Location access denied. Please enable GPS permissions in your browser.",
+          2: "GPS signal unavailable. Please ensure location is enabled on your device.",
+          3: "GPS request timed out. Retrying…",
         };
         setLocationStatus("error");
         setLocationError(msgs[err.code] || "Could not fetch GPS coordinates.");
-        // Set fallback coordinates (0, 0) so the process doesn't block
         setCoords({ lat: 0, lng: 0, accuracy: 0 });
-        console.warn("Location acquisition failed, using fallback coordinates (0, 0)");
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, []);
 
-  // A stable ref that tracks whether the component has unmounted.
-  // Passed into async functions so they skip setState after unmount.
   const cancelledRef = useRef(false);
-
-  // Fetch assignment, today's attendance status & coordinates on mount
-  useEffect(() => {
-    cancelledRef.current = false;
-    fetchCurrentAssignment();
-    checkTodayAttendanceStatus();
-    captureLocation();
-    return () => { cancelledRef.current = true; };
-  }, [captureLocation, checkTodayAttendanceStatus]);
 
   const searchParams = useSearchParams();
   const targetScheduleId = searchParams?.get('scheduleId') || '';
@@ -202,11 +222,9 @@ export default function TrainerActivities() {
       const res = await api.get(statusUrl);
       if (cancelledRef.current) return;
 
-      // Always read the schedule gate from the API response
       if (typeof res.hasScheduleToday === 'boolean') {
         setHasScheduleToday(res.hasScheduleToday);
       } else {
-        // Older backend without schedule gate — allow access by default
         setHasScheduleToday(true);
       }
       if (res.scheduleInfo) {
@@ -215,8 +233,6 @@ export default function TrainerActivities() {
 
       if (res.success && res.clockedIn) {
         if (res.attendanceId) setAttendanceId(res.attendanceId);
-        // Map backend steps (2=clocked-in, 3=attendance done, 4=activities done, 5=clocked-out, 6=summary)
-        // to our frontend steps (1=check-in, 2=attendance, 3=activities, 4=check-out, 5=summary)
         if (res.step) {
           const mapped = Math.max(2, Math.min(5, res.step - 1));
           setStep(mapped);
@@ -224,29 +240,22 @@ export default function TrainerActivities() {
             setStep(5);
             setSummaryData({ clockOutTime: res.checkOutTime, duration: res.durationMinutes || 0 });
           } else if (res.step === 3) {
-            toast.success('Already checked-in today. Redirected to Student Attendance.');
+            toast.success('Already checked-in today. Resuming at Student Attendance.');
           }
         } else {
-          setStep(2); // already clocked-in -> go to attendance step
+          setStep(2);
         }
       }
     } catch (err) {
       if (cancelledRef.current) return;
-      console.warn("Could not check today's clock-in status:", err);
+      console.warn("Could not check today's status:", err);
       setHasScheduleToday(true);
     } finally {
       if (!cancelledRef.current) setScheduleChecked(true);
     }
   }, [targetScheduleId]);
 
-  // Validation loop whenever coordinates change
-  useEffect(() => {
-    if (coords && assignment) {
-      validateLocationAgainstGeofence();
-    }
-  }, [coords, assignment]);
-
-  const fetchCurrentAssignment = async () => {
+  const fetchCurrentAssignment = useCallback(async () => {
     setLoading(true);
     setAssignmentError(null);
     try {
@@ -260,344 +269,192 @@ export default function TrainerActivities() {
         throw new Error(res.message || 'No active assignment found');
       }
     } catch (err) {
-      const message = err.response?.message || err.data?.message || err.message || 'Unable to load trainer assignment.';
-      console.error('Failed to load current trainer assignment:', message);
+      const msg = err.response?.message || err.data?.message || err.message || 'Unable to load trainer assignment.';
       setAssignment(null);
-      setAssignmentError(message);
-      toast.error('Unable to load your current assignment. Please contact admin.');
+      setAssignmentError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [targetScheduleId]);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    fetchCurrentAssignment();
+    checkTodayAttendanceStatus();
+    captureLocation();
+    return () => { cancelledRef.current = true; };
+  }, [captureLocation, checkTodayAttendanceStatus, fetchCurrentAssignment]);
+
+  // Validate geofence
+  useEffect(() => {
+    if (coords && assignment) {
+      const validate = async () => {
+        try {
+          const res = await api.post('/location/validate', {
+            latitude: coords.lat,
+            longitude: coords.lng
+          });
+          if (res.success) {
+            setIsInside(res.isInside);
+            setDistance(res.distanceMeters);
+          }
+        } catch (err) {
+          setIsInside(false);
+          if (err.response?.distanceMeters != null) {
+            setDistance(err.response.distanceMeters);
+          }
+        }
+      };
+      validate();
+    }
+  }, [coords, assignment]);
+
+  // Generic image upload handler
+  const handleSingleImageUpload = async (file, setFile, setPreview) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (JPG, PNG, WebP).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be under 10MB.');
+      return;
+    }
+
+    const tId = toast.loading('Optimizing image…');
+    try {
+      const compressed = await compressImage(file);
+      setFile(compressed);
+      setPreview(URL.createObjectURL(compressed));
+      toast.success('Image ready!', { id: tId });
+    } catch {
+      setFile(file);
+      setPreview(URL.createObjectURL(file));
+      toast.dismiss(tId);
+    }
+  };
+
+  // Step 1: Check-In Handler
+  const handleClockIn = async () => {
+    if (!checkInFile) {
+      toast.error('Please take or upload a check-in photo.');
+      return;
+    }
+    setLoading(true);
+    const formData = new FormData();
+    const lat = coords?.lat || assignment?.latitude || 0;
+    const lng = coords?.lng || assignment?.longitude || 0;
+    formData.append('latitude', lat);
+    formData.append('longitude', lng);
+    formData.append('timestamp', new Date().toISOString());
+    if (targetScheduleId) formData.append('scheduleId', targetScheduleId);
+    formData.append('check_in_image', checkInFile, checkInFile.name);
+    formData.append('address', assignment?.collegeName ? `${assignment.collegeName} Campus` : '');
+
+    try {
+      const res = await api.post('/attendance/clock-in', formData);
+      if (res.success) {
+        setAttendanceId(res.attendanceId);
+        toast.success('Check-In recorded successfully!');
+        setCheckInFile(null);
+        setCheckInPreview(null);
+        setStep(2);
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Check-in failed. Please try again.'));
     } finally {
       setLoading(false);
     }
   };
 
-  const validateLocationAgainstGeofence = async () => {
-    if (!coords) return;
-    try {
-      const res = await api.post('/location/validate', {
-        latitude: coords.lat,
-        longitude: coords.lng
-      });
-      if (res.success) {
-        setIsInside(res.isInside);
-        setDistance(res.distanceMeters);
-      }
-    } catch (err) {
-      setIsInside(false);
-      if (err.response?.distanceMeters != null) {
-        setDistance(err.response.distanceMeters);
-      }
-    }
-  };
-
-  // --- Camera Operations ---
-  const startCamera = async () => {
-    setCapturedImageUrl(null);
-    setCapturedImageBlob(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-        // Explicitly start playback — required on some browsers to avoid black screen
-        try {
-          await videoRef.current.play();
-        } catch (playErr) {
-          console.warn("Video autoplay prevented:", playErr);
-        }
-      }
-      setCameraStream(stream);
-      setCameraActive(true);
-    } catch (err) {
-      console.error(err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toast.error("Camera permission denied. Please allow camera access in your browser settings and reload.");
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        toast.error("No camera found on this device.");
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        toast.error("Camera is already in use by another app. Please close it and try again.");
-      } else {
-        toast.error("Could not access device camera. Please check permissions.");
-      }
-    }
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
-
-    const W = videoRef.current.videoWidth || 640;
-    const H = videoRef.current.videoHeight || 480;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext('2d');
-
-    // Mirror horizontally to undo the CSS -scale-x-100 flip so the saved image is correct
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.drawImage(videoRef.current, -W, 0, W, H);
-    ctx.restore();
-
-    // --- Geo-tag overlay strip ---
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-
-    const latStr = coords ? coords.lat.toFixed(6) : 'N/A';
-    const lngStr = coords ? coords.lng.toFixed(6) : 'N/A';
-    const accStr = coords ? `±${Math.round(coords.accuracy)}m` : '';
-    const locName = assignment?.collegeName || 'Current Location';
-
-    // Strip height proportional to image
-    const stripH = Math.round(H * 0.18);
-    const stripY = H - stripH;
-    const pad = Math.round(W * 0.025);
-    const baseFontSize = Math.max(11, Math.round(W * 0.022));
-
-    // Semi-transparent dark background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.68)';
-    ctx.fillRect(0, stripY, W, stripH);
-
-    // Subtle teal left accent bar
-    ctx.fillStyle = '#10b981';
-    ctx.fillRect(0, stripY, 4, stripH);
-
-    // Map pin icon (drawn with canvas arcs)
-    const iconX = pad + 10;
-    const iconY = stripY + stripH * 0.35;
-    const iconR = baseFontSize * 0.65;
-    ctx.beginPath();
-    ctx.arc(iconX, iconY, iconR, 0, 2 * Math.PI);
-    ctx.fillStyle = '#10b981';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(iconX, iconY, iconR * 0.45, 0, 2 * Math.PI);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-    // Pin tail
-    ctx.beginPath();
-    ctx.moveTo(iconX - iconR * 0.5, iconY + iconR * 0.7);
-    ctx.lineTo(iconX + iconR * 0.5, iconY + iconR * 0.7);
-    ctx.lineTo(iconX, iconY + iconR * 1.8);
-    ctx.closePath();
-    ctx.fillStyle = '#10b981';
-    ctx.fill();
-
-    const textX = iconX + iconR * 2.5;
-
-    // College / location name — prominent
-    ctx.font = `bold ${baseFontSize * 1.1}px Inter, Arial, sans-serif`;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(locName, textX, stripY + stripH * 0.3);
-
-    // GPS coordinates line
-    ctx.font = `${baseFontSize * 0.88}px Inter, monospace`;
-    ctx.fillStyle = '#10b981';
-    ctx.fillText(`${latStr}, ${lngStr}  ${accStr}`, textX, stripY + stripH * 0.54);
-
-    // Date + time line
-    ctx.font = `${baseFontSize * 0.82}px Inter, Arial, sans-serif`;
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(`${dateStr}  ${timeStr}`, textX, stripY + stripH * 0.76);
-
-    // "GEO VERIFIED" badge on right
-    const badgeText = coords ? 'GPS VERIFIED' : 'NO GPS';
-    const badgeColor = coords ? '#10b981' : '#ef4444';
-    const bW = baseFontSize * 5.8;
-    const bH = baseFontSize * 1.4;
-    const bX = W - bW - pad;
-    const bY = stripY + (stripH - bH) / 2;
-    ctx.fillStyle = badgeColor;
-    ctx.beginPath();
-    ctx.roundRect(bX, bY, bW, bH, 4);
-    ctx.fill();
-    ctx.font = `bold ${baseFontSize * 0.78}px Inter, Arial, sans-serif`;
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.fillText(badgeText, bX + bW / 2, bY + bH * 0.68);
-    ctx.textAlign = 'left';
-
-    canvas.toBlob((blob) => {
-      setCapturedImageBlob(blob);
-      setCapturedImageUrl(URL.createObjectURL(blob));
-      stopCamera();
-    }, 'image/jpeg', 0.95);
-  };
-
-  const stopCamera = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
-    setCameraActive(false);
-  };
-
-  const beforeUploadImg = (file, setFileList, setPreview) => {
-    if (!file.type.startsWith('image/')) { message.error('Only image files allowed!'); return Upload.LIST_IGNORE; }
-    if (file.size > 10 * 1024 * 1024) { message.error('Image must be ≤10MB!'); return Upload.LIST_IGNORE; }
-    return new Promise(async (resolve) => {
-      try {
-        message.loading({ content: 'Optimizing…', key: 'compress', duration: 0 });
-        const compressed = await compressImage(file);
-        message.success({ content: 'Image optimized!', key: 'compress', duration: 2 });
-        const obj = { uid: file.uid, name: file.name, status: 'done', originFileObj: compressed, size: compressed.size };
-        setFileList([obj]); setPreview(URL.createObjectURL(compressed)); resolve(false);
-      } catch { message.destroy('compress'); resolve(false); }
-    });
-  };
-
-
-  // --- Step 1: Check-In ---
-  const handleClockIn = async () => {
-    if (checkInFile.length === 0) { message.error('Please upload a check-in image.'); return; }
-    setLoading(true);
-    const formData = new FormData();
-    const lat = coords?.lat || assignment?.latitude || 0;
-    const lng = coords?.lng || assignment?.longitude || 0;
-    formData.append('latitude', lat); formData.append('longitude', lng);
-    formData.append('timestamp', new Date().toISOString());
-    if (targetScheduleId) formData.append('scheduleId', targetScheduleId);
-    formData.append('check_in_image', checkInFile[0].originFileObj, checkInFile[0].name);
-    formData.append('address', assignment?.collegeName ? `${assignment.collegeName} Campus` : '');
-    try {
-      const res = await api.post('/attendance/clock-in', formData);
-      if (res.success) {
-        setAttendanceId(res.attendanceId);
-        toast.success('Check-In recorded!');
-        setCheckInFile([]); setCheckInPreview(null);
-        setStep(2);
-      }
-    } catch (err) { toast.error(getApiErrorMessage(err, 'Check-in failed.')); }
-    finally { setLoading(false); }
-  };
-
-  // --- Step 2: Student Attendance ---
+  // Step 2: Student Attendance Handler
   const handleAttendanceSubmit = async (e) => {
     e.preventDefault();
-    if (!attendanceFile) { toast.error('Please select an attendance file.'); return; }
+    if (!attendanceFile) {
+      toast.error('Please upload the student attendance sheet.');
+      return;
+    }
     setLoading(true);
     const formData = new FormData();
     formData.append('attendanceExcel', attendanceFile);
     formData.append('attendanceId', attendanceId);
     const lat = coords?.lat || assignment?.latitude || 0;
     const lng = coords?.lng || assignment?.longitude || 0;
-    formData.append('latitude', lat); formData.append('longitude', lng);
+    formData.append('latitude', lat);
+    formData.append('longitude', lng);
+
     try {
       const res = await api.post('/student-attendance/upload', formData);
-      if (res.success) { toast.success(res.message || 'Attendance saved!'); setStep(3); }
-    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to process attendance file.')); }
-    finally { setLoading(false); }
+      if (res.success) {
+        toast.success(res.message || 'Student attendance saved!');
+        setStep(3);
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to process attendance file.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
-
-
-  // --- Activity Log Submissions ---
+  // Step 3: Student Activity Photos Handler
   const handleActivityFileChange = async (e) => {
-    const files = Array.from(e.target.files);
-    
-    // Validate total count
+    const files = Array.from(e.target.files || []);
     if (activityImages.length + files.length > 5) {
-      toast.error("You can upload a maximum of 5 activity images");
+      toast.error("You can upload a maximum of 5 activity photos.");
       return;
     }
 
-    // Validate size and compress images
-    const compressedFiles = [];
-    const thumbnailUrls = [];
-
-    const compToastId = toast.loading("Optimizing activity photos...");
-
+    const tId = toast.loading("Optimizing activity photos…");
     try {
+      const compressedList = [];
+      const previewList = [];
+
       for (const file of files) {
-        // Size validation
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error(`File ${file.name} exceeds 5MB size limit!`, { id: compToastId });
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`File ${file.name} exceeds 10MB!`);
           continue;
         }
-
-        // Compress
         const compressed = await compressImage(file);
-        compressedFiles.push(compressed);
-
-        // Generate canvas thumbnail
-        const thumbUrl = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-              const canvas = document.createElement("canvas");
-              const ctx = canvas.getContext("2d");
-              const maxThumbSize = 150;
-              let width = img.width;
-              let height = img.height;
-              if (width > height) {
-                if (width > maxThumbSize) {
-                  height = Math.round((height * maxThumbSize) / width);
-                  width = maxThumbSize;
-                }
-              } else {
-                if (height > maxThumbSize) {
-                  width = Math.round((width * maxThumbSize) / height);
-                  height = maxThumbSize;
-                }
-              }
-              canvas.width = width;
-              canvas.height = height;
-              ctx.drawImage(img, 0, 0, width, height);
-              canvas.toBlob((blob) => {
-                if (blob) {
-                  resolve(URL.createObjectURL(blob));
-                } else {
-                  resolve(event.target.result);
-                }
-              }, "image/jpeg", 0.7);
-            };
-            img.src = event.target.result;
-          };
-          reader.readAsDataURL(file);
-        });
-        
-        thumbnailUrls.push(thumbUrl);
+        compressedList.push(compressed);
+        previewList.push(URL.createObjectURL(compressed));
       }
-      
-      setActivityImages(prev => [...prev, ...compressedFiles]);
-      setActivityPreviews(prev => [...prev, ...thumbnailUrls]);
-      toast.success("Photos optimized successfully!", { id: compToastId });
+
+      setActivityImages((prev) => [...prev, ...compressedList]);
+      setActivityPreviews((prev) => [...prev, ...previewList]);
+      toast.success("Photos added!", { id: tId });
     } catch (err) {
       console.error(err);
-      toast.error("Error optimizing photos", { id: compToastId });
+      toast.error("Error processing photos", { id: tId });
     }
   };
 
   const removeActivityImage = (idx) => {
-    setActivityImages(prev => prev.filter((_, i) => i !== idx));
-    setActivityPreviews(prev => prev.filter((_, i) => i !== idx));
+    setActivityImages((prev) => prev.filter((_, i) => i !== idx));
+    setActivityPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleActivitySubmit = async (e) => {
     e.preventDefault();
-    if (!activityTitle || !activityDesc) {
-      toast.error("Please fill in activity title and description");
+    if (!activityTitle.trim() || !activityDesc.trim()) {
+      toast.error("Please enter activity topic title and details.");
       return;
     }
     if (activityImages.length === 0) {
-      toast.error("Please upload at least 1 activity image as verification");
+      toast.error("Please upload at least 1 classroom activity photo.");
       return;
     }
 
     setLoading(true);
     const formData = new FormData();
     formData.append('attendanceId', attendanceId);
-    formData.append('title', activityTitle);
-    formData.append('description', activityDesc);
+    formData.append('title', activityTitle.trim());
+    formData.append('description', activityDesc.trim());
     const lat = coords?.lat || assignment?.latitude || 0;
     const lng = coords?.lng || assignment?.longitude || 0;
     formData.append('latitude', lat);
     formData.append('longitude', lng);
 
-    activityImages.forEach(img => {
+    activityImages.forEach((img) => {
       formData.append('activityPhotos', img);
     });
 
@@ -605,78 +462,93 @@ export default function TrainerActivities() {
       const res = await api.post('/student-activities', formData);
       if (res.success) {
         toast.success('Activities logged successfully!');
-        setStep(4); // Proceed to Check-Out
+        setStep(4);
       }
     } catch (err) {
-      const msg = getApiErrorMessage(err, "Failed to submit activities.");
-      toast.error(msg);
+      toast.error(getApiErrorMessage(err, "Failed to submit activities."));
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Step 4: Check-Out ---
+  // Step 4: Check-Out Handler
   const handleClockOut = async () => {
-    if (checkOutFile.length === 0) { toast.error('Please upload a check-out image.'); return; }
+    if (!checkOutFile) {
+      toast.error('Please take or upload a check-out photo.');
+      return;
+    }
     setLoading(true);
     const formData = new FormData();
-    formData.append('check_out_image', checkOutFile[0].originFileObj, checkOutFile[0].name);
+    formData.append('check_out_image', checkOutFile, checkOutFile.name);
     formData.append('attendanceId', attendanceId);
     const lat = coords?.lat || assignment?.latitude || 0;
     const lng = coords?.lng || assignment?.longitude || 0;
-    formData.append('latitude', lat); formData.append('longitude', lng);
+    formData.append('latitude', lat);
+    formData.append('longitude', lng);
     formData.append('timestamp', new Date().toISOString());
     formData.append('address', assignment?.collegeName ? `${assignment.collegeName} Campus` : '');
+
     try {
       const res = await api.post('/attendance/clock-out', formData);
       if (res.success) {
         toast.success('Check-Out recorded!');
         setSummaryData({ clockOutTime: res.clockOutTime, duration: res.durationMinutes });
-        setCheckOutFile([]); setCheckOutPreview(null);
+        setCheckOutFile(null);
+        setCheckOutPreview(null);
         setStep(5);
       }
-    } catch (err) { toast.error(getApiErrorMessage(err, 'Check-out failed.')); }
-    finally { setLoading(false); }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Check-out failed. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Show spinner while schedule check hasn't resolved yet
+  const currentGuide = REFERENCE_GUIDES[step];
+
+  // Loading state
   if (!scheduleChecked) {
     return (
-      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">Checking today's schedule…</p>
+      <section className="mx-auto max-w-5xl px-4 py-16 flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 animate-pulse">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">Checking Today's Attendance Schedule</h3>
+            <p className="text-xs text-slate-500 mt-1">Verifying active assignments and GPS geofence…</p>
+          </div>
         </div>
       </section>
     );
   }
 
-  // Block access if no schedule is assigned for today
+  // No schedule gate
   if (hasScheduleToday === false) {
     return (
-      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900/50 p-8 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/40">
-            <CalendarDays className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+      <section className="mx-auto max-w-3xl px-4 py-12">
+        <div className="rounded-3xl border border-amber-200 bg-white dark:bg-slate-900 dark:border-amber-900/50 p-8 text-center shadow-lg">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600">
+            <CalendarDays className="h-8 w-8" />
           </div>
-          <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-amber-900 dark:text-amber-100">
-            No Schedule for Today
+          <h1 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">
+            No Active Schedule for Today
           </h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            You do not have a scheduled session assigned for today. Please contact your coordinator to get your schedule updated.
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+            You do not have an active session assigned for today. If you have an unassigned class, please contact your SPOC coordinator.
           </p>
-          <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <div className="mt-6 flex items-center justify-center gap-3">
             <button
               type="button"
               onClick={() => router.push('/trainer/dashboard')}
-              className="inline-flex items-center justify-center rounded-full bg-slate-900 dark:bg-slate-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 dark:hover:bg-slate-600"
+              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold transition shadow-sm"
             >
               Back to Dashboard
             </button>
             <button
               type="button"
               onClick={() => { setScheduleChecked(false); checkTodayAttendanceStatus(); }}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 px-6 py-3 text-sm font-semibold text-amber-700 dark:text-amber-400 transition hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold transition inline-flex items-center gap-2"
             >
               <RefreshCw className="h-4 w-4" />
               Refresh
@@ -687,358 +559,669 @@ export default function TrainerActivities() {
     );
   }
 
-  if (!assignment && !loading) {
-    return (
-      <section className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-900/50 p-8 text-center shadow-sm">
-          <h1 className="text-3xl font-extrabold tracking-tight text-rose-950 dark:text-rose-200">Assignment Required</h1>
-          <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            {assignmentError || 'Unable to load your current assignment. Please contact your administrator.'}
-          </p>
-          <button
-            type="button"
-            onClick={fetchCurrentAssignment}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-600"
-          >
-            Retry Assignment
-          </button>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 text-slate-800 dark:text-slate-100">
+    <div className="mx-auto max-w-7xl px-3 py-4 sm:px-6 lg:px-8 space-y-6">
 
-      {/* Header Title */}
-      <div className="mb-8 border-b border-border pb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Daily Workflow</h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            {assignment?.collegeName ? `${assignment.collegeName} — Complete all 4 steps.` : "Complete all 4 steps for today's visit."}
-          </p>
-        </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0f3f5c]/10 border border-[#1a547a]/20 text-[#0f3f5c] dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-          <Building className="h-6 w-6" />
-        </div>
-      </div>
-
-      {/* Step Progress Bar */}
-      {step < 5 && (
-        <div className="mb-8 rounded-2xl bg-card border border-border p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider mb-4 text-slate-500 dark:text-slate-400">Step Progress</p>
-          <div className="flex items-center">
-            {STEPS.map((s, idx) => {
-              const done = step > s.num; const active = step === s.num; const Icon = s.icon;
-              return (
-                <React.Fragment key={s.num}>
-                  <div className="flex flex-col items-center flex-shrink-0">
-                    <div className={`h-10 w-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                      active ? 'bg-gradient-to-br from-emerald-500 to-cyan-500 border-emerald-400 text-white scale-110 shadow-lg shadow-emerald-500/20'
-                      : done ? 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-muted border-border text-slate-400 dark:text-slate-500'
-                    }`}>
-                      {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                    </div>
-                    <span className={`text-xs mt-1.5 font-semibold hidden sm:block text-center leading-tight max-w-[72px] ${
-                      active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
-                    }`}>{s.label}</span>
-                  </div>
-                  {idx < STEPS.length - 1 && (
-                    <div className={`h-[3px] flex-1 mx-1 rounded-full transition-all duration-500 ${step > s.num ? 'bg-emerald-400' : 'bg-border'}`} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 1: CHECK-IN */}
-      {step === 1 && (
-        <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-b border-border px-6 py-5 flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-              <MapPin className="h-5 w-5" />
+      {/* ── Top Header Bar ──────────────────────────────────────── */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#0f3f5c] to-[#1a6b9e] text-white flex items-center justify-center shadow-md shrink-0">
+              <Activity className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Step 1 — Check-In</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Upload your geotagged check-in photo to record arrival.</p>
-            </div>
-          </div>
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl border border-border bg-muted/30 dark:bg-slate-900 p-3 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">GPS Status</p>
-                <p className={`mt-1.5 font-bold text-sm ${locationStatus === 'ready' ? 'text-emerald-600 dark:text-emerald-400' : locationStatus === 'locating' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                  {locationStatus === 'ready' ? 'Ready ✓' : locationStatus === 'locating' ? 'Acquiring…' : 'Unavailable'}
-                </p>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#0f3f5c] dark:text-cyan-400">
+                  TRAINER DAILY ATTENDANCE &amp; ACTIVITIES
+                </span>
+                <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-400">
+                  Live Session
+                </span>
               </div>
-              <div className="rounded-xl border border-border bg-muted/30 dark:bg-slate-900 p-3 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Coordinates</p>
-                <p className="mt-1.5 font-bold text-sm text-slate-800 dark:text-slate-200 break-all">
-                  {coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : '—'}
-                </p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/30 dark:bg-slate-900 p-3 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Distance</p>
-                <p className={`mt-1.5 font-bold text-sm ${isInside ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                  {distance != null ? `${Math.round(distance)}m ${isInside ? '✓' : ''}` : '—'}
-                </p>
-              </div>
-            </div>
-            {locationError && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-800 dark:text-amber-200">{locationError}</p>
-              </div>
-            )}
-            <div className="space-y-3">
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Check-In Image <span className="text-rose-500">*</span></p>
-              <Upload fileList={checkInFile} onChange={({ fileList }) => setCheckInFile(fileList)}
-                beforeUpload={(file) => beforeUploadImg(file, setCheckInFile, setCheckInPreview)}
-                maxCount={1} listType="picture" showUploadList={{ showPreviewIcon: false, showRemoveIcon: true }}
-                className="w-full" onRemove={() => { setCheckInFile([]); setCheckInPreview(null); }}>
-                <Button icon={<UploadOutlined />} size="large" block>Upload / Take Photo</Button>
-              </Upload>
-              {checkInPreview && (
-                <div className="flex justify-center mt-3">
-                  <div className="relative">
-                    <img loading="lazy" src={checkInPreview} alt="Check-In Preview"
-                      className="max-w-[280px] w-full max-h-52 object-cover rounded-xl border border-border shadow" />
-                    <button type="button" onClick={() => { setCheckInFile([]); setCheckInPreview(null); }}
-                      className="absolute -top-2 -right-2 h-7 w-7 flex items-center justify-center rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-md transition">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="pt-2 flex justify-center">
-              <button onClick={handleClockIn} disabled={loading || checkInFile.length === 0}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-bold text-sm px-8 py-3.5 rounded-xl hover:opacity-95 disabled:opacity-50 transition shadow-lg">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirm Check-In
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 2: STUDENT ATTENDANCE */}
-      {step === 2 && (
-        <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-b border-border px-6 py-5 flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Step 2 — Student Attendance</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Upload attendance as Excel, PDF, or classroom photo.</p>
-            </div>
-            <span className="ml-auto inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
-              Checked-In ✓
-            </span>
-          </div>
-          <form onSubmit={handleAttendanceSubmit} className="p-6 space-y-6">
-            <div>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Attendance File <span className="text-rose-500">*</span></p>
-              <label className="block border-2 border-dashed border-orange-300 dark:border-orange-800 hover:border-orange-500 dark:hover:border-orange-600 transition-colors rounded-2xl p-8 text-center bg-orange-50/20 dark:bg-slate-900/40 cursor-pointer relative">
-                <input type="file" accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]; if (!f) return;
-                    setAttendanceFile(f);
-                    setAttendanceFilePreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <span className="p-2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 rounded-xl"><FileSpreadsheet className="h-5 w-5" /></span>
-                  <span className="p-2 bg-amber-100 dark:bg-amber-950/60 text-amber-600 rounded-xl"><FileCheck className="h-5 w-5" /></span>
-                  <span className="p-2 bg-rose-100 dark:bg-rose-950/60 text-rose-600 rounded-xl"><Camera className="h-5 w-5" /></span>
-                </div>
-                {attendanceFile ? (
-                  <div className="space-y-1">
-                    <p className="text-base font-bold text-slate-800 dark:text-white">{attendanceFile.name}</p>
-                    <p className="text-xs text-slate-500">{(attendanceFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                    <span className="text-xs text-orange-600 font-semibold hover:underline">Click to change</span>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Drag &amp; drop or click to upload</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Supports Excel (.xlsx, .csv), PDF, or Classroom Photo — up to 15MB</p>
-                  </div>
-                )}
-              </label>
-              {attendanceFilePreview && (
-                <div className="flex justify-center mt-4">
-                  <div className="relative">
-                    <img loading="lazy" src={attendanceFilePreview} alt="Attendance Preview"
-                      className="max-w-[280px] w-full max-h-48 object-cover rounded-xl border border-border shadow" />
-                    <button type="button" onClick={() => { setAttendanceFile(null); setAttendanceFilePreview(null); }}
-                      className="absolute -top-2 -right-2 h-7 w-7 flex items-center justify-center rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-md transition">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="flex justify-center pt-2 border-t border-border">
-              <button type="submit" disabled={loading || !attendanceFile}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-sm px-8 py-3.5 rounded-xl hover:opacity-95 disabled:opacity-50 transition shadow-lg">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Submit Attendance
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* STEP 3: STUDENT ACTIVITIES */}
-      {step === 3 && (
-        <form onSubmit={handleActivitySubmit} className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border-b border-border px-6 py-5 flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-cyan-100 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Step 3 — Student Activities</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Record syllabus progress and upload verification photos.</p>
-            </div>
-          </div>
-          <div className="p-6 space-y-5">
-            <div className="grid gap-1.5">
-              <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Activity Title / Syllabus Topic <span className="text-rose-500">*</span></label>
-              <input type="text" placeholder="e.g. Python OOP Workshop Day 3" value={activityTitle}
-                onChange={(e) => setActivityTitle(e.target.value)}
-                className="rounded-xl border border-border bg-muted/10 dark:bg-slate-950/20 px-4 py-3 text-base text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-sm" />
-            </div>
-            <div className="grid gap-1.5">
-              <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Description / Syllabus Details <span className="text-rose-500">*</span></label>
-              <textarea placeholder="Summarize teaching topics, student exercises, outcomes…" rows={4} value={activityDesc}
-                onChange={(e) => setActivityDesc(e.target.value)}
-                className="rounded-xl border border-border bg-muted/10 dark:bg-slate-950/20 px-4 py-3 text-base text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none shadow-sm resize-none" />
-            </div>
-            <div className="space-y-3">
-              <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                Activity Photos <span className="text-rose-500">*</span>{' '}
-                <span className="text-slate-400 font-normal text-xs">(max 5)</span>
-              </label>
-              {activityPreviews.length > 0 && (
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-                  {activityPreviews.map((p, idx) => (
-                    <div key={`${p}-${idx}`} className="relative aspect-square rounded-xl bg-muted border border-border overflow-hidden shadow-sm group">
-                      <img loading="lazy" src={p} alt={`Activity ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button type="button" onClick={() => removeActivityImage(idx)}
-                        className="absolute top-1.5 right-1.5 h-6 w-6 flex items-center justify-center rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow transition opacity-0 group-hover:opacity-100"
-                        aria-label="Remove photo"><X className="h-3.5 w-3.5" /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {activityImages.length < 5 && (
-                <label className="block border-2 border-dashed border-border hover:border-cyan-400 dark:hover:border-cyan-600 transition rounded-xl p-6 text-center bg-card cursor-pointer relative">
-                  <input type="file" multiple accept="image/*" onChange={handleActivityFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  <ImageIcon className="h-8 w-8 text-cyan-500 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Click or drag to upload activity photos</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {activityImages.length > 0 ? `${activityImages.length}/5 uploaded — ${5 - activityImages.length} more allowed` : 'Up to 5 images, max 10MB each'}
-                  </p>
-                </label>
-              )}
-            </div>
-            <div className="flex justify-center pt-2 border-t border-border">
-              <button type="submit" disabled={loading}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold text-sm px-8 py-3.5 rounded-xl hover:opacity-95 disabled:opacity-50 transition shadow-lg">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Submit Activities
-              </button>
-            </div>
-          </div>
-        </form>
-      )}
-
-      {/* STEP 4: CHECK-OUT */}
-      {step === 4 && (
-        <div className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-rose-500/10 to-red-500/10 border-b border-border px-6 py-5 flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400">
-              <LogOut className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Step 4 — Check-Out</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Upload your check-out photo to complete today's visit.</p>
-            </div>
-          </div>
-          <div className="p-6 space-y-6">
-            <div className="space-y-3">
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Check-Out Image <span className="text-rose-500">*</span></p>
-              <Upload fileList={checkOutFile} onChange={({ fileList }) => setCheckOutFile(fileList)}
-                beforeUpload={(file) => beforeUploadImg(file, setCheckOutFile, setCheckOutPreview)}
-                maxCount={1} listType="picture" showUploadList={{ showPreviewIcon: false, showRemoveIcon: true }}
-                className="w-full" onRemove={() => { setCheckOutFile([]); setCheckOutPreview(null); }}>
-                <Button icon={<UploadOutlined />} size="large" block>Upload / Take Photo</Button>
-              </Upload>
-              {checkOutPreview && (
-                <div className="flex justify-center mt-3">
-                  <div className="relative">
-                    <img loading="lazy" src={checkOutPreview} alt="Check-Out Preview"
-                      className="max-w-[280px] w-full max-h-52 object-cover rounded-xl border border-border shadow" />
-                    <button type="button" onClick={() => { setCheckOutFile([]); setCheckOutPreview(null); }}
-                      className="absolute -top-2 -right-2 h-7 w-7 flex items-center justify-center rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-md transition">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="pt-2 flex justify-center border-t border-border">
-              <button onClick={handleClockOut} disabled={loading || checkOutFile.length === 0}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-rose-500 to-red-600 text-white font-bold text-sm px-8 py-3.5 rounded-xl hover:opacity-95 disabled:opacity-50 transition shadow-lg">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                Confirm Check-Out
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 5: SUMMARY */}
-      {step === 5 && (
-        <div className="rounded-2xl bg-card border border-emerald-200 dark:border-emerald-900 p-8 text-center space-y-6 shadow-sm">
-          <div className="h-16 w-16 bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full flex items-center justify-center mx-auto text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 className="h-9 w-9" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white">Daily Visit Completed!</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
-              All 4 steps — check-in, attendance, activities, and check-out — have been recorded.
-            </p>
-          </div>
-          <div className="max-w-sm mx-auto grid grid-cols-2 gap-4 pt-2">
-            <div className="p-4 rounded-xl bg-muted/10 dark:bg-slate-950/20 border border-border text-center shadow-sm">
-              <Clock className="h-5 w-5 text-cyan-600 dark:text-cyan-400 mx-auto mb-1" />
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Duration</p>
-              <p className="text-xl font-extrabold text-slate-800 dark:text-slate-200 mt-1">{summaryData?.duration || 0} mins</p>
-            </div>
-            <div className="p-4 rounded-xl bg-muted/10 dark:bg-slate-950/20 border border-border text-center shadow-sm">
-              <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mx-auto mb-1" />
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Check-Out</p>
-              <p className="text-base font-bold text-slate-800 dark:text-slate-200 mt-1.5">
-                {summaryData?.clockOutTime ? formatTime(summaryData.clockOutTime) : 'Done'}
+              <h1 className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white tracking-tight">
+                {assignment?.collegeName || scheduleInfo?.college || "College Visit Workflow"}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {assignment?.courseName || scheduleInfo?.course ? `Course: ${assignment?.courseName || scheduleInfo?.course} • ` : ''}
+                Complete all 4 daily steps with geotagged verification photos.
               </p>
             </div>
           </div>
-          <div className="pt-4">
-            <button onClick={() => router.push('/trainer/dashboard')}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-5 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition hover:bg-muted shadow-sm">
-              Back to Dashboard
+
+          {/* Quick GPS Status Pill */}
+          <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl p-2.5 px-3.5">
+            <div className={`h-3 w-3 rounded-full shrink-0 ${locationStatus === 'ready' ? 'bg-emerald-500 animate-pulse' : locationStatus === 'locating' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'}`} />
+            <div className="text-xs">
+              <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <span>GPS {locationStatus === 'ready' ? 'Verified' : locationStatus === 'locating' ? 'Acquiring…' : 'Disabled'}</span>
+                {isInside && <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.2 rounded">On Campus ✓</span>}
+              </div>
+              <div className="text-[10px] font-mono text-slate-500">
+                {coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)} (±${Math.round(coords.accuracy || 0)}m)` : 'Checking GPS…'}
+              </div>
+            </div>
+            <button
+              onClick={captureLocation}
+              title="Refresh GPS"
+              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 4-Step Progress Navigation ──────────────────────────── */}
+      {step < 5 && (
+        <section className="rounded-2xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 sm:p-5 shadow-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            {STEPS.map((s) => {
+              const isDone = step > s.num;
+              const isActive = step === s.num;
+              const Icon = s.icon;
+
+              return (
+                <div
+                  key={s.num}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                    isActive
+                      ? 'bg-slate-950 text-white border-slate-950 shadow-md scale-[1.02] dark:bg-white dark:text-slate-950 dark:border-white'
+                      : isDone
+                      ? 'bg-emerald-50/60 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-300'
+                      : 'bg-slate-50/50 border-slate-200/70 text-slate-400 dark:bg-slate-800/30 dark:border-slate-800 dark:text-slate-500'
+                  }`}
+                >
+                  <div
+                    className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm ${
+                      isActive
+                        ? 'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-950'
+                        : isDone
+                        ? 'bg-emerald-200/80 text-emerald-800 dark:bg-emerald-800 dark:text-emerald-100'
+                        : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                    }`}
+                  >
+                    {isDone ? <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-300" /> : <Icon className="h-4 w-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-[10px] uppercase font-bold tracking-wider ${isActive ? 'text-slate-300 dark:text-slate-600' : isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                      Step {s.num} {isDone ? '• Done' : isActive ? '• Active' : ''}
+                    </p>
+                    <p className="text-xs sm:text-sm font-bold truncate leading-tight mt-0.5">
+                      {s.label}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Main Content Area: Left (Action Form) + Right (Reference Guide) ── */}
+      {step < 5 && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+          {/* ── Left Column (7 cols on lg): Step Form ──────────────── */}
+          <div className="lg:col-span-7 space-y-6">
+
+            {/* STEP 1: CHECK-IN */}
+            {step === 1 && (
+              <div className="rounded-2xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center font-bold">
+                      <MapPin className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 dark:text-white">Step 1 — Trainer Check-In</h2>
+                      <p className="text-xs text-slate-500">Record your campus arrival with GPS-verified selfie.</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    Required
+                  </span>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  {/* Location Info Grid */}
+                  <div className="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">GPS Status</span>
+                      <span className={`text-xs font-bold mt-0.5 inline-block ${locationStatus === 'ready' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {locationStatus === 'ready' ? 'Verified ✓' : 'Checking…'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Latitude / Longitude</span>
+                      <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200 mt-0.5 block truncate">
+                        {coords ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Campus Geofence</span>
+                      <span className={`text-xs font-bold mt-0.5 inline-block ${isInside ? 'text-emerald-600' : 'text-slate-700 dark:text-slate-300'}`}>
+                        {distance != null ? `${Math.round(distance)}m ${isInside ? '(Inside ✓)' : ''}` : 'Target College'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {locationError && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                      <span>{locationError}</span>
+                    </div>
+                  )}
+
+                  {/* Image Upload Area */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
+                      Check-In Photo (With GPS Tag) <span className="text-rose-500">*</span>
+                    </label>
+
+                    {checkInPreview ? (
+                      <div className="relative rounded-2xl border border-slate-200 bg-slate-50 dark:bg-slate-800/40 p-3 text-center">
+                        <div className="relative max-w-sm mx-auto rounded-xl overflow-hidden shadow-md">
+                          <img
+                            src={checkInPreview}
+                            alt="Check-In Preview"
+                            className="w-full max-h-72 object-cover rounded-xl"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { setCheckInFile(null); setCheckInPreview(null); }}
+                            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-lg transition"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2 font-medium">
+                          Photo ready for verification. Click below to submit check-in.
+                        </p>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-emerald-500 dark:border-slate-700 dark:hover:border-emerald-400 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-emerald-50/20 dark:bg-slate-800/20 transition group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="user"
+                          onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
+                          className="hidden"
+                        />
+                        <div className="h-12 w-12 rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
+                          <Camera className="h-6 w-6" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          Take Check-In Selfie or Upload Photo
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                          Supports GPS Map Camera photos (JPG, PNG). See reference guide on right.
+                        </p>
+                        <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-sm group-hover:bg-emerald-700">
+                          <UploadCloud className="h-3.5 w-3.5" />
+                          Select / Capture Image
+                        </span>
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                    <button
+                      onClick={handleClockIn}
+                      disabled={loading || !checkInFile}
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      Confirm Check-In
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: STUDENT ATTENDANCE */}
+            {step === 2 && (
+              <form onSubmit={handleAttendanceSubmit} className="rounded-2xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center font-bold">
+                      <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 dark:text-white">Step 2 — Student Attendance</h2>
+                      <p className="text-xs text-slate-500">Upload the official signed student attendance sheet.</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    Checked-In ✓
+                  </span>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
+                      Attendance Sheet Document / Photo <span className="text-rose-500">*</span>
+                    </label>
+
+                    {attendanceFilePreview ? (
+                      <div className="relative rounded-2xl border border-slate-200 bg-slate-50 dark:bg-slate-800/40 p-3 text-center">
+                        <div className="relative max-w-sm mx-auto rounded-xl overflow-hidden shadow-md">
+                          <img
+                            src={attendanceFilePreview}
+                            alt="Attendance Sheet Preview"
+                            className="w-full max-h-72 object-cover rounded-xl"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { setAttendanceFile(null); setAttendanceFilePreview(null); }}
+                            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-lg transition"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-600 font-bold mt-2">
+                          {attendanceFile.name} ({(attendanceFile.size / 1024 / 1024).toFixed(2)} MB)
+                        </p>
+                      </div>
+                    ) : attendanceFile ? (
+                      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 dark:bg-amber-950/30 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <FileSpreadsheet className="h-6 w-6 text-amber-600" />
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">{attendanceFile.name}</p>
+                            <p className="text-xs text-slate-500">{(attendanceFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setAttendanceFile(null); setAttendanceFilePreview(null); }}
+                          className="text-xs font-bold text-rose-600 hover:text-rose-700"
+                        >
+                          Change File
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,image/*"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            setAttendanceFile(f);
+                            setAttendanceFilePreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+                          }}
+                          className="hidden"
+                        />
+                        <div className="h-12 w-12 rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
+                          <FileSpreadsheet className="h-6 w-6" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          Upload Signed Student Attendance Sheet
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                          Supports Photo of Physical Sheet, PDF, Excel (.xlsx, .csv).
+                        </p>
+                        <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shadow-sm group-hover:bg-amber-700">
+                          <UploadCloud className="h-3.5 w-3.5" />
+                          Select Attendance File / Photo
+                        </span>
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={loading || !attendanceFile}
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      Submit Attendance Sheet
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: STUDENT ACTIVITIES */}
+            {step === 3 && (
+              <form onSubmit={handleActivitySubmit} className="rounded-2xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-400 flex items-center justify-center font-bold">
+                      <BookOpen className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 dark:text-white">Step 3 — Student Activities &amp; Syllabus</h2>
+                      <p className="text-xs text-slate-500">Record syllabus topic covered and classroom activity photos.</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                    Step 3 of 4
+                  </span>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                      Activity / Syllabus Topic <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Embedded System & IoT - MCU & WiFi Cloud Architecture"
+                      value={activityTitle}
+                      onChange={(e) => setActivityTitle(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2.5 text-sm text-slate-800 dark:text-white focus:border-sky-500 focus:outline-none shadow-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                      Session Details &amp; Exercises <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      placeholder="Detail the topics covered, hands-on lab exercises, student queries resolved…"
+                      rows={3}
+                      value={activityDesc}
+                      onChange={(e) => setActivityDesc(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2.5 text-sm text-slate-800 dark:text-white focus:border-sky-500 focus:outline-none shadow-sm resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        Classroom Photos <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        {activityImages.length}/5 uploaded
+                      </span>
+                    </div>
+
+                    {activityPreviews.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
+                        {activityPreviews.map((p, idx) => (
+                          <div key={`${p}-${idx}`} className="relative aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden group shadow-sm">
+                            <img src={p} alt={`Activity ${idx + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeActivityImage(idx)}
+                              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {activityImages.length < 5 && (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-sky-500 dark:border-slate-700 dark:hover:border-sky-400 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-sky-50/20 dark:bg-slate-800/20 transition group">
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleActivityFileChange}
+                          className="hidden"
+                        />
+                        <ImageIcon className="h-6 w-6 text-sky-600 mb-1.5 group-hover:scale-110 transition" />
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          Click to upload classroom session photos
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {5 - activityImages.length} more photos allowed (max 10MB each)
+                        </p>
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={loading || !activityTitle.trim() || !activityDesc.trim() || activityImages.length === 0}
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      Save Activities &amp; Continue
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 4: CHECK-OUT */}
+            {step === 4 && (
+              <div className="rounded-2xl border border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center font-bold">
+                      <LogOut className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-slate-900 dark:text-white">Step 4 — Trainer Check-Out</h2>
+                      <p className="text-xs text-slate-500">Record departure photo to complete today's session.</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                    Final Step
+                  </span>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
+                      Check-Out Photo (With GPS Tag) <span className="text-rose-500">*</span>
+                    </label>
+
+                    {checkOutPreview ? (
+                      <div className="relative rounded-2xl border border-slate-200 bg-slate-50 dark:bg-slate-800/40 p-3 text-center">
+                        <div className="relative max-w-sm mx-auto rounded-xl overflow-hidden shadow-md">
+                          <img
+                            src={checkOutPreview}
+                            alt="Check-Out Preview"
+                            className="w-full max-h-72 object-cover rounded-xl"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { setCheckOutFile(null); setCheckOutPreview(null); }}
+                            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-lg transition"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2 font-medium">
+                          Check-out photo ready. Confirm below to complete your day.
+                        </p>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-rose-500 dark:border-slate-700 dark:hover:border-rose-400 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-rose-50/20 dark:bg-slate-800/20 transition group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="user"
+                          onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
+                          className="hidden"
+                        />
+                        <div className="h-12 w-12 rounded-2xl bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
+                          <Camera className="h-6 w-6" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          Take Check-Out Selfie or Upload Photo
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                          Supports GPS Map Camera photo taken upon leaving campus.
+                        </p>
+                        <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold shadow-sm group-hover:bg-rose-700">
+                          <UploadCloud className="h-3.5 w-3.5" />
+                          Select Check-Out Photo
+                        </span>
+                      </label>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                    <button
+                      onClick={handleClockOut}
+                      disabled={loading || !checkOutFile}
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      Confirm Check-Out
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* ── Right Column (5 cols on lg): Reference Sample & Guide ── */}
+          {currentGuide && (
+            <div className="lg:col-span-5 space-y-4 sticky top-6">
+              <div className="rounded-2xl border border-slate-200/90 bg-white dark:bg-slate-900 dark:border-slate-800 p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                      Reference Guide &amp; Sample
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${currentGuide.badgeColor}`}>
+                    {currentGuide.badge}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug">
+                    {currentGuide.title}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {currentGuide.subtitle}
+                  </p>
+                </div>
+
+                {/* Reference Image with Zoom Button */}
+                <div className="relative rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-950 group">
+                  <img
+                    src={currentGuide.image}
+                    alt={currentGuide.title}
+                    className="w-full h-56 sm:h-64 object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-3.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLightboxImage(currentGuide.image);
+                        setLightboxTitle(currentGuide.title);
+                      }}
+                      className="w-full py-2 px-3 rounded-lg bg-white/90 hover:bg-white text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg backdrop-blur transition"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" />
+                      View Full Reference Image
+                    </button>
+                  </div>
+                </div>
+
+                {/* Key Verification Points */}
+                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-800 space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                    Important Instructions
+                  </span>
+                  <ul className="space-y-1.5">
+                    {currentGuide.points.map((pt, i) => (
+                      <li key={i} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2 leading-relaxed">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>{pt}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {/* ── STEP 5: VISIT COMPLETED SUMMARY ────────────────────── */}
+      {step === 5 && (
+        <div className="rounded-3xl border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900 p-8 sm:p-12 text-center max-w-2xl mx-auto shadow-lg space-y-6">
+          <div className="h-20 w-20 rounded-3xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto shadow-md">
+            <CheckCircle2 className="h-12 w-12" />
+          </div>
+
+          <div>
+            <span className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-3 py-1 rounded-full">
+              Session Completed ✓
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white mt-3">
+              Daily Workflow Finished!
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-md mx-auto">
+              All 4 steps (Check-in, Attendance sheet, Student activities, and Check-out) have been successfully recorded and verified.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-center">
+              <Clock className="h-5 w-5 text-sky-600 mx-auto mb-1.5" />
+              <p className="text-[10px] uppercase font-bold text-slate-400">Total Duration</p>
+              <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                {summaryData?.duration || 0} mins
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-center">
+              <UserCheck className="h-5 w-5 text-emerald-600 mx-auto mb-1.5" />
+              <p className="text-[10px] uppercase font-bold text-slate-400">Check-Out Time</p>
+              <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                {summaryData?.clockOutTime ? formatTime(summaryData.clockOutTime) : 'Completed'}
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-center gap-3">
+            <button
+              onClick={() => router.push('/trainer/dashboard')}
+              className="px-6 py-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-sm transition shadow-md"
+            >
+              Return to Dashboard
             </button>
           </div>
         </div>
       )}
 
-    </section>
+      {/* ── LIGHTBOX MODAL FOR HIGH-RES REFERENCE IMAGES ───────── */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                {lightboxTitle || "Reference Sample"}
+              </h3>
+              <button
+                onClick={() => setLightboxImage(null)}
+                className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 flex items-center justify-center transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center max-h-[80vh] overflow-auto bg-slate-950">
+              <img
+                src={lightboxImage}
+                alt={lightboxTitle}
+                className="max-h-[75vh] w-auto object-contain rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 }
-

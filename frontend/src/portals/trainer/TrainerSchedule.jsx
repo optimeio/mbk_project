@@ -1,6 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { App as AntdApp } from 'antd';
 
 import { CalendarDaysIcon, ListBulletIcon, ClockIcon } from '@heroicons/react/24/outline';
@@ -526,6 +527,7 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
     useRenderCountDebug("TrainerSchedule");
     const { modal, message: messageApi } = AntdApp.useApp();
     const { currentUser } = useAuth();
+    const searchParams = useSearchParams();
 
     const [view, setView] = useState('list'); // 'calendar' or 'list'
     const [selectedMonth, setSelectedMonth] = useState(() => initialSelectedMonth || new Date().toISOString().slice(0, 7));
@@ -549,6 +551,20 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
     const [showLateRequestModal, setShowLateRequestModal] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     const [isSubmittingCheckOut, setIsSubmittingCheckOut] = useState(false);
+    const handledAutoOpenIdRef = useRef(null);
+
+    // Auto-open Late Attendance Request modal if query param is provided (only once per ID)
+    useEffect(() => {
+        const openRequestId = searchParams?.get('openRequest') || searchParams?.get('scheduleId');
+        if (openRequestId && filteredSchedules.length > 0 && handledAutoOpenIdRef.current !== openRequestId) {
+            const target = filteredSchedules.find((s) => String(s.id || s._id) === String(openRequestId));
+            if (target) {
+                handledAutoOpenIdRef.current = openRequestId;
+                setSelectedSchedule(target);
+                setShowLateRequestModal(true);
+            }
+        }
+    }, [searchParams, filteredSchedules]);
 
     // Check-In Data
     const [attendanceData, setAttendanceData] = useState({
@@ -901,10 +917,24 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
         return result;
     }, [schedules, staticCourses]);
 
-    // Fetch all trainers for filter dropdown (auto-updates when new trainers register)
+    // Fetch all trainers for filter dropdown (only for non-trainer roles e.g. admin/spoc)
     useEffect(() => {
         let cancelled = false;
         const fetchAllTrainers = async () => {
+            // Trainers only view their own schedule; do not call global trainer directory
+            if (isTrainer) {
+                if (authTrainerId) {
+                    setTrainers([{
+                        id: authTrainerId,
+                        _id: authTrainerId,
+                        name: `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || 'My Sessions',
+                        firstName: currentUser?.firstName || '',
+                        lastName: currentUser?.lastName || '',
+                    }]);
+                }
+                return;
+            }
+
             try {
                 const response = await fetchTrainersPage({ page: 1, limit: 250 });
                 if (cancelled) return;
@@ -950,7 +980,7 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
         };
         fetchAllTrainers();
         return () => { cancelled = true; };
-    }, [currentUser, authTrainerId]);
+    }, [currentUser, authTrainerId, isTrainer]);
 
     // Filter schedules based on selected filters
     useEffect(() => {
@@ -1336,6 +1366,14 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
 
     const closeLateRequestModal = useCallback(() => {
         setShowLateRequestModal(false);
+        setSelectedSchedule(null);
+        if (typeof window !== 'undefined' && (window.location.search.includes('openRequest') || window.location.search.includes('scheduleId'))) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('openRequest');
+            url.searchParams.delete('scheduleId');
+            const cleanUrl = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '');
+            window.history.replaceState({}, '', cleanUrl);
+        }
     }, []);
 
     const upcomingSchedules = useMemo(() => {
@@ -2181,7 +2219,6 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                             onOpenCheckIn={openCheckInModal}
                             onOpenCheckOut={openCheckOutModal}
                             onOpenLateRequest={openLateRequestModal}
-                            onDelete={handleDelete}
                         />
                     )}
                 </div>
@@ -2212,7 +2249,6 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
                             onOpenCheckIn={openCheckInModal}
                             onOpenCheckOut={openCheckOutModal}
                             onOpenLateRequest={openLateRequestModal}
-                            onDelete={handleDelete}
                         />
                     )}
                 </div>

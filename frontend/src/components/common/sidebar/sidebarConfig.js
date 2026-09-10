@@ -13,9 +13,11 @@ export const roleLinks = {
     { label: "Monitor Schedule",  href: "/dashboard/schedule-monitor",   icon: CalendarClock },
     { label: "Approvals",         href: "/dashboard/approvals",          icon: UserCheck },
     { label: "Verify Documents",  href: "/dashboard/documents",          icon: BadgeCheck },
-    { label: "Trainer Activity",  href: "/dashboard/trainer-activity",   icon: Clock3 },
-    { label: "Overall Attendance",href: "/dashboard/attendance",         icon: CalendarClock },
+    { label: "Check-In Verify",   href: "/spoc/attendance",              icon: BadgeCheck },
+    { label: "Check-Out Status",  href: "/spoc/geo-verification",        icon: MapPin },
     { label: "Attendance Requests",href: "/dashboard/attendance-requests", icon: ClipboardList },
+    { label: "Overall Attendance",href: "/dashboard/attendance",         icon: CalendarClock },
+    { label: "Trainer Activity",  href: "/dashboard/trainer-activity",   icon: Clock3 },
     { label: "City Management",   href: "/dashboard/cities",             icon: MapPin },
     { label: "Salary Management", href: "/dashboard/salary",             icon: HandCoins },
     { label: "Complaints",        href: "/dashboard/complaints",         icon: MessageSquareMore },
@@ -49,6 +51,7 @@ export const roleLinks = {
 
   Trainer: [
     { label: "Dashboard",          href: "/trainer/dashboard",            icon: Home },
+    { label: "Trainer Activities", href: "/trainer/activities",           icon: ClipboardList },
     { label: "Schedule",           href: "/trainer/schedule",             icon: CalendarClock },
     { label: "My Attendance",      href: "/trainer/attendance",           icon: BadgeCheck },
     { label: "Payslips",           href: "/trainer/payslips",             icon: Receipt },

@@ -149,19 +149,36 @@ function TrainerDashboardSchedulesSection({
             <div className="space-y-3">
               {recentActivities.map((activity) => {
                 const statusMeta = getStatusMeta(activity.status);
+                const isAbsentOrTimeout =
+                  activity.status === "absent" ||
+                  activity.status === "timeout" ||
+                  activity.status === "expired" ||
+                  activity.isTimeOut;
+
+                const handleActivityClick = () => {
+                  if (activity.id) {
+                    router.push(`/trainer/schedule?openRequest=${encodeURIComponent(activity.id)}`);
+                  } else {
+                    router.push('/trainer/schedule');
+                  }
+                };
 
                 return (
-                  <button
+                  <div
                     key={activity.id}
-                    type="button"
-                    onClick={() => onOpenScheduleDate(activity.rawDate)}
-                    className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50 md:flex-row md:items-center md:justify-between md:px-5"
+                    onClick={handleActivityClick}
+                    className="flex w-full flex-col gap-3 rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50 md:flex-row md:items-center md:justify-between md:px-5 cursor-pointer group"
                   >
-                    <div className="min-w-0">
-                      <h3 className="truncate text-base font-semibold text-slate-900 sm:text-lg">
-                        {safeRenderText(activity.college, "Assigned College")}
-                      </h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-600">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                          Day {safeRenderText(activity.dayNumber, "1")}
+                        </span>
+                        <h3 className="truncate text-base font-bold text-slate-900 sm:text-lg">
+                          {safeRenderText(activity.college, "Assigned College")}
+                        </h3>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-slate-600">
                         <span className="inline-flex items-center font-semibold text-slate-700">
                           <BookOpen className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
                           {safeRenderText(activity.course, "Course")}
@@ -177,12 +194,27 @@ function TrainerDashboardSchedulesSection({
                       </div>
                     </div>
 
-                    <span
-                      className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${statusMeta.className}`}
-                    >
-                      {statusMeta.label}
-                    </span>
-                  </button>
+                    <div className="flex items-center gap-2.5 self-end md:self-center shrink-0">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusMeta.className}`}
+                      >
+                        {statusMeta.label}
+                      </span>
+                      {isAbsentOrTimeout && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleActivityClick();
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition"
+                        >
+                          <Clock className="h-3.5 w-3.5" />
+                          Request Attendance
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>

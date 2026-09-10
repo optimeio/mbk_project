@@ -143,6 +143,10 @@ export const getScheduleBadge = (schedule) => {
     return { label: "Check-Out Pending", className: "bg-amber-100 text-amber-700" };
   }
 
+  if (schedule.isLateRequest || schedule.attendance?.isLateRequest || schedule.attendance?.lateRequestStatus === "pending") {
+    return { label: "Attendance Requested", className: "bg-indigo-100 text-indigo-800 border border-indigo-200" };
+  }
+
   if (normalizedStatus === "inprogress") {
     return { label: "In Progress", className: "bg-yellow-100 text-yellow-800" };
   }
@@ -152,6 +156,10 @@ export const getScheduleBadge = (schedule) => {
       label: "Completed",
       className: "bg-blue-50 text-blue-700 border border-blue-100",
     };
+  }
+
+  if (normalizedStatus === "absent" || schedule.status === "absent") {
+    return { label: "Absent", className: "bg-rose-100 text-rose-800 border border-rose-200" };
   }
 
   if (schedule.status === "scheduled") {
@@ -314,7 +322,7 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
   } else if (schedule.isLateRequest || schedule.attendance?.isLateRequest || schedule.attendance?.lateRequestStatus === "pending") {
     primaryAction = {
       kind: "late-request-pending",
-      label: "Late Attendance Requested (Pending Approval)",
+      label: "Attendance Requested (Pending Approval)",
       disabled: true,
     };
   } else if (isAttendanceRejected) {
@@ -335,7 +343,7 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     if (isSessionClosedByTime && !isCompleted) {
       primaryAction = {
         kind: "expired-info",
-        label: `${sessionLabel} Closed (Time Passed)`,
+        label: `Absent - ${sessionLabel} Closed (Time Passed)`,
       };
     } else if (isToday) {
       if (isPastCutoffTime) {
@@ -353,7 +361,7 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     } else if (isWithinGracePeriod) {
       primaryAction = {
         kind: "checkin",
-        label: isPastDate ? "Request Late Check-In (Past Date)" : "Check In",
+        label: isPastDate ? "Request Attendance" : "Check In",
         isLate: isPastDate,
       };
     } else if (isFutureDate) {
@@ -364,7 +372,7 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     } else {
       primaryAction = {
         kind: "expired-info",
-        label: "Session Expired (Beyond 7 days)",
+        label: "Absent - Session Expired (Beyond 7 days)",
       };
     }
   } else if (isInProgress) {

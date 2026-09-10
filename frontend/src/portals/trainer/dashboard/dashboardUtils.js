@@ -208,9 +208,9 @@ export const getStatusMeta = (status = "") => {
     };
   }
 
-  if (normalized === "timeout" || normalized === "expired" || normalized === "closed") {
+  if (normalized === "timeout" || normalized === "expired" || normalized === "closed" || normalized === "absent") {
     return {
-      label: "Time Out (Closed)",
+      label: "Absent",
       className: "bg-rose-50 text-rose-700 border border-rose-200 font-bold",
     };
   }

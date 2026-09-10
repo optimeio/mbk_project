@@ -188,7 +188,7 @@ const CheckInModal = ({
       <div className="dashboard-modal-panel h-full w-full overflow-y-auto bg-white p-4 sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-xl sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
-            {isLateRequest ? "Request Late Check-In (Past Date)" : "Check In"}
+            {isLateRequest ? "Request Attendance (Past Date)" : "Check In"}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <XCircleIcon className="h-6 w-6" />
@@ -445,7 +445,17 @@ const CheckInModal = ({
 
             <div className="grid gap-3 sm:grid-cols-3 mt-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Attendance Sheet / Document</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Attendance Sheet</label>
+                  <a
+                    href="/reference-images/student-attendance-reference.jpg"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                  >
+                    View Sample
+                  </a>
+                </div>
                 <div className="relative rounded-xl border border-dashed border-gray-300 px-3 py-4 text-center bg-white hover:border-indigo-500 transition-all">
                   <input
                     type="file"
@@ -481,7 +491,17 @@ const CheckInModal = ({
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Check-In Image</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Check-In Image</label>
+                  <a
+                    href="/reference-images/checkin-reference.jpg"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                  >
+                    View Sample
+                  </a>
+                </div>
                 <div className="relative rounded-xl border border-dashed border-gray-300 px-3 py-4 text-center bg-white hover:border-indigo-500 transition-all">
                   <input
                     type="file"
@@ -526,7 +546,7 @@ const CheckInModal = ({
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center font-medium"
           >
             <CheckCircleIcon className="h-5 w-5 mr-2" />
-            {isLateRequest ? "Submit Late Check-In Request" : "Check In"}
+            {isLateRequest ? "Submit Attendance Request" : "Check In"}
           </button>
         </div>
       </div>

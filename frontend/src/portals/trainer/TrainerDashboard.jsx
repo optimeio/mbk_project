@@ -173,8 +173,12 @@ function TrainerDashboard() {
   }, []);
 
   const handleOpenScheduleDate = useCallback(
-    (rawDate) => {
-      router.push(`/trainer/dashboard`);
+    (rawDate, scheduleId) => {
+      if (scheduleId) {
+        router.push(`/trainer/schedule?openRequest=${encodeURIComponent(scheduleId)}`);
+      } else {
+        router.push(`/trainer/schedule`);
+      }
     },
     [router],
   );

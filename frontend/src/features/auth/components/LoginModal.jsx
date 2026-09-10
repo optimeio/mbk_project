@@ -35,16 +35,43 @@ const ACCOUNT_TYPES = [
   { id: "company", label: "Company" },
 ];
 
-const LoginModal = ({ isOpen, onClose }) => {
+const LoginModal = ({ isOpen, onClose, initialRole }) => {
   const router = useRouter();
   const { isRouterReady } = useSafeRouter();
   const { login, currentUser, isAuthenticated, loading: authLoading } = useAuth();
-  const [accountType, setAccountType] = useState("trainer");
+  
+  const [accountType, setAccountType] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const type = params.get("type") || params.get("role");
+      if (type && ["trainer", "student", "company"].includes(type.toLowerCase())) {
+        return type.toLowerCase();
+      }
+    }
+    return initialRole || "trainer";
+  });
+
+  // Keep URL synchronized when modal is open and when tab changes
+  useEffect(() => {
+    if (isOpen && typeof window !== "undefined") {
+      const targetUrl = `/login?type=${encodeURIComponent(accountType)}`;
+      if (window.location.pathname + window.location.search !== targetUrl) {
+        window.history.replaceState(null, "", targetUrl);
+      }
+    }
+  }, [isOpen, accountType]);
+
+  const handleCloseModal = () => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.pathname === "/login") {
+        window.history.replaceState(null, "", "/");
+      }
+    }
+    if (onClose) onClose();
+  };
 
   const navigateAfterLogin = async (route, role, email) => {
-    // Navigate immediately so the user lands on their dashboard without waiting
-    // for portal data warmup. Warming runs in the background (non-blocking) to
-    // avoid the perceived "stuck on home, then dashboard" delay after login.
     safeRouterReplace(router, route);
 
     if (typeof window !== "undefined") {
@@ -301,7 +328,7 @@ const LoginModal = ({ isOpen, onClose }) => {
       <div className="login-modal-container">
         <button
           className="login-modal-close"
-          onClick={onClose}
+          onClick={handleCloseModal}
           aria-label="Close Modal"
         >
           <XMarkIcon style={{ width: "24px", height: "24px" }} />

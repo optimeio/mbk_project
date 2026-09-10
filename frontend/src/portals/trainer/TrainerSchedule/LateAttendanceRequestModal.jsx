@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import dayjs from "dayjs";
 import {
   XMarkIcon,
@@ -22,6 +23,7 @@ function LateAttendanceRequestModal({
   onSuccess,
   showToast,
 }) {
+  const [mounted, setMounted] = useState(false);
   const [reason, setReason] = useState("");
   const [checkInImage, setCheckInImage] = useState(null);
   const [checkInPreview, setCheckInPreview] = useState(null);
@@ -34,12 +36,24 @@ function LateAttendanceRequestModal({
   const [currentDateTime, setCurrentDateTime] = useState("");
 
   useEffect(() => {
+    setMounted(true);
     setCurrentDateTime(dayjs().format("DD MMM YYYY, hh:mm A"));
     const interval = setInterval(() => {
       setCurrentDateTime(dayjs().format("DD MMM YYYY, hh:mm A"));
     }, 10000);
-    return () => clearInterval(interval);
-  }, []);
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
 
   const scheduledDateFormatted = selectedSchedule?.scheduledDate || selectedSchedule?.date
     ? dayjs(selectedSchedule.scheduledDate || selectedSchedule.date).format("DD MMM YYYY")
@@ -93,8 +107,8 @@ function LateAttendanceRequestModal({
     e.preventDefault();
 
     if (!reason.trim()) {
-      if (showToast) showToast("warning", "Please provide a reason for the late attendance request.");
-      else alert("Please provide a reason for the late attendance request.");
+      if (showToast) showToast("warning", "Please provide a reason for the attendance request.");
+      else alert("Please provide a reason for the attendance request.");
       return;
     }
 
@@ -158,16 +172,16 @@ function LateAttendanceRequestModal({
         if (showToast) {
           showToast(
             "success",
-            "Late attendance request submitted successfully! Awaiting Admin verification."
+            "Attendance request submitted successfully! Awaiting Admin verification."
           );
         }
         if (onSuccess) onSuccess();
         onClose();
       } else {
-        throw new Error(response?.message || "Failed to submit late attendance request");
+        throw new Error(response?.message || "Failed to submit attendance request");
       }
     } catch (err) {
-      console.error("Late attendance request error:", err);
+      console.error("Attendance request error:", err);
       const errorMsg = err?.response?.message || err?.message || "Failed to submit request";
       if (showToast) showToast("error", errorMsg);
       else alert(errorMsg);
@@ -176,32 +190,42 @@ function LateAttendanceRequestModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+  if (!mounted) return null;
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] overflow-y-auto bg-black/60 backdrop-blur-sm p-3 sm:p-6 flex min-h-full items-center justify-center cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] my-auto overflow-hidden cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-indigo-900 to-indigo-800 text-white">
+        <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-indigo-900 to-indigo-800 text-white">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-white/10 text-amber-300">
               <ClockIcon className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">Request Late Attendance</h2>
+              <h2 className="text-lg font-bold">Request Attendance for Trainers</h2>
               <p className="text-xs text-indigo-200">
                 Submit past session attendance proof for Admin verification
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white transition"
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white transition cursor-pointer"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
           {/* Scheduled Session Meta Card */}
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
@@ -253,7 +277,7 @@ function LateAttendanceRequestModal({
             {/* Reason Input */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                Reason for Late Request <span className="text-red-500">*</span>
+                Reason for Attendance Request <span className="text-red-500">*</span>
               </label>
               <textarea
                 required
@@ -403,7 +427,7 @@ function LateAttendanceRequestModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex items-center justify-end gap-3">
+        <div className="shrink-0 border-t border-gray-100 px-6 py-4 bg-gray-50 flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -424,13 +448,15 @@ function LateAttendanceRequestModal({
                 Submitting Request...
               </>
             ) : (
-              <>Submit Late Request</>
+              <>Submit Attendance Request</>
             )}
           </button>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
 export default memo(LateAttendanceRequestModal);
