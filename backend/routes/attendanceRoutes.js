@@ -5228,8 +5228,9 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             });
         }
 
-        // Update late request details
-        attendance.session = session || schedule.session || 'FULL_DAY';
+        // Normalize session
+        const requestSession = String(session || schedule.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN';
+        attendance.session = requestSession;
         attendance.isLateRequest = true;
         attendance.lateRequestReason = requestReason;
         attendance.lateRequestSubmittedAt = new Date();
@@ -5240,31 +5241,11 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         attendance.geoVerificationStatus = 'pending';
         attendance.checkOutVerificationStatus = 'PENDING_CHECKOUT';
 
-        // Helper: attempt Drive upload and return previewUrl; fall back to local path if Drive not enabled
-        const tryDriveUpload = async (file, folderType) => {
-            try {
-                const result = await uploadTrainerSessionFileToDrive({
-                    trainer: schedule.trainerId,
-                    collegeId: schedule.collegeId?._id || schedule.collegeId,
-                    scheduleId: schedule._id,
-                    attendanceId: attendance._id,
-                    dayNumber: schedule.dayNumber || 1,
-                    session: session || schedule.session || 'FN',
-                    folderType,
-                    file,
-                });
-                return result?.previewUrl || result?.fileUrl || file.path || null;
-            } catch (driveErr) {
-                console.warn('[LATE-REQUEST] Drive upload warning:', driveErr.message);
-                return file.path || null;
-            }
-        };
-
-        // 1. Store Check-In Evidence (if new file uploaded)
+        // 1. Store Check-In Evidence (local path first)
         if (checkInFile) {
-            const storedUrl = await tryDriveUpload(checkInFile, 'checkIn');
-            attendance.imageUrl = storedUrl || checkInFile.path;
-            attendance.checkInPhoto = storedUrl || checkInFile.path;
+            const relPath = `/uploads/attendance/images/${path.basename(checkInFile.path)}`;
+            attendance.imageUrl = relPath;
+            attendance.checkInPhoto = relPath;
             attendance.checkInTime = attendance.checkInTime || new Date().toISOString();
             if (!attendance.checkIn) {
                 attendance.checkIn = {
@@ -5278,38 +5259,36 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             }
         }
 
-        // 2. Store Student Attendance Evidence (if new file uploaded)
+        // 2. Store Student Attendance Evidence (local path first)
         if (studentAttendanceFile) {
             const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
             const isExcel = ['.xls', '.xlsx', '.csv'].includes(docExt);
-            const storedUrl = await tryDriveUpload(studentAttendanceFile, 'attendance');
+            const relPath = isExcel
+                ? `/uploads/attendance/excels/${path.basename(studentAttendanceFile.path)}`
+                : `/uploads/attendance/documents/${path.basename(studentAttendanceFile.path)}`;
             if (docExt === '.pdf') {
-                attendance.attendancePdfUrl = storedUrl || studentAttendanceFile.path;
+                attendance.attendancePdfUrl = relPath;
             } else if (isExcel) {
-                attendance.attendanceExcelUrl = storedUrl || studentAttendanceFile.path;
+                attendance.attendanceExcelUrl = relPath;
             } else {
-                attendance.studentsPhotoUrl = storedUrl || studentAttendanceFile.path;
+                attendance.studentsPhotoUrl = relPath;
+                attendance.attendancePhotoUrl = relPath;
+                attendance.attendanceDocumentUrl = relPath;
             }
         }
 
-        // 3. Store Student Activity Photos - APPEND new photos, do NOT overwrite existing
+        // 3. Store Student Activity Photos (local path first)
         if (activityFiles && activityFiles.length > 0) {
-            const uploadedActivityUrls = [];
-            for (const actFile of activityFiles) {
-                const storedUrl = await tryDriveUpload(actFile, 'studentActivities');
-                uploadedActivityUrls.push(storedUrl || actFile.path);
-            }
-            // Append to existing photos — do not replace to avoid Drive duplicates
+            const uploadedActivityUrls = activityFiles.map(f => `/uploads/attendance/photos/${path.basename(f.path)}`);
             const existing = Array.isArray(attendance.activityPhotos) ? attendance.activityPhotos : [];
             attendance.activityPhotos = [...existing, ...uploadedActivityUrls];
         }
 
-        // 4. Store Check-Out Evidence (if new file uploaded)
+        // 4. Store Check-Out Evidence (local path first)
         if (checkOutFile) {
-            const storedUrl = await tryDriveUpload(checkOutFile, 'checkOut');
-            const checkOutStoredPath = storedUrl || checkOutFile.path;
-            attendance.checkOutGeoImageUrl = checkOutStoredPath;
-            attendance.checkOutGeoImageUrls = [checkOutStoredPath];
+            const relPath = `/uploads/attendance/images/${path.basename(checkOutFile.path)}`;
+            attendance.checkOutGeoImageUrl = relPath;
+            attendance.checkOutGeoImageUrls = [relPath];
             attendance.checkOutTime = new Date().toISOString();
             attendance.checkOut = {
                 time: new Date(),
@@ -5320,7 +5299,7 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                     lng: schedule.collegeLocation?.lng || null,
                 },
                 photos: [{
-                    url: checkOutStoredPath,
+                    url: relPath,
                     uploadedAt: new Date(),
                     validationStatus: 'pending',
                 }]
@@ -5337,18 +5316,132 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         await schedule.save();
 
         if (trainerId) {
-            try {
-                await invalidateTrainerScheduleCaches([trainerId]);
-            } catch (cacheErr) {
-                console.warn('Cache invalidation warning:', cacheErr.message);
-            }
+            invalidateTrainerScheduleCaches([trainerId]).catch(() => {});
         }
 
-        return res.status(201).json({
+        // Send immediate success response to trainer UI
+        res.status(201).json({
             success: true,
             message: 'Late attendance request submitted successfully. Awaiting Admin verification.',
             attendance
         });
+
+        // ── Background Async Google Drive Upload (Non-blocking) ──
+        (async () => {
+            try {
+                const targetTrainer = schedule.trainerId;
+                const targetCollegeId = schedule.collegeId?._id || schedule.collegeId;
+                const targetScheduleId = schedule._id;
+                const targetAttendanceId = attendance._id;
+                const targetDayNumber = schedule.dayNumber || 1;
+
+                if (checkInFile) {
+                    uploadTrainerSessionFileToDrive({
+                        trainer: targetTrainer,
+                        collegeId: targetCollegeId,
+                        scheduleId: targetScheduleId,
+                        attendanceId: targetAttendanceId,
+                        dayNumber: targetDayNumber,
+                        session: requestSession,
+                        folderType: 'checkIn',
+                        file: checkInFile,
+                    }).then(result => {
+                        const dUrl = result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null);
+                        if (dUrl) {
+                            Attendance.findByIdAndUpdate(targetAttendanceId, {
+                                $set: {
+                                    imageUrl: dUrl,
+                                    checkInPhoto: dUrl,
+                                    'checkIn.driveFileId': result.id || result.driveFileId
+                                }
+                            }).catch(() => {});
+                        }
+                    }).catch(err => console.warn('[ASYNC-DRIVE] Late checkin upload failed:', err.message));
+                }
+
+                if (studentAttendanceFile) {
+                    uploadTrainerSessionFileToDrive({
+                        trainer: targetTrainer,
+                        collegeId: targetCollegeId,
+                        scheduleId: targetScheduleId,
+                        attendanceId: targetAttendanceId,
+                        dayNumber: targetDayNumber,
+                        session: requestSession,
+                        folderType: 'attendance',
+                        file: studentAttendanceFile,
+                    }).then(result => {
+                        const dUrl = result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null);
+                        if (dUrl) {
+                            const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
+                            const updateFields = {};
+                            if (docExt === '.pdf') updateFields.attendancePdfUrl = dUrl;
+                            else if (['.xls', '.xlsx', '.csv'].includes(docExt)) updateFields.attendanceExcelUrl = dUrl;
+                            else {
+                                updateFields.studentsPhotoUrl = dUrl;
+                                updateFields.attendancePhotoUrl = dUrl;
+                                updateFields.attendanceDocumentUrl = dUrl;
+                            }
+                            Attendance.findByIdAndUpdate(targetAttendanceId, { $set: updateFields }).catch(() => {});
+                        }
+                    }).catch(err => console.warn('[ASYNC-DRIVE] Late attendance doc upload failed:', err.message));
+                }
+
+                if (activityFiles && activityFiles.length > 0) {
+                    for (const actFile of activityFiles) {
+                        const localRel = `/uploads/attendance/photos/${path.basename(actFile.path)}`;
+                        uploadTrainerSessionFileToDrive({
+                            trainer: targetTrainer,
+                            collegeId: targetCollegeId,
+                            scheduleId: targetScheduleId,
+                            attendanceId: targetAttendanceId,
+                            dayNumber: targetDayNumber,
+                            session: requestSession,
+                            folderType: 'studentActivities',
+                            file: actFile,
+                        }).then(result => {
+                            const dUrl = result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null);
+                            if (dUrl) {
+                                Attendance.findById(targetAttendanceId).then(att => {
+                                    if (att) {
+                                        const photos = (att.activityPhotos || []).map(p => p === localRel ? dUrl : p);
+                                        if (!photos.includes(dUrl)) photos.push(dUrl);
+                                        att.activityPhotos = Array.from(new Set(photos.filter(Boolean)));
+                                        return att.save();
+                                    }
+                                }).catch(() => {});
+                            }
+                        }).catch(err => console.warn('[ASYNC-DRIVE] Late activity upload failed:', err.message));
+                    }
+                }
+
+                if (checkOutFile) {
+                    uploadTrainerSessionFileToDrive({
+                        trainer: targetTrainer,
+                        collegeId: targetCollegeId,
+                        scheduleId: targetScheduleId,
+                        attendanceId: targetAttendanceId,
+                        dayNumber: targetDayNumber,
+                        session: requestSession,
+                        folderType: 'checkOut',
+                        file: checkOutFile,
+                    }).then(result => {
+                        const dUrl = result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null);
+                        if (dUrl) {
+                            Attendance.findByIdAndUpdate(targetAttendanceId, {
+                                $set: {
+                                    checkOutGeoImageUrl: dUrl,
+                                    checkOutGeoImageUrls: [dUrl],
+                                    'checkOut.photos.0.url': dUrl,
+                                    'checkOut.driveFileId': result.id || result.driveFileId
+                                }
+                            }).catch(() => {});
+                        }
+                    }).catch(err => console.warn('[ASYNC-DRIVE] Late checkout upload failed:', err.message));
+                }
+            } catch (bgErr) {
+                console.warn('[LATE-REQUEST-BG] Background drive task error:', bgErr.message);
+            }
+        })();
     } catch (error) {
         console.error('Error submitting late attendance request:', error);
         return res.status(500).json({

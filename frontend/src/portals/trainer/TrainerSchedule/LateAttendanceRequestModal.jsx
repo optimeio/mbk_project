@@ -77,8 +77,8 @@ function LateAttendanceRequestModal({
     ? dayjs(selectedSchedule.scheduledDate || selectedSchedule.date).format("DD MMM YYYY")
     : "N/A";
 
-  const sessionLabel = String(selectedSchedule?.session || "FULL_DAY").toUpperCase();
-  const displaySession = sessionLabel === "FN" ? "Forenoon (FN)" : sessionLabel === "AN" ? "Afternoon (AN)" : "Full Day";
+  const sessionLabel = String(selectedSchedule?.session || "FN").toUpperCase();
+  const displaySession = sessionLabel.includes("AN") ? "Afternoon (AN)" : "Forenoon (FN)";
 
   const collegeName = selectedSchedule?.collegeId?.name || selectedSchedule?.collegeName || "College";
   const courseName = selectedSchedule?.courseId?.title || selectedSchedule?.courseId?.name || selectedSchedule?.courseName || selectedSchedule?.subject || "Course";
@@ -161,7 +161,7 @@ function LateAttendanceRequestModal({
 
       formData.append("scheduleId", scheduleId);
       formData.append("reason", reason.trim());
-      formData.append("session", selectedSchedule?.session || "FULL_DAY");
+      formData.append("session", sessionLabel.includes("AN") ? "AN" : "FN");
 
       if (checkInImage) {
         formData.append("checkInImage", checkInImage);
