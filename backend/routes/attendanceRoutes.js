@@ -3593,27 +3593,45 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
                 const isPdf = lowerName.endsWith('.pdf') || docField === 'attendancepdf';
                 const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv') || docField === 'attendanceexcel';
 
-                if (isPdf && !attendancePdfUrl) {
+                if (isPdf) {
                     attendancePdfUrl = docUrl;
-                } else if (isExcel && !attendanceExcelUrl) {
+                } else if (isExcel) {
                     attendanceExcelUrl = docUrl;
-                } else if (!attendancePhoto && !lowerName.includes('checkin') && !lowerName.includes('checkout') && !lowerName.includes('activity')) {
+                } else if (!lowerName.includes('checkin') && !lowerName.includes('checkout') && !lowerName.includes('activity')) {
                     attendancePhoto = docUrl;
                 }
             } else if (isGeotagDoc) {
-                if (doc.fileField === 'signature' && !signatureUrl) {
+                if (doc.fileField === 'signature') {
                     signatureUrl = docUrl;
-                } else if (!checkInPhoto && !lowerName.includes('checkout') && !lowerName.includes('activity')) {
+                } else if (!lowerName.includes('checkout') && !lowerName.includes('activity')) {
                     checkInPhoto = docUrl;
                 }
             }
         });
+
+        // Clean & deduplicate activityPhotos (remove redundant local /uploads/ paths when Drive URLs exist)
+        let activityPhotos = Array.isArray(item.activityPhotos) ? [...item.activityPhotos] : [];
+        const driveActivityUrls = activityPhotos.filter(p => typeof p === 'string' && (p.startsWith('http') || p.includes('googleusercontent') || p.includes('drive.google')));
+        if (driveActivityUrls.length > 0) {
+            activityPhotos = driveActivityUrls;
+        }
+        const activityDocs = matchingDocs.filter(d => d.fileType === 'activity' || String(d.fileField || '').toLowerCase() === 'activityphotos');
+        activityDocs.forEach(d => {
+            const dUrl = d.fileUrl || (d.driveFileId ? `https://lh3.googleusercontent.com/d/${d.driveFileId}=w1200` : null);
+            if (dUrl && !activityPhotos.includes(dUrl)) {
+                activityPhotos.push(dUrl);
+            }
+        });
+        activityPhotos = Array.from(new Set(activityPhotos.filter(Boolean)));
 
         return {
             ...item,
             attendancePdfUrl: attendancePdfUrl || null,
             attendanceExcelUrl: attendanceExcelUrl || null,
             attendancePhoto: attendancePhoto || null,
+            attendanceDocumentUrl: attendancePhoto || item.attendanceDocumentUrl || null,
+            studentsPhotoUrl: attendancePhoto || item.studentsPhotoUrl || null,
+            activityPhotos,
             checkInPhoto: checkInPhoto || null,
             signatureUrl: signatureUrl || null,
             checkInLocation: checkInLocation || null,

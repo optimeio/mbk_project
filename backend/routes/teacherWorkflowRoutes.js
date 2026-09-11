@@ -865,13 +865,20 @@ router.post("/student-activities", authenticate, uploadAttendance, async (req, r
         }).then(driveFile => {
           if (driveFile?.id) {
             const driveUrl = driveFile.previewUrl || driveFile.webViewLink || `https://lh3.googleusercontent.com/d/${driveFile.id}=w1200`;
+            const localFileUrl = `/uploads/attendance/photos/${file.filename}`;
             console.log(`[DRIVE-UPLOAD-ASYNC] Student activity photo ${file.filename} uploaded to Drive: ${driveFile.id}`);
-            Attendance.findByIdAndUpdate(attendanceRecord._id, {
-              $addToSet: { activityPhotos: driveUrl }
+            
+            Attendance.findById(attendanceRecord._id).then(att => {
+              if (att) {
+                const photos = (att.activityPhotos || []).map(p => p === localFileUrl ? driveUrl : p);
+                if (!photos.includes(driveUrl)) photos.push(driveUrl);
+                att.activityPhotos = Array.from(new Set(photos.filter(Boolean)));
+                return att.save();
+              }
             }).catch(dbErr => console.error("Failed to update activityPhotos drive link in DB:", dbErr));
 
             StudentActivity.updateMany(
-              { trainerId: trainer._id, classId: attendanceRecord.collegeId.toString(), photoUrl: `/uploads/attendance/photos/${file.filename}` },
+              { trainerId: trainer._id, classId: attendanceRecord.collegeId.toString(), photoUrl: localFileUrl },
               { $set: { photoUrl: driveUrl, driveFileId: driveFile.id } }
             ).catch(err => console.error("Error updating student activity drive link:", err));
           }

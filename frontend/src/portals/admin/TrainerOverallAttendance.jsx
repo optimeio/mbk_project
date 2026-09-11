@@ -252,6 +252,13 @@ const getAttendanceFileEntries = (record = {}) => {
   const checkInRef = record?.checkInPhoto || record?.checkInImage || record?.checkIn?.photo;
   const checkOutRef = record?.checkOutGeoImageUrl;
 
+  const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
+  const hasDriveAttendanceDoc = docs.some(doc => {
+    const docField = String(doc?.fileField || '').toLowerCase();
+    const docName = String(doc?.fileName || doc?.name || '').toLowerCase();
+    return doc?.fileType === 'attendance' || docField.includes('attendance') || /attendance|sheet|roster/i.test(docName);
+  });
+
   const pdfUrl = record?.attendancePdfUrl || record?.studentAttendancePdfUrl || record?.scannedAttendancePdfUrl || record?.attendancePdf || record?.attendance_pdf;
   if (pdfUrl) {
     files.push({
@@ -282,19 +289,22 @@ const getAttendanceFileEntries = (record = {}) => {
     record?.attendanceSheet ||
     record?.studentAttendancePhoto;
 
+  // Only add raw image URL if no Drive document exists or if it's already a full http URL
   if (attendanceImageUrl && attendanceImageUrl !== checkInRef && attendanceImageUrl !== checkOutRef && !/check.?in/i.test(attendanceImageUrl)) {
-    const isPdf = String(attendanceImageUrl).toLowerCase().endsWith('.pdf');
-    const isExcel = String(attendanceImageUrl).toLowerCase().endsWith('.xlsx') || String(attendanceImageUrl).toLowerCase().endsWith('.xls') || String(attendanceImageUrl).toLowerCase().endsWith('.csv');
-    files.push({
-      type: isPdf ? 'pdf' : (isExcel ? 'excel' : 'image'),
-      name: isPdf ? 'Attendance PDF' : (isExcel ? 'Attendance Sheet / Document' : 'Student Attendance Sheet / Document'),
-      url: getSecureImageUrl(attendanceImageUrl),
-      originalUrl: attendanceImageUrl,
-    });
+    const isDriveOrHttp = typeof attendanceImageUrl === 'string' && (attendanceImageUrl.startsWith('http') || isValidGoogleDriveId(attendanceImageUrl));
+    if (!hasDriveAttendanceDoc || isDriveOrHttp) {
+      const isPdf = String(attendanceImageUrl).toLowerCase().endsWith('.pdf');
+      const isExcel = String(attendanceImageUrl).toLowerCase().endsWith('.xlsx') || String(attendanceImageUrl).toLowerCase().endsWith('.xls') || String(attendanceImageUrl).toLowerCase().endsWith('.csv');
+      files.push({
+        type: isPdf ? 'pdf' : (isExcel ? 'excel' : 'image'),
+        name: isPdf ? 'Attendance PDF' : (isExcel ? 'Attendance Sheet / Document' : 'Student Attendance Sheet / Document'),
+        url: getSecureImageUrl(attendanceImageUrl),
+        originalUrl: attendanceImageUrl,
+      });
+    }
   }
 
   // Extract from record.documents / record.scheduleDocuments
-  const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
   docs.forEach((doc, idx) => {
     const docUrl = doc?.fileUrl || doc?.url || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
     if (!docUrl) return;
@@ -327,18 +337,22 @@ const getStudentActivityEntries = (record = {}) => {
   const checkInRef = record?.checkInPhoto || record?.checkInImage || record?.checkIn?.photo;
   const checkOutRef = record?.checkOutGeoImageUrl;
 
-  if (Array.isArray(record?.activityPhotos) && record.activityPhotos.length) {
-    record.activityPhotos.forEach((photo, idx) => {
-      if (photo && photo !== checkInRef && photo !== checkOutRef) {
-        activities.push({
-          type: 'image',
-          title: `Activity Photo ${idx + 1}`,
-          url: getSecureImageUrl(photo),
-          originalUrl: photo,
-        });
-      }
-    });
-  }
+  let rawPhotos = Array.isArray(record?.activityPhotos) ? record.activityPhotos.filter(Boolean) : [];
+  // If drive URLs are available, filter out un-synced local paths
+  const drivePhotos = rawPhotos.filter(p => typeof p === 'string' && (p.startsWith('http') || p.includes('googleusercontent') || p.includes('drive.google')));
+  const effectivePhotos = drivePhotos.length > 0 ? drivePhotos : rawPhotos;
+
+  effectivePhotos.forEach((photo, idx) => {
+    if (photo && photo !== checkInRef && photo !== checkOutRef) {
+      activities.push({
+        type: 'image',
+        title: `Activity Photo ${idx + 1}`,
+        url: getSecureImageUrl(photo),
+        originalUrl: photo,
+      });
+    }
+  });
+
   if (Array.isArray(record?.activityVideos) && record.activityVideos.length) {
     record.activityVideos.forEach((video, idx) => {
       if (video) {

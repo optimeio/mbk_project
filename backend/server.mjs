@@ -353,17 +353,33 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
       const escapeRegex = (str) => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapeRegex(filename), 'i');
 
-      // 1. Check ScheduleDocument (stores direct Google Drive links for attendance/geotag/activities)
+      const isCheckInFile = /check.?in|clock.?in/i.test(filename) || cleanPath.includes('/images/');
+      const isCheckOutFile = /check.?out|clock.?out/i.test(filename);
+      const isActivityFile = /activity/i.test(filename) || cleanPath.includes('/photos/');
+      const isAttendanceDocFile = /attendance|excel|sheet|roster/i.test(filename) || cleanPath.includes('/excels/');
+      const isSignatureFile = /signature/i.test(filename) || cleanPath.includes('/signatures/');
+
+      // 1. Check ScheduleDocument specifically matching file classification
       try {
         const ScheduleDocument = (await import('./models/ScheduleDocument.js')).default;
-        const schedDoc = await ScheduleDocument.findOne({
+        const schedDocQuery = {
           $or: [
             { fileName: regex },
             { fileUrl: regex },
             { driveFileId: filename.split('.')[0] }
           ]
-        }).select('driveFileId fileUrl').lean();
+        };
+        if (isCheckInFile) {
+          schedDocQuery.fileField = { $in: ['checkInPhoto', 'check_in_image', 'clock_in_image'] };
+        } else if (isCheckOutFile) {
+          schedDocQuery.fileField = { $in: ['checkOutPhoto', 'check_out_image'] };
+        } else if (isAttendanceDocFile) {
+          schedDocQuery.fileType = 'attendance';
+        } else if (isActivityFile) {
+          schedDocQuery.fileType = 'activity';
+        }
 
+        const schedDoc = await ScheduleDocument.findOne(schedDocQuery).select('driveFileId fileUrl').lean();
         const schedDriveId = extractDriveFileId(schedDoc?.driveFileId) || extractDriveFileId(schedDoc?.fileUrl);
         if (isValidDriveId(schedDriveId)) {
           return res.redirect(302, `https://lh3.googleusercontent.com/d/${schedDriveId}=w1200`);
@@ -372,61 +388,71 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
         // Continue to Attendance fallback
       }
 
-      // 2. Check Attendance record
-      const Attendance = (await import('./models/Attendance.js')).default;
-      const record = await Attendance.findOne({
-        $or: [
-          { 'checkOut.photos.url': regex },
-          { checkOutGeoImageUrl: regex },
-          { checkOutGeoImageUrls: regex },
-          { checkInPhoto: regex },
-          { checkInImage: regex },
-          { imageUrl: regex },
-          { 'checkIn.photo': regex },
-          { signatureUrl: regex },
-          { studentsPhotoUrl: regex },
-          { activityPhotos: regex },
-          { attendancePdfUrl: regex },
-          { attendanceExcelUrl: regex },
-          { studentAttendancePdfUrl: regex },
-          { studentAttendanceExcelUrl: regex },
-          { attendanceSheetUrl: regex },
-        ]
-      }).select('checkIn checkOut checkInPhoto checkInGeoImageUrl checkInImage imageUrl signatureUrl attendancePdfUrl attendanceExcelUrl driveFileId scheduleId').lean();
-
-      if (record) {
-        const driveId =
-          extractDriveFileId(record?.checkOut?.driveFileId) ||
-          extractDriveFileId(record?.checkIn?.driveFileId) ||
-          extractDriveFileId(record?.driveFileId) ||
-          extractDriveFileId(record?.checkInPhoto) ||
-          extractDriveFileId(record?.checkInGeoImageUrl) ||
-          extractDriveFileId(record?.checkInImage) ||
-          extractDriveFileId(record?.imageUrl) ||
-          extractDriveFileId(record?.signatureUrl) ||
-          extractDriveFileId(record?.attendancePdfUrl) ||
-          extractDriveFileId(record?.attendanceExcelUrl);
-
-        if (isValidDriveId(driveId)) {
-          return res.redirect(302, `https://lh3.googleusercontent.com/d/${driveId}=w1200`);
-        }
-
-        // Try checking ScheduleDocument linked to this attendance
+      // 2. Check StudentActivity for activity photos
+      if (isActivityFile) {
         try {
-          const ScheduleDocument = (await import('./models/ScheduleDocument.js')).default;
-          const linkedSchedDoc = await ScheduleDocument.findOne({
-            $or: [
-              { attendanceId: record._id },
-              { scheduleId: record.scheduleId }
-            ]
-          }).select('driveFileId fileUrl').lean();
-
-          const linkedDriveId = extractDriveFileId(linkedSchedDoc?.driveFileId) || extractDriveFileId(linkedSchedDoc?.fileUrl);
-          if (isValidDriveId(linkedDriveId)) {
-            return res.redirect(302, `https://lh3.googleusercontent.com/d/${linkedDriveId}=w1200`);
+          const StudentActivity = (await import('./models/StudentActivity.js')).default;
+          const saDoc = await StudentActivity.findOne({ photoUrl: regex }).select('photoUrl driveFileId').lean();
+          const saDriveId = extractDriveFileId(saDoc?.driveFileId) || extractDriveFileId(saDoc?.photoUrl);
+          if (isValidDriveId(saDriveId)) {
+            return res.redirect(302, `https://lh3.googleusercontent.com/d/${saDriveId}=w1200`);
           }
-        } catch (lErr) {
+        } catch (saErr) {
           // Ignore
+        }
+      }
+
+      // 3. Check Attendance record with strict field isolation
+      const Attendance = (await import('./models/Attendance.js')).default;
+      let recordQuery = null;
+
+      if (isCheckInFile) {
+        recordQuery = { $or: [{ checkInPhoto: regex }, { checkInImage: regex }, { imageUrl: regex }, { 'checkIn.photo': regex }] };
+      } else if (isCheckOutFile) {
+        recordQuery = { $or: [{ 'checkOut.photos.url': regex }, { checkOutGeoImageUrl: regex }, { checkOutGeoImageUrls: regex }] };
+      } else if (isAttendanceDocFile) {
+        recordQuery = { $or: [{ attendancePdfUrl: regex }, { attendanceExcelUrl: regex }, { studentAttendancePdfUrl: regex }, { studentAttendanceExcelUrl: regex }, { attendanceSheetUrl: regex }, { studentsPhotoUrl: regex }, { attendancePhotoUrl: regex }, { attendanceDocumentUrl: regex }] };
+      } else if (isActivityFile) {
+        recordQuery = { activityPhotos: regex };
+      } else if (isSignatureFile) {
+        recordQuery = { signatureUrl: regex };
+      }
+
+      if (recordQuery) {
+        const record = await Attendance.findOne(recordQuery).lean();
+        if (record) {
+          let driveId = null;
+          if (isCheckInFile) {
+            driveId = extractDriveFileId(record?.checkIn?.driveFileId) || extractDriveFileId(record?.checkInPhoto) || extractDriveFileId(record?.checkInGeoImageUrl) || extractDriveFileId(record?.checkInImage) || extractDriveFileId(record?.imageUrl);
+          } else if (isCheckOutFile) {
+            driveId = extractDriveFileId(record?.checkOut?.driveFileId) || extractDriveFileId(record?.checkOutGeoImageUrl) || extractDriveFileId(record?.checkOutGeoImageUrls?.[0]);
+          } else if (isAttendanceDocFile) {
+            driveId = extractDriveFileId(record?.attendancePdfUrl) || extractDriveFileId(record?.attendanceExcelUrl) || extractDriveFileId(record?.studentsPhotoUrl) || extractDriveFileId(record?.attendancePhotoUrl) || extractDriveFileId(record?.attendanceDocumentUrl);
+            if (!driveId && record.scheduleId) {
+              const ScheduleDocument = (await import('./models/ScheduleDocument.js')).default;
+              const doc = await ScheduleDocument.findOne({
+                $or: [{ attendanceId: record._id }, { scheduleId: record.scheduleId }],
+                fileType: 'attendance'
+              }).lean();
+              driveId = extractDriveFileId(doc?.driveFileId) || extractDriveFileId(doc?.fileUrl);
+            }
+          } else if (isActivityFile) {
+            if (Array.isArray(record?.activityPhotos)) {
+              for (const ap of record.activityPhotos) {
+                const extracted = extractDriveFileId(ap);
+                if (isValidDriveId(extracted)) {
+                  driveId = extracted;
+                  break;
+                }
+              }
+            }
+          } else if (isSignatureFile) {
+            driveId = extractDriveFileId(record?.signatureUrl);
+          }
+
+          if (isValidDriveId(driveId)) {
+            return res.redirect(302, `https://lh3.googleusercontent.com/d/${driveId}=w1200`);
+          }
         }
       }
 

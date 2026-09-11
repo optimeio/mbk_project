@@ -483,121 +483,153 @@ export default function TrainerAttendanceRequests() {
             </div>
 
             {/* 4 Proofs Showcase Grid */}
-            <div>
-              <Text strong style={{ fontSize: 13, color: "#1f2937", display: "block", marginBottom: 10 }}>
-                Mandatory Uploaded Proofs (4 Documents / Photos):
-              </Text>
+            {(() => {
+              const checkInPhotoUrl = selectedRecord.imageUrl || selectedRecord.checkInPhoto || selectedRecord.checkIn?.photo;
+              const attendanceDoc = (Array.isArray(selectedRecord.documents) ? selectedRecord.documents : []).find(
+                (d) => d.fileType === 'attendance' || String(d.fileField || '').toLowerCase().includes('attendance')
+              );
+              const attendanceSheetUrl =
+                attendanceDoc?.fileUrl ||
+                (attendanceDoc?.driveFileId ? `https://lh3.googleusercontent.com/d/${attendanceDoc.driveFileId}=w1200` : null) ||
+                selectedRecord.attendancePhoto ||
+                selectedRecord.studentsPhotoUrl ||
+                selectedRecord.attendanceDocumentUrl;
+              const cleanAttendanceSheetUrl =
+                attendanceSheetUrl && attendanceSheetUrl !== checkInPhotoUrl && !/check.?in/i.test(attendanceSheetUrl)
+                  ? attendanceSheetUrl
+                  : null;
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-                {/* Proof 1: Check-In */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#4338ca", display: "flex", alignItems: "center", gap: 4 }}>
-                    <Camera size={13} />
-                    <span>1. Check-In Photo</span>
-                  </div>
-                  {selectedRecord.imageUrl || selectedRecord.checkInPhoto ? (
-                    <Image
-                      src={getSecureImageUrl(selectedRecord.imageUrl || selectedRecord.checkInPhoto)}
-                      alt="Check-In Proof"
-                      style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
-                    />
-                  ) : (
-                    <Alert message="No image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                  )}
-                  {selectedRecord.checkInTime ? (
-                    <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
-                      Time: {dayjs(selectedRecord.checkInTime).format("hh:mm A")}
-                    </div>
-                  ) : null}
-                </div>
+              const rawActivities = Array.isArray(selectedRecord.activityPhotos) ? selectedRecord.activityPhotos.filter(Boolean) : [];
+              const driveActivities = rawActivities.filter(
+                (p) => typeof p === 'string' && (p.startsWith('http') || p.includes('googleusercontent') || p.includes('drive.google'))
+              );
+              const effectiveActivities = (driveActivities.length > 0 ? driveActivities : rawActivities).filter(
+                (p) => p !== checkInPhotoUrl && !/check.?in/i.test(p)
+              );
+              const uniqueActivities = Array.from(new Set(effectiveActivities));
 
-                {/* Proof 2: Student Attendance Sheet */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#1d4ed8", display: "flex", alignItems: "center", gap: 4 }}>
-                    <FileSpreadsheet size={13} />
-                    <span>2. Student Attendance</span>
-                  </div>
-                  {selectedRecord.attendancePdfUrl ? (
-                    <Button
-                      type="primary"
-                      danger
-                      icon={<FileText size={13} />}
-                      href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
-                      target="_blank"
-                      style={{ width: "100%", fontSize: 11, height: 32 }}
-                    >
-                      View PDF Roster
-                    </Button>
-                  ) : selectedRecord.attendanceExcelUrl ? (
-                    <Button
-                      type="primary"
-                      icon={<FileSpreadsheet size={13} />}
-                      href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
-                      target="_blank"
-                      style={{ width: "100%", fontSize: 11, height: 32, backgroundColor: "#15803d", borderColor: "#15803d" }}
-                    >
-                      Download Excel Roster
-                    </Button>
-                  ) : (selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl) &&
-                      (selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl) !== selectedRecord.imageUrl &&
-                      (selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl) !== selectedRecord.checkInPhoto ? (
-                    <Image
-                      src={getSecureImageUrl(selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl)}
-                      alt="Student Sheet"
-                      style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
-                    />
-                  ) : (
-                    <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                  )}
-                </div>
+              const checkOutPhotoUrl = selectedRecord.checkOutGeoImageUrl || selectedRecord.checkOut?.photos?.[0]?.url;
+              const cleanCheckOutPhotoUrl =
+                checkOutPhotoUrl && checkOutPhotoUrl !== checkInPhotoUrl && !/check.?in/i.test(checkOutPhotoUrl)
+                  ? checkOutPhotoUrl
+                  : null;
 
-                {/* Proof 3: Student Classroom Activities */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#7e22ce", display: "flex", alignItems: "center", gap: 4 }}>
-                    <Layers size={13} />
-                    <span>3. Activities ({Array.isArray(selectedRecord.activityPhotos) ? selectedRecord.activityPhotos.length : 0})</span>
-                  </div>
-                  {Array.isArray(selectedRecord.activityPhotos) && selectedRecord.activityPhotos.length > 0 ? (
-                    <Image.PreviewGroup>
-                      <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
-                        {selectedRecord.activityPhotos.map((photo, i) => (
-                          <Image
-                            key={i}
-                            src={getSecureImageUrl(photo)}
-                            alt={`Activity ${i + 1}`}
-                            style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
-                          />
-                        ))}
+              return (
+                <div>
+                  <Text strong style={{ fontSize: 13, color: "#1f2937", display: "block", marginBottom: 10 }}>
+                    Mandatory Uploaded Proofs (4 Documents / Photos):
+                  </Text>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                    {/* Proof 1: Check-In */}
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#4338ca", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Camera size={13} />
+                        <span>1. Check-In Photo</span>
                       </div>
-                    </Image.PreviewGroup>
-                  ) : (
-                    <Alert message="No activities" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                  )}
-                </div>
-
-                {/* Proof 4: Check-Out Photo */}
-                <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#047857", display: "flex", alignItems: "center", gap: 4 }}>
-                    <Camera size={13} />
-                    <span>4. Check-Out Photo</span>
-                  </div>
-                  {selectedRecord.checkOutGeoImageUrl || selectedRecord.checkOut?.photos?.[0]?.url ? (
-                    <Image
-                      src={getSecureImageUrl(selectedRecord.checkOutGeoImageUrl || selectedRecord.checkOut?.photos?.[0]?.url)}
-                      alt="Check-Out Proof"
-                      style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
-                    />
-                  ) : (
-                    <Alert message="No check-out image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                  )}
-                  {selectedRecord.checkOutTime ? (
-                    <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
-                      Time: {dayjs(selectedRecord.checkOutTime).format("hh:mm A")}
+                      {checkInPhotoUrl ? (
+                        <Image
+                          src={getSecureImageUrl(checkInPhotoUrl)}
+                          alt="Check-In Proof"
+                          style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
+                        />
+                      ) : (
+                        <Alert message="No image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                      )}
+                      {selectedRecord.checkInTime ? (
+                        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
+                          Time: {dayjs(selectedRecord.checkInTime).format("hh:mm A")}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+
+                    {/* Proof 2: Student Attendance Sheet */}
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#1d4ed8", display: "flex", alignItems: "center", gap: 4 }}>
+                        <FileSpreadsheet size={13} />
+                        <span>2. Student Attendance</span>
+                      </div>
+                      {selectedRecord.attendancePdfUrl ? (
+                        <Button
+                          type="primary"
+                          danger
+                          icon={<FileText size={13} />}
+                          href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
+                          target="_blank"
+                          style={{ width: "100%", fontSize: 11, height: 32 }}
+                        >
+                          View PDF Roster
+                        </Button>
+                      ) : selectedRecord.attendanceExcelUrl ? (
+                        <Button
+                          type="primary"
+                          icon={<FileSpreadsheet size={13} />}
+                          href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
+                          target="_blank"
+                          style={{ width: "100%", fontSize: 11, height: 32, backgroundColor: "#15803d", borderColor: "#15803d" }}
+                        >
+                          Download Excel Roster
+                        </Button>
+                      ) : cleanAttendanceSheetUrl ? (
+                        <Image
+                          src={getSecureImageUrl(cleanAttendanceSheetUrl)}
+                          alt="Student Sheet"
+                          style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
+                        />
+                      ) : (
+                        <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                      )}
+                    </div>
+
+                    {/* Proof 3: Student Classroom Activities */}
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#7e22ce", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Layers size={13} />
+                        <span>3. Activities ({uniqueActivities.length})</span>
+                      </div>
+                      {uniqueActivities.length > 0 ? (
+                        <Image.PreviewGroup>
+                          <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+                            {uniqueActivities.map((photo, i) => (
+                              <Image
+                                key={i}
+                                src={getSecureImageUrl(photo)}
+                                alt={`Activity ${i + 1}`}
+                                style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
+                              />
+                            ))}
+                          </div>
+                        </Image.PreviewGroup>
+                      ) : (
+                        <Alert message="No activities" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                      )}
+                    </div>
+
+                    {/* Proof 4: Check-Out Photo */}
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#047857", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Camera size={13} />
+                        <span>4. Check-Out Photo</span>
+                      </div>
+                      {cleanCheckOutPhotoUrl ? (
+                        <Image
+                          src={getSecureImageUrl(cleanCheckOutPhotoUrl)}
+                          alt="Check-Out Proof"
+                          style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
+                        />
+                      ) : (
+                        <Alert message="No check-out image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                      )}
+                      {selectedRecord.checkOutTime ? (
+                        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
+                          Time: {dayjs(selectedRecord.checkOutTime).format("hh:mm A")}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Admin Remarks & Decision */}
             <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14 }}>
