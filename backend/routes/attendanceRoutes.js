@@ -3274,10 +3274,16 @@ const checkOutHandler = async (req, res) => {
 
         // Handle optional activity media
         if (req.files?.activityPhotos) {
-            attendance.activityPhotos = [...(attendance.activityPhotos || []), ...req.files.activityPhotos.map(f => f.path)];
+            attendance.activityPhotos = [
+                ...(attendance.activityPhotos || []),
+                ...req.files.activityPhotos.map(f => `/uploads/attendance/images/${path.basename(f.path)}`)
+            ];
         }
         if (req.files?.activityVideos) {
-            attendance.activityVideos = [...(attendance.activityVideos || []), ...req.files.activityVideos.map(f => f.path)];
+            attendance.activityVideos = [
+                ...(attendance.activityVideos || []),
+                ...req.files.activityVideos.map(f => `/uploads/attendance/videos/${path.basename(f.path)}`)
+            ];
         }
 
         const checkOutAutoApproved = applyCheckOutVerificationResult({
@@ -3544,7 +3550,7 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
 
         const matchingCheckIn = checkInDocs.find(
             (c) => (c.scheduleId && itemScheduleId && String(c.scheduleId) === itemScheduleId) ||
-                   (c.trainerId && itemTrainerId && String(c.trainerId) === itemTrainerId)
+                   (c.trainerId && itemTrainerId && String(c.trainerId) === itemTrainerId && item.assignedDate && c.date && String(c.date).slice(0, 10) === String(item.assignedDate).slice(0, 10))
         );
 
         let attendancePdfUrl = item.attendancePdfUrl || item.studentAttendancePdfUrl || item.scannedAttendancePdfUrl;
@@ -3562,7 +3568,7 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
         }
 
         let attendancePhoto = item.attendancePhoto || item.attendance_photo || item.attendanceFile || item.attendanceDocument;
-        if (!attendancePdfUrl && !attendanceExcelUrl && item.imageUrl && item.imageUrl !== checkInPhoto) {
+        if (!attendancePdfUrl && !attendanceExcelUrl && item.imageUrl && item.imageUrl !== checkInPhoto && !/check.?in/i.test(item.imageUrl)) {
             attendancePhoto = attendancePhoto || item.imageUrl;
         }
 
@@ -3571,24 +3577,33 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             if (!docUrl) return;
 
             const lowerName = String(doc.fileName || '').toLowerCase();
-            const isAttendanceDoc = doc.fileType === 'attendance' || doc.fileField === 'attendancePdf' || doc.fileField === 'attendanceExcel' || doc.fileField === 'attendancePhoto' || doc.fileField === 'attendance_photo' || /attendance|sheet|roster|certificate/i.test(lowerName);
-            const isGeotagDoc = doc.fileType === 'geotag' || doc.fileField === 'checkInPhoto' || doc.fileField === 'check_in_image' || doc.fileField === 'signature';
+            const docField = String(doc.fileField || '').toLowerCase();
+            const isAttendanceDoc = (
+                doc.fileType === 'attendance' ||
+                docField === 'attendancepdf' ||
+                docField === 'attendanceexcel' ||
+                docField === 'attendancephoto' ||
+                docField === 'attendance_photo' ||
+                docField === 'attendancedocument' ||
+                (/attendance|sheet|roster/i.test(lowerName) && !/check.?in|check.?out|activity/i.test(lowerName))
+            );
+            const isGeotagDoc = doc.fileType === 'geotag' || docField === 'checkinphoto' || docField === 'check_in_image' || docField === 'signature' || /check.?in/i.test(lowerName);
 
             if (isAttendanceDoc) {
-                const isPdf = lowerName.endsWith('.pdf') || doc.fileField === 'attendancePdf';
-                const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv') || doc.fileField === 'attendanceExcel';
+                const isPdf = lowerName.endsWith('.pdf') || docField === 'attendancepdf';
+                const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv') || docField === 'attendanceexcel';
 
                 if (isPdf && !attendancePdfUrl) {
                     attendancePdfUrl = docUrl;
                 } else if (isExcel && !attendanceExcelUrl) {
                     attendanceExcelUrl = docUrl;
-                } else if (!attendancePhoto) {
+                } else if (!attendancePhoto && !lowerName.includes('checkin') && !lowerName.includes('checkout') && !lowerName.includes('activity')) {
                     attendancePhoto = docUrl;
                 }
             } else if (isGeotagDoc) {
                 if (doc.fileField === 'signature' && !signatureUrl) {
                     signatureUrl = docUrl;
-                } else if (!checkInPhoto) {
+                } else if (!checkInPhoto && !lowerName.includes('checkout') && !lowerName.includes('activity')) {
                     checkInPhoto = docUrl;
                 }
             }

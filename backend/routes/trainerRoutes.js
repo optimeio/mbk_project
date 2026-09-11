@@ -641,18 +641,17 @@ router.get("/", authenticate, async (req, res) => {
     }
 
     const { city } = req.query;
-    const userQuery = { role: "Trainer" };
+    const userQuery = { role: { $in: ["Trainer", "trainer", "TRAINER"] } };
 
     const trainerUsers = await User.find(userQuery).select(
       "name firstName lastName email phoneNumber city specialization experience isActive role createdAt",
     );
     const userIds = trainerUsers.map((u) => u._id);
 
-    if (userIds.length === 0) {
-      return res.json({ success: true, data: [] });
-    }
-
-    const trainerQuery = { userId: { $in: userIds } };
+    // If no user documents match by role, also find trainers directly
+    const trainerQuery = userIds.length > 0
+      ? { $or: [{ userId: { $in: userIds } }, { role: { $in: ["Trainer", "trainer"] } }] }
+      : {};
 
     if (city && String(city).trim()) {
       const normalizedCityName = String(city).trim();

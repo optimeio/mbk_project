@@ -216,7 +216,7 @@ const CreateScheduleModal = ({ open, onClose, onSuccess, associations = {} }) =>
   const [courseId, setCourseId] = useState("");
   const [dayNumber, setDayNumber] = useState(1);
   const [scheduledDate, setScheduledDate] = useState("");
-  const [session, setSession] = useState("FULL_DAY");
+  const [session, setSession] = useState("FN");
   const [subject, setSubject] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -238,10 +238,13 @@ const CreateScheduleModal = ({ open, onClose, onSuccess, associations = {} }) =>
   const filteredTrainers = trainers.filter((t) => {
     const isApproved = (
       t.status?.toUpperCase() === "APPROVED" ||
+      t.status?.toUpperCase() === "ACTIVE" ||
       t.verificationStatus?.toUpperCase() === "APPROVED" ||
       t.verificationStatus?.toUpperCase() === "VERIFIED" ||
       t.registrationStatus?.toLowerCase() === "approved" ||
-      t.isApproved === true
+      t.isApproved === true ||
+      t.isVerified === true ||
+      !t.status
     ) && t.status?.toUpperCase() !== "REJECTED";
     if (!isApproved) return false;
     if (t.userId?.isActive === false) return false;
@@ -250,9 +253,10 @@ const CreateScheduleModal = ({ open, onClose, onSuccess, associations = {} }) =>
     const tCompanyId = t.companyId?._id || t.companyId || t.company?._id || t.company || t.userId?.companyId;
     const tCompanyCode = t.companyCode;
 
-    if (tCompanyId && String(tCompanyId) === String(companyId)) return true;
+    if (!tCompanyId) return true;
+    if (String(tCompanyId) === String(companyId)) return true;
     if (tCompanyCode && selectedCompanyObj?.companyCode && String(tCompanyCode).toUpperCase() === String(selectedCompanyObj.companyCode).toUpperCase()) return true;
-    if (isSmGroupsSelected && (!tCompanyId || String(tCompanyId) === String(companyId))) return true;
+    if (isSmGroupsSelected) return true;
 
     return false;
   });
@@ -314,7 +318,7 @@ const CreateScheduleModal = ({ open, onClose, onSuccess, associations = {} }) =>
     setCourseId("");
     setDayNumber(1);
     setScheduledDate("");
-    setSession("FULL_DAY");
+    setSession("FN");
     setSubject("");
     setError("");
   };
@@ -576,7 +580,6 @@ const CreateScheduleModal = ({ open, onClose, onSuccess, associations = {} }) =>
                         required
                         className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                       >
-                        <option value="FULL_DAY">Full Day</option>
                         <option value="FN">Forenoon (FN)</option>
                         <option value="AN">Afternoon (AN)</option>
                       </select>

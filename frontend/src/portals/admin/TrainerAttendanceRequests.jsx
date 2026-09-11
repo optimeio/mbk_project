@@ -538,9 +538,11 @@ export default function TrainerAttendanceRequests() {
                     >
                       Download Excel Roster
                     </Button>
-                  ) : selectedRecord.studentsPhotoUrl && selectedRecord.studentsPhotoUrl !== selectedRecord.imageUrl && selectedRecord.studentsPhotoUrl !== selectedRecord.checkInPhoto ? (
+                  ) : (selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl) &&
+                      (selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl) !== selectedRecord.imageUrl &&
+                      (selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl) !== selectedRecord.checkInPhoto ? (
                     <Image
-                      src={getSecureImageUrl(selectedRecord.studentsPhotoUrl)}
+                      src={getSecureImageUrl(selectedRecord.studentsPhotoUrl || selectedRecord.attendancePhoto || selectedRecord.attendanceDocumentUrl)}
                       alt="Student Sheet"
                       style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
                     />

@@ -143,9 +143,9 @@ const RescheduleModal = ({
   const [trainerId, setTrainerId] = useState("");
   const [dayNumber, setDayNumber] = useState(1);
   const [scheduledDate, setScheduledDate] = useState("");
-  const [session, setSession] = useState("FULL_DAY");
+  const [session, setSession] = useState("FN");
   const [subject, setSubject] = useState("");
-  const [status, setStatus] = useState("rescheduled");
+  const [status, setStatus] = useState("scheduled");
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -177,9 +177,9 @@ const RescheduleModal = ({
     setTrainerId(schedule.trainerId?._id || schedule.trainerId || "");
     setDayNumber(schedule.dayNumber || 1);
     setScheduledDate(formattedDate);
-    setSession(schedule.session || "FULL_DAY");
+    setSession(schedule.session === "AN" ? "AN" : "FN");
     setSubject(schedule.subject || "");
-    setStatus(schedule.status || "rescheduled");
+    setStatus(schedule.status || "scheduled");
     setRescheduleReason(schedule.rescheduleReason || schedule.reason || "");
     setError("");
   }, [isOpen, schedule]);
@@ -190,10 +190,13 @@ const RescheduleModal = ({
   const filteredTrainers = trainers.filter((t) => {
     const isApproved = (
       t.status?.toUpperCase() === "APPROVED" ||
+      t.status?.toUpperCase() === "ACTIVE" ||
       t.verificationStatus?.toUpperCase() === "APPROVED" ||
       t.verificationStatus?.toUpperCase() === "VERIFIED" ||
       t.registrationStatus?.toLowerCase() === "approved" ||
-      t.isApproved === true
+      t.isApproved === true ||
+      t.isVerified === true ||
+      !t.status
     ) && t.status?.toUpperCase() !== "REJECTED";
     if (!isApproved) return false;
     if (t.userId?.isActive === false) return false;
@@ -202,9 +205,10 @@ const RescheduleModal = ({
     const tCompanyId = t.companyId?._id || t.companyId || t.company?._id || t.company || t.userId?.companyId;
     const tCompanyCode = t.companyCode;
 
-    if (tCompanyId && String(tCompanyId) === String(companyId)) return true;
+    if (!tCompanyId) return true;
+    if (String(tCompanyId) === String(companyId)) return true;
     if (tCompanyCode && selectedCompanyObj?.companyCode && String(tCompanyCode).toUpperCase() === String(selectedCompanyObj.companyCode).toUpperCase()) return true;
-    if (isSmGroupsSelected && (!tCompanyId || String(tCompanyId) === String(companyId))) return true;
+    if (isSmGroupsSelected) return true;
 
     return false;
   });
@@ -471,7 +475,6 @@ const RescheduleModal = ({
                         required
                         className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm text-slate-800 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
                       >
-                        <option value="FULL_DAY">Full Day</option>
                         <option value="FN">Forenoon (FN)</option>
                         <option value="AN">Afternoon (AN)</option>
                       </select>

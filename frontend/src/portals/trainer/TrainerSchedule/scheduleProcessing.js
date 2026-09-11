@@ -485,6 +485,7 @@ export const transformScheduleRecord = (
       checkOut: schedule.checkOut || null,
       dayStatus: schedule.dayStatus || null,
       dayStatusLabel: schedule.dayStatusLabel || null,
+      session: schedule.session || "FN",
       attendanceUploaded: schedule.attendanceUploaded ?? null,
       geoTagUploaded: schedule.geoTagUploaded ?? null,
       rescheduleReason: schedule.rescheduleReason || null,

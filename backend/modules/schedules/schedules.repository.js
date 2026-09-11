@@ -287,10 +287,12 @@ const listAssociationsColleges = async () =>
 const listAssociationsTrainers = async () =>
   Trainer.find({
     $or: [
-      { status: "APPROVED" },
-      { verificationStatus: { $in: ["APPROVED", "VERIFIED"] } },
-      { registrationStatus: "approved" },
+      { status: { $in: ["APPROVED", "approved", "ACTIVE", "active", "Active", "Verified", "verified"] } },
+      { verificationStatus: { $in: ["APPROVED", "VERIFIED", "approved", "verified", "Active", "active"] } },
+      { registrationStatus: { $in: ["approved", "APPROVED", "verified", "VERIFIED", "active", "ACTIVE"] } },
       { isApproved: true },
+      { isVerified: true },
+      { status: { $exists: false } },
     ],
     status: { $ne: "REJECTED" },
   })

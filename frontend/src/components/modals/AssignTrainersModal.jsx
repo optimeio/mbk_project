@@ -52,7 +52,7 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
         const newSchedule = {
             id: Date.now(),
             dayOfWeek: 'Monday',
-            session: 'FULL_DAY',
+            session: 'FN',
             subject: ''
         };
 
@@ -233,11 +233,10 @@ const AssignTrainersModal = ({ open, onClose, onSave, college, trainers = [] }) 
                                                                                     Session
                                                                                 </label>
                                                                                 <select
-                                                                                    value={schedule.session || "FULL_DAY"}
+                                                                                    value={schedule.session || "FN"}
                                                                                     onChange={(e) => updateSchedule(trainer.id, schedule.id, 'session', e.target.value)}
                                                                                     className="block w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
                                                                                 >
-                                                                                    <option value="FULL_DAY">Full Day</option>
                                                                                     <option value="FN">Forenoon (FN)</option>
                                                                                     <option value="AN">Afternoon (AN)</option>
                                                                                 </select>

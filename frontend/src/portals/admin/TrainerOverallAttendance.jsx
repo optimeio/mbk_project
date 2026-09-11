@@ -183,15 +183,18 @@ const getCheckInEntries = (record = {}) => {
   const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
   
   const checkInDocs = docs.filter((doc) => {
+    const docField = String(doc?.fileField || '').toLowerCase();
+    const docName = String(doc?.fileName || doc?.name || '').toLowerCase();
     return (
-      doc?.fileField === 'checkInPhoto' ||
-      doc?.fileField === 'check_in_image' ||
-      doc?.fileField === 'clock_in_image' ||
-      (doc?.fileType === 'geotag' && !String(doc?.fileName || '').toLowerCase().includes('checkout') && !String(doc?.fileField || '').toLowerCase().includes('checkout'))
+      docField === 'checkinphoto' ||
+      docField === 'check_in_image' ||
+      docField === 'clock_in_image' ||
+      docField === 'photo' ||
+      (doc?.fileType === 'geotag' && !docName.includes('checkout') && !docField.includes('checkout') && !docName.includes('activity'))
     );
   });
 
-  const sigDocs = docs.filter((doc) => doc?.fileField === 'signature');
+  const sigDocs = docs.filter((doc) => String(doc?.fileField || '').toLowerCase() === 'signature');
 
   // If we have attached check-in document(s) from Drive, use those as the authentic files
   if (checkInDocs.length > 0) {
@@ -246,6 +249,9 @@ const getCheckInEntries = (record = {}) => {
 
 const getAttendanceFileEntries = (record = {}) => {
   const files = [];
+  const checkInRef = record?.checkInPhoto || record?.checkInImage || record?.checkIn?.photo;
+  const checkOutRef = record?.checkOutGeoImageUrl;
+
   const pdfUrl = record?.attendancePdfUrl || record?.studentAttendancePdfUrl || record?.scannedAttendancePdfUrl || record?.attendancePdf || record?.attendance_pdf;
   if (pdfUrl) {
     files.push({
@@ -276,8 +282,7 @@ const getAttendanceFileEntries = (record = {}) => {
     record?.attendanceSheet ||
     record?.studentAttendancePhoto;
 
-  const checkInRef = record?.checkInPhoto || record?.checkInImage || record?.checkIn?.photo;
-  if (attendanceImageUrl && attendanceImageUrl !== checkInRef) {
+  if (attendanceImageUrl && attendanceImageUrl !== checkInRef && attendanceImageUrl !== checkOutRef && !/check.?in/i.test(attendanceImageUrl)) {
     const isPdf = String(attendanceImageUrl).toLowerCase().endsWith('.pdf');
     const isExcel = String(attendanceImageUrl).toLowerCase().endsWith('.xlsx') || String(attendanceImageUrl).toLowerCase().endsWith('.xls') || String(attendanceImageUrl).toLowerCase().endsWith('.csv');
     files.push({
@@ -292,14 +297,19 @@ const getAttendanceFileEntries = (record = {}) => {
   const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
   docs.forEach((doc, idx) => {
     const docUrl = doc?.fileUrl || doc?.url || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
+    if (!docUrl) return;
     const docName = doc?.fileName || doc?.name || `Attendance Document ${idx + 1}`;
     const lowerName = String(docName).toLowerCase();
-    const isPdf = lowerName.endsWith('.pdf') || doc?.fileType === 'attendance' || doc?.fileField === 'attendancePdf';
-    const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv') || doc?.fileField === 'attendanceExcel';
-    const isImage = lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png') || lowerName.endsWith('.webp') || doc?.fileField === 'attendancePhoto' || doc?.fileField === 'attendance_photo' || doc?.fileField === 'studentsPhoto' || doc?.fileField === 'attendanceDocument';
-    const isAttendanceType = doc?.fileType === 'attendance' || doc?.fileField?.includes('attendance') || /attendance|sheet|roster|certificate/i.test(docName);
+    const docField = String(doc?.fileField || '').toLowerCase();
 
-    if (docUrl && (isPdf || isExcel || isImage || isAttendanceType)) {
+    const isPdf = lowerName.endsWith('.pdf') || docField === 'attendancepdf' || docField === 'studentattendancepdf';
+    const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv') || docField === 'attendanceexcel';
+    
+    // Explicit student attendance image docs only
+    const isAttendanceImage = docField === 'attendancephoto' || docField === 'attendance_photo' || docField === 'attendancedocument';
+    const isAttendanceType = (doc?.fileType === 'attendance' || /attendance|sheet|roster|student_list/i.test(docName)) && !/check.?in|check.?out|activity/i.test(lowerName) && !/check.?in|check.?out|activity/i.test(docField);
+
+    if (isPdf || isExcel || isAttendanceImage || isAttendanceType) {
       files.push({
         type: isPdf ? 'pdf' : (isExcel ? 'excel' : 'image'),
         name: docName,
@@ -314,9 +324,12 @@ const getAttendanceFileEntries = (record = {}) => {
 
 const getStudentActivityEntries = (record = {}) => {
   const activities = [];
+  const checkInRef = record?.checkInPhoto || record?.checkInImage || record?.checkIn?.photo;
+  const checkOutRef = record?.checkOutGeoImageUrl;
+
   if (Array.isArray(record?.activityPhotos) && record.activityPhotos.length) {
     record.activityPhotos.forEach((photo, idx) => {
-      if (photo) {
+      if (photo && photo !== checkInRef && photo !== checkOutRef) {
         activities.push({
           type: 'image',
           title: `Activity Photo ${idx + 1}`,
@@ -341,11 +354,13 @@ const getStudentActivityEntries = (record = {}) => {
 
   const docs = Array.isArray(record?.documents) ? record.documents : [];
   docs.forEach((doc, idx) => {
-    if (doc?.fileField === 'activityPhotos' || doc?.fileField === 'studentsPhoto') {
+    const docField = String(doc?.fileField || '').toLowerCase();
+    const docName = String(doc?.fileName || '').toLowerCase();
+    if (docField === 'activityphotos' || docField === 'activityphoto' || docField === 'activityvideos' || doc?.fileType === 'activity' || /activity|classroom/i.test(docName)) {
       const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
-      if (docUrl) {
+      if (docUrl && docUrl !== checkInRef && docUrl !== checkOutRef) {
         activities.push({
-          type: 'image',
+          type: docName.endsWith('.mp4') || docField === 'activityvideos' ? 'video' : 'image',
           title: doc.fileName || `Activity Photo ${activities.length + 1}`,
           url: getSecureImageUrl(docUrl),
           originalUrl: docUrl,
@@ -419,7 +434,7 @@ const resolveSessionMeta = (record = {}) => {
     }
   }
 
-  return { label: rawSession || 'Full Day', color: 'default' };
+  return { label: rawSession || 'FN', color: 'blue' };
 };
 
 const toFiniteNumber = (value) => {
