@@ -128,6 +128,7 @@ export default function TrainerActivities() {
 
   // Step tracker: 1=Check-In, 2=Student Attendance, 3=Student Activities, 4=Check-Out, 5=Summary
   const [step, setStep] = useState(1);
+  const [maxAllowedStep, setMaxAllowedStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
   // Lightbox Modal state
@@ -217,16 +218,37 @@ export default function TrainerActivities() {
   // Helper: Is current IST time past 1:00 PM (FN session close)?
   const isFNSessionClosedNow = () => {
     const now = new Date();
-    const istHour = Number(
-      new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).format(now)
-    );
-    return istHour >= 13;
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+    return hour >= 13;
+  };
+
+  // Helper: Is current IST time past 5:30 PM (AN session close)?
+  const isANSessionClosedNow = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+    const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+    return hour > 17 || (hour === 17 && minute >= 30);
   };
 
   // Helper: Detect if a schedule session is FN
   const isSessionFN = (info) => {
     const s = String(info?.session || info?.sessionType || '').toUpperCase().trim();
     if (s === 'FN') return true;
+    if (s === 'AN') return false;
     // Derive from startTime (e.g. '09:00 AM')
     const startRaw = String(info?.startTime || info?.time || '').trim().toUpperCase().split('-')[0].trim();
     const match = startRaw.match(/(\d{1,2}):(\d{2})(?:\s*([AP]M))?/);
@@ -236,7 +258,7 @@ export default function TrainerActivities() {
       if (match[3] === 'AM' && h === 12) h = 0;
       return h < 13;
     }
-    return false;
+    return true;
   };
 
   const checkTodayAttendanceStatus = useCallback(async () => {
@@ -261,20 +283,33 @@ export default function TrainerActivities() {
         if (res.step) {
           const mapped = Math.max(2, Math.min(5, res.step - 1));
           setStep(mapped);
+          setMaxAllowedStep((prev) => Math.max(prev, mapped));
           if (res.step === 6) {
             setStep(5);
+            setMaxAllowedStep(5);
             setSummaryData({ clockOutTime: res.checkOutTime, duration: res.durationMinutes || 0 });
           } else if (res.step === 3) {
             toast.success('Already checked-in today. Resuming at Student Attendance.');
+          } else if (res.step === 4) {
+            toast.success('Student attendance uploaded. Resuming at Classroom Activities.');
+          } else if (res.step === 5) {
+            toast.success('Activities logged. Ready for Check-Out.');
           }
         } else {
           setStep(2);
+          setMaxAllowedStep((prev) => Math.max(prev, 2));
         }
       } else if (res.hasScheduleToday && res.scheduleInfo) {
-        // Not yet clocked in — check if FN session is already closed
+        // Not yet clocked in — check if FN or AN session is already closed
         const fnOnly = isSessionFN(res.scheduleInfo);
         if (fnOnly && isFNSessionClosedNow()) {
           toast('FN session closed at 1:00 PM. Redirecting to your dashboard.', {
+            icon: '🕐',
+            duration: 4000,
+          });
+          setTimeout(() => { if (!cancelledRef.current) router.push('/trainer/dashboard'); }, 1500);
+        } else if (!fnOnly && isANSessionClosedNow()) {
+          toast('AN session closed at 5:30 PM. Redirecting to your dashboard.', {
             icon: '🕐',
             duration: 4000,
           });
@@ -404,6 +439,7 @@ export default function TrainerActivities() {
         setCheckInFile(null);
         setCheckInPreview(null);
         setStep(2);
+        setMaxAllowedStep((prev) => Math.max(prev, 2));
       }
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Check-in failed. Please try again.'));
@@ -433,6 +469,7 @@ export default function TrainerActivities() {
       if (res.success) {
         toast.success(res.message || 'Student attendance saved!');
         setStep(3);
+        setMaxAllowedStep((prev) => Math.max(prev, 3));
       }
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to process attendance file.'));
@@ -508,6 +545,7 @@ export default function TrainerActivities() {
       if (res.success) {
         toast.success('Activities logged successfully!');
         setStep(4);
+        setMaxAllowedStep((prev) => Math.max(prev, 4));
       }
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Failed to submit activities."));
@@ -541,6 +579,7 @@ export default function TrainerActivities() {
         setCheckOutFile(null);
         setCheckOutPreview(null);
         setStep(5);
+        setMaxAllowedStep((prev) => Math.max(prev, 5));
       }
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Check-out failed. Please try again.'));
@@ -663,17 +702,25 @@ export default function TrainerActivities() {
             {STEPS.map((s) => {
               const isDone = step > s.num;
               const isActive = step === s.num;
+              const isUnlocked = s.num <= maxAllowedStep || isDone;
               const Icon = s.icon;
 
               return (
-                <div
+                <button
+                  type="button"
                   key={s.num}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                  disabled={!isUnlocked}
+                  onClick={() => {
+                    if (isUnlocked) setStep(s.num);
+                  }}
+                  className={`text-left flex items-center gap-3 p-3 rounded-xl border transition-all ${
                     isActive
                       ? 'bg-slate-950 text-white border-slate-950 shadow-md scale-[1.02] dark:bg-white dark:text-slate-950 dark:border-white'
                       : isDone
-                      ? 'bg-emerald-50/60 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-300'
-                      : 'bg-slate-50/50 border-slate-200/70 text-slate-400 dark:bg-slate-800/30 dark:border-slate-800 dark:text-slate-500'
+                      ? 'bg-emerald-50/60 border-emerald-200 text-emerald-800 hover:bg-emerald-100/70 cursor-pointer dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-300'
+                      : isUnlocked
+                      ? 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-300'
+                      : 'bg-slate-50/50 border-slate-200/70 text-slate-400 opacity-60 cursor-not-allowed dark:bg-slate-800/30 dark:border-slate-800 dark:text-slate-500'
                   }`}
                 >
                   <div
@@ -689,13 +736,13 @@ export default function TrainerActivities() {
                   </div>
                   <div className="min-w-0">
                     <p className={`text-[10px] uppercase font-bold tracking-wider ${isActive ? 'text-slate-300 dark:text-slate-600' : isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                      Step {s.num} {isDone ? '• Done' : isActive ? '• Active' : ''}
+                      Step {s.num} {isDone ? '• Done' : isActive ? '• Active' : isUnlocked ? '• Unlocked' : ''}
                     </p>
                     <p className="text-xs sm:text-sm font-bold truncate leading-tight mt-0.5">
                       {s.label}
                     </p>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -281,16 +281,15 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
 
   // Time Window Calculations for Today's FN / AN Sessions
   const startTimeVal = schedule.startTime || (schedule.time ? String(schedule.time).split("-")[0].trim() : "09:00 AM");
-  const endTimeVal = schedule.endTime || (schedule.time ? String(schedule.time).split("-")[1]?.trim() : "01:00 PM");
-
   const sessionStartObj = parseScheduleTime(scheduleDateRaw, startTimeVal);
-  const sessionEndObj = parseScheduleEndTime(scheduleDateRaw, endTimeVal);
-
   const startHour = sessionStartObj ? sessionStartObj.getHours() : 9;
   // FN = Forenoon (starts before 13:00), AN = Afternoon (starts 13:00+)
   const isFNSession = startHour < 13;
   const sessionLabel = isFNSession ? "FN Session" : "AN Session";
   const sessionType = schedule.session ? String(schedule.session).toUpperCase().trim() : (isFNSession ? "FN" : "AN");
+
+  const endTimeVal = schedule.endTime || (schedule.time ? String(schedule.time).split("-")[1]?.trim() : (isFNSession || sessionType === "FN" ? "01:00 PM" : "05:30 PM"));
+  const sessionEndObj = parseScheduleEndTime(scheduleDateRaw, endTimeVal);
 
   // 1-hour check-in cutoff window (e.g. 9:00 AM -> cutoff at 10:00 AM)
   const checkInCutoffObj = sessionStartObj
@@ -299,8 +298,8 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
 
   const isPastCutoffTime = isToday && checkInCutoffObj ? now > checkInCutoffObj : false;
 
-  // FN session hard-closes at 13:00 IST regardless of stored endTime
-  // AN/FULL_DAY session uses parsed sessionEndObj
+  // FN session hard-closes at 13:00 IST (1:00 PM)
+  // AN session hard-closes at 17:30 IST (5:30 PM)
   let isSessionClosedByTime = false;
   if (isToday) {
     if (isFNSession || sessionType === "FN") {
@@ -308,6 +307,11 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
       const fnCloseHour = new Date(now);
       fnCloseHour.setHours(13, 0, 0, 0);
       isSessionClosedByTime = now >= fnCloseHour;
+    } else if (sessionType === "AN" || !isFNSession) {
+      // AN hard-close: 5:30 PM (17:30)
+      const anCloseHour = new Date(now);
+      anCloseHour.setHours(17, 30, 0, 0);
+      isSessionClosedByTime = now >= anCloseHour;
     } else if (sessionEndObj) {
       isSessionClosedByTime = now >= sessionEndObj;
     }

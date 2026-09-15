@@ -1383,7 +1383,7 @@ const createScheduleFeed = async ({
 
   const resolvedSession = session || "FULL_DAY";
   const defaultStartTime = resolvedSession === "AN" ? "13:00" : "09:00";
-  const defaultEndTime = resolvedSession === "FN" ? "13:00" : "17:00";
+  const defaultEndTime = resolvedSession === "FN" ? "13:00" : "17:30";
 
   // Idempotency check: prevent duplicate schedule creation if one already exists
   if (trainerId && collegeId) {
@@ -2544,7 +2544,7 @@ const updateScheduleFeed = async ({
       schedule.startTime = payload.session === "AN" ? "13:00" : "09:00";
     }
     if (payload?.endTime === undefined) {
-      schedule.endTime = payload.session === "FN" ? "13:00" : "17:00";
+      schedule.endTime = payload.session === "FN" ? "13:00" : "17:30";
     }
   }
   
