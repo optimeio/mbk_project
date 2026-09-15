@@ -2,6 +2,7 @@
 
 import { Fragment, useState, useEffect, useRef } from "react";
 import { Dialog, Transition } from "@headlessui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   XMarkIcon,
   CalendarIcon,
@@ -137,6 +138,7 @@ const RescheduleModal = ({
   trainers: propTrainers = [],
   onSaveSuccess,
 }) => {
+  const queryClient = useQueryClient();
   const [companyId, setCompanyId] = useState("");
   const [courseId, setCourseId] = useState("");
   const [collegeId, setCollegeId] = useState("");
@@ -294,6 +296,16 @@ const RescheduleModal = ({
         signalTrainerDashboardRefresh(targetTrainerId);
       }
       clearPortalDataBundle();
+
+      // Invalidate queries across all portals
+      queryClient.invalidateQueries({ queryKey: ["admin", "schedules-monitor"] });
+      queryClient.invalidateQueries({ queryKey: ["trainer-overall-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "college-details"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "schedule-associations"] });
+      queryClient.invalidateQueries({ queryKey: ["scheduler"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["schedules"] });
+      queryClient.invalidateQueries({ queryKey: ["trainer", "schedules"] });
 
       onClose();
 

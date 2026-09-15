@@ -1175,17 +1175,13 @@ const validateTrainerApproved = async (trainerId) => {
     error.statusCode = 404;
     throw error;
   }
-  const isApproved = (
-    String(trainerDoc.status || "").trim().toUpperCase() === "APPROVED" ||
-    String(trainerDoc.verificationStatus || "").trim().toUpperCase() === "APPROVED" ||
-    String(trainerDoc.verificationStatus || "").trim().toUpperCase() === "VERIFIED" ||
-    String(trainerDoc.registrationStatus || "").trim().toLowerCase() === "approved" ||
-    trainerDoc.isApproved === true
-  ) && String(trainerDoc.status || "").trim().toUpperCase() !== "REJECTED";
+  const isRejected =
+    String(trainerDoc.status || "").trim().toUpperCase() === "REJECTED" ||
+    String(trainerDoc.verificationStatus || "").trim().toUpperCase() === "REJECTED";
 
-  if (!isApproved || trainerDoc.userId?.isActive === false) {
-    const statusLabel = trainerDoc.status || trainerDoc.verificationStatus || "Pending Approval";
-    const error = new Error(`Only approved trainers can be assigned to schedules. Trainer status is currently "${statusLabel}".`);
+  if (isRejected || trainerDoc.userId?.isActive === false) {
+    const statusLabel = trainerDoc.status || trainerDoc.verificationStatus || "Inactive";
+    const error = new Error(`Cannot assign schedule to inactive or rejected trainer (status: "${statusLabel}").`);
     error.statusCode = 400;
     throw error;
   }
@@ -2606,6 +2602,28 @@ const updateScheduleFeed = async ({
 
   const updatedSchedule = await saveScheduleLoader({ schedule });
 
+  // Synchronize Attendance and TrainerAssignment for rescheduled session
+  const { Attendance, TrainerAssignment } = require("../../models");
+  if (Attendance && updatedSchedule?._id) {
+    try {
+      const attendanceUpdates = {};
+      if (updatedSchedule.scheduledDate) attendanceUpdates.date = updatedSchedule.scheduledDate;
+      if (updatedSchedule.trainerId) attendanceUpdates.trainerId = updatedSchedule.trainerId;
+      if (updatedSchedule.collegeId) attendanceUpdates.collegeId = updatedSchedule.collegeId;
+      if (updatedSchedule.dayNumber) attendanceUpdates.dayNumber = updatedSchedule.dayNumber;
+      if (updatedSchedule.session) attendanceUpdates.session = updatedSchedule.session;
+      if (updatedSchedule.subject) attendanceUpdates.subject = updatedSchedule.subject;
+      if (updatedSchedule.courseId) attendanceUpdates.courseId = updatedSchedule.courseId;
+
+      await Attendance.updateMany(
+        { scheduleId: updatedSchedule._id },
+        { $set: attendanceUpdates }
+      );
+    } catch (attSyncErr) {
+      console.warn("[updateScheduleFeed] Attendance sync error:", attSyncErr.message);
+    }
+  }
+
   if (updatedSchedule?.trainerId) {
     try {
       const trainer = await getTrainerByIdLoader({ trainerId: updatedSchedule.trainerId });
@@ -2707,6 +2725,21 @@ const updateScheduleFeed = async ({
 
   if (typeof invalidateTrainerScheduleCachesLoader === "function") {
     await invalidateTrainerScheduleCachesLoader([previousTrainerId, updatedSchedule?.trainerId]);
+  }
+
+  if (io) {
+    try {
+      io.emit("schedule:updated", {
+        scheduleId: updatedSchedule._id,
+        schedule: updatedSchedule,
+      });
+      io.emit("schedule:rescheduled", {
+        scheduleId: updatedSchedule._id,
+        schedule: updatedSchedule,
+      });
+    } catch (ioErr) {
+      // Ignore socket emit errors
+    }
   }
 
   return {
@@ -2881,32 +2914,39 @@ const mapAssociationsPayload = ({
         trainer.trainerId ||
         "Trainer";
 
-      return {
+      const mapped = {
         id: trainer._id,
         _id: trainer._id,
         name,
-        firstName: trainer.firstName || trainer.userId?.firstName || "",
-        lastName: trainer.lastName || trainer.userId?.lastName || "",
-        email: trainer.email || trainer.userId?.email || "",
-        phone: trainer.phone || trainer.mobile || trainer.userId?.phoneNumber || "",
-        mobile: trainer.mobile || trainer.phone || trainer.userId?.phoneNumber || "",
-        trainerId: trainer.trainerId || "",
+        trainerId: trainer.trainerId,
         companyId: trainer.companyId?._id || trainer.companyId || trainer.userId?.companyId || null,
         companyCode: trainer.companyCode || null,
-        status: trainer.status || "APPROVED",
-        verificationStatus: trainer.verificationStatus || "VERIFIED",
-        registrationStatus: trainer.registrationStatus || "approved",
-        isApproved: trainer.isApproved ?? true,
-        isVerified: trainer.isVerified ?? true,
-        userId: trainer.userId
-          ? {
-              _id: trainer.userId._id,
-              name: trainer.userId.name,
-              email: trainer.userId.email,
-              isActive: trainer.userId.isActive !== false,
-            }
-          : null,
       };
+
+      if (trainer.firstName !== undefined) mapped.firstName = trainer.firstName;
+      if (trainer.lastName !== undefined) mapped.lastName = trainer.lastName;
+      if (trainer.email !== undefined || trainer.userId?.email !== undefined) {
+        mapped.email = trainer.email || trainer.userId?.email || "";
+      }
+      if (trainer.phone !== undefined || trainer.mobile !== undefined || trainer.userId?.phoneNumber !== undefined) {
+        mapped.phone = trainer.phone || trainer.mobile || trainer.userId?.phoneNumber || "";
+        mapped.mobile = trainer.mobile || trainer.phone || trainer.userId?.phoneNumber || "";
+      }
+      if (trainer.status !== undefined) mapped.status = trainer.status;
+      if (trainer.verificationStatus !== undefined) mapped.verificationStatus = trainer.verificationStatus;
+      if (trainer.registrationStatus !== undefined) mapped.registrationStatus = trainer.registrationStatus;
+      if (trainer.isApproved !== undefined) mapped.isApproved = trainer.isApproved;
+      if (trainer.isVerified !== undefined) mapped.isVerified = trainer.isVerified;
+      if (trainer.userId && typeof trainer.userId === "object") {
+        mapped.userId = {
+          _id: trainer.userId._id,
+          name: trainer.userId.name,
+          email: trainer.userId.email,
+          isActive: trainer.userId.isActive !== false,
+        };
+      }
+
+      return mapped;
     }),
   departments: departmentsRaw.map((department) => ({
     id: department._id,
