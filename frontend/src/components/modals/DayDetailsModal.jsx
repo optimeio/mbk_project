@@ -112,14 +112,9 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
 
     const availableTrainers = (trainers && trainers.length > 0) ? trainers : fetchedTrainers;
     const approvedTrainers = (availableTrainers || []).filter((t) => {
-        const isApproved = (
-            t.status?.toUpperCase() === "APPROVED" ||
-            t.verificationStatus?.toUpperCase() === "APPROVED" ||
-            t.verificationStatus?.toUpperCase() === "VERIFIED" ||
-            t.registrationStatus?.toLowerCase() === "approved" ||
-            t.isApproved === true
-        ) && t.status?.toUpperCase() !== "REJECTED";
-        return isApproved && t.userId?.isActive !== false;
+        const isRejected = t.status?.toUpperCase() === "REJECTED" || t.verificationStatus?.toUpperCase() === "REJECTED";
+        const isInactive = t.userId?.isActive === false;
+        return !isRejected && !isInactive;
     });
 
     const [isEditing, setIsEditing] = useState(false);
@@ -535,15 +530,19 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
                                                             >
                                                                 <option value="">Select a Trainer</option>
-                                                                {approvedTrainers.map((trainer) => (
-                                                                    <option key={trainer._id} value={trainer._id}>
-                                                                        {trainer.userId?.name || trainer.name || trainer.customTrainerId || 'Unknown Trainer'}
-                                                                    </option>
-                                                                ))}
+                                                                {approvedTrainers.map((trainer) => {
+                                                                    const name = trainer.userId?.name || [trainer.firstName, trainer.lastName].filter(Boolean).join(' ') || trainer.name || trainer.trainerId || 'Unknown Trainer';
+                                                                    const code = trainer.trainerId ? ` (${trainer.trainerId})` : (trainer.email ? ` (${trainer.email})` : '');
+                                                                    return (
+                                                                        <option key={trainer._id} value={trainer._id}>
+                                                                            {name}{code}
+                                                                        </option>
+                                                                    );
+                                                                })}
                                                             </select>
                                                             {approvedTrainers.length === 0 && (
                                                                 <p className="mt-1 text-xs text-red-600">
-                                                                    No approved trainers found. Only approved trainers can be assigned.
+                                                                    No active trainers found.
                                                                 </p>
                                                             )}
                                                         </div>

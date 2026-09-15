@@ -634,7 +634,7 @@ const isSPOCAdmin = (req, res, next) => {
 // Supports optional query: ?city=SALEM
 router.get("/", authenticate, async (req, res) => {
   try {
-    const allowedRoles = ["SuperAdmin", "SPOCAdmin", "Accountnt", "Trainer", "trainer"];
+    const allowedRoles = ["SuperAdmin", "SPOCAdmin", "Accountnt", "Trainer", "trainer", "CompanyAdmin", "companyadmin", "Company", "company", "Admin", "admin"];
     const normalizedRole = String(req.user?.role || "").trim().toLowerCase();
     if (!allowedRoles.map((r) => r.toLowerCase()).includes(normalizedRole)) {
       return res.status(403).json({ message: "Access denied." });

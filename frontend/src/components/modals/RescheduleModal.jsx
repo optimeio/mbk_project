@@ -188,17 +188,10 @@ const RescheduleModal = ({
   const isSmGroupsSelected = selectedCompanyObj && /sm\s*groups/i.test(selectedCompanyObj.name || "");
 
   const filteredTrainers = trainers.filter((t) => {
-    const isApproved = (
-      t.status?.toUpperCase() === "APPROVED" ||
-      t.status?.toUpperCase() === "ACTIVE" ||
-      t.verificationStatus?.toUpperCase() === "APPROVED" ||
-      t.verificationStatus?.toUpperCase() === "VERIFIED" ||
-      t.registrationStatus?.toLowerCase() === "approved" ||
-      t.isApproved === true ||
-      t.isVerified === true ||
-      !t.status
-    ) && t.status?.toUpperCase() !== "REJECTED";
-    if (!isApproved) return false;
+    const isRejected =
+      t.status?.toUpperCase() === "REJECTED" ||
+      t.verificationStatus?.toUpperCase() === "REJECTED";
+    if (isRejected) return false;
     if (t.userId?.isActive === false) return false;
 
     if (!companyId) return true;
@@ -210,7 +203,8 @@ const RescheduleModal = ({
     if (tCompanyCode && selectedCompanyObj?.companyCode && String(tCompanyCode).toUpperCase() === String(selectedCompanyObj.companyCode).toUpperCase()) return true;
     if (isSmGroupsSelected) return true;
 
-    return false;
+    // Allow active trainers across companies
+    return true;
   });
 
   const selectedCourseObj = courses.find((crs) => String(crs._id || crs.id) === String(courseId));
@@ -246,8 +240,8 @@ const RescheduleModal = ({
 
   const trainerOptions = filteredTrainers.map((t) => {
     const id = t._id || t.id;
-    const name = t.name || t.userId?.name || [t.firstName, t.lastName].filter(Boolean).join(" ") || t.trainerId || "Unknown";
-    const code = t.trainerId ? ` (${t.trainerId})` : "";
+    const name = t.name || [t.firstName, t.lastName].filter(Boolean).join(" ") || t.userId?.name || t.trainerId || "Unknown";
+    const code = t.trainerId ? ` (${t.trainerId})` : (t.email ? ` (${t.email})` : "");
     return { value: id, label: `${name}${code}` };
   });
 

@@ -513,29 +513,27 @@ router.get('/courses', async (req, res) => {
 // so a brand-new company can pick a trainer to create the first schedule.
 router.get('/trainers', async (req, res) => {
     try {
-        // "Schedulable" = admin-approved. Both approval paths set status=APPROVED;
-        // the .mjs admin path also sets registrationStatus=approved. We do NOT use
-        // verificationStatus alone (it can be set mid-registration before approval).
         const trainerDocs = await Trainer.find({
-            $or: [
-                { status: 'APPROVED' },
-                { registrationStatus: 'approved' },
-            ],
+            status: { $nin: ['REJECTED', 'rejected'] },
+            verificationStatus: { $nin: ['REJECTED', 'rejected'] },
         })
-            .select('firstName lastName name email phone city specialization trainerId profilePicture userId')
-            .populate('userId', 'name email')
+            .select('firstName lastName name email phone mobile city specialization trainerId profilePicture userId companyId companyCode status verificationStatus registrationStatus')
+            .populate('userId', 'name firstName lastName email phoneNumber profilePicture isActive companyId')
             .sort({ firstName: 1, createdAt: -1 })
             .limit(1000)
             .lean();
 
         // Normalize a display name so the scheduling dropdown always shows it.
-        const trainers = trainerDocs.map((t) => {
-            const fullName =
-                t.name ||
-                [t.firstName, t.lastName].filter(Boolean).join(' ').trim() ||
-                t.userId?.name ||
-                t.email ||
-                'Trainer';
+        const trainers = trainerDocs
+            .filter((t) => t.userId?.isActive !== false)
+            .map((t) => {
+                const fullName =
+                    t.name ||
+                    [t.firstName, t.lastName].filter(Boolean).join(' ').trim() ||
+                    t.userId?.name ||
+                    [t.userId?.firstName, t.userId?.lastName].filter(Boolean).join(' ').trim() ||
+                    t.email ||
+                    'Trainer';
             return {
                 _id: t._id,
                 id: t._id,

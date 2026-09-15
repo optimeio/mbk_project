@@ -286,17 +286,10 @@ const listAssociationsColleges = async () =>
 
 const listAssociationsTrainers = async () =>
   Trainer.find({
-    $or: [
-      { status: { $in: ["APPROVED", "approved", "ACTIVE", "active", "Active", "Verified", "verified"] } },
-      { verificationStatus: { $in: ["APPROVED", "VERIFIED", "approved", "verified", "Active", "active"] } },
-      { registrationStatus: { $in: ["approved", "APPROVED", "verified", "VERIFIED", "active", "ACTIVE"] } },
-      { isApproved: true },
-      { isVerified: true },
-      { status: { $exists: false } },
-    ],
-    status: { $ne: "REJECTED" },
+    status: { $nin: ["REJECTED", "rejected"] },
+    verificationStatus: { $nin: ["REJECTED", "rejected"] },
   })
-    .select("_id name firstName lastName email phone mobile trainerId companyId companyCode userId status verificationStatus registrationStatus")
+    .select("_id name firstName lastName email phone mobile trainerId companyId companyCode userId status verificationStatus registrationStatus isApproved isVerified")
     .populate("userId", "name firstName lastName email phoneNumber companyId isActive")
     .sort({ firstName: 1 });
 

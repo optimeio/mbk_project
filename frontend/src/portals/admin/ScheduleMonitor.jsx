@@ -64,11 +64,26 @@ const ScheduleMonitor = () => {
                     trainersData = trainersRes.trainers;
                 }
 
+                const assocTrainers = Array.isArray(assocData.trainers) ? assocData.trainers : [];
+                const trainerMap = new Map();
+                assocTrainers.forEach((t) => {
+                    const id = String(t._id || t.id || '');
+                    if (id) trainerMap.set(id, t);
+                });
+                trainersData.forEach((t) => {
+                    const id = String(t._id || t.id || '');
+                    if (id) {
+                        const existing = trainerMap.get(id) || {};
+                        trainerMap.set(id, { ...existing, ...t });
+                    }
+                });
+                const combinedTrainers = Array.from(trainerMap.values());
+
                 return {
                     companies: Array.isArray(assocData.companies) ? assocData.companies : [],
                     colleges: Array.isArray(assocData.colleges) ? assocData.colleges : [],
                     courses: Array.isArray(assocData.courses) ? assocData.courses : [],
-                    trainers: trainersData,
+                    trainers: combinedTrainers.length > 0 ? combinedTrainers : (assocTrainers.length > 0 ? assocTrainers : trainersData),
                 };
             } catch (err) {
                 console.error("Error loading schedule associations:", err);

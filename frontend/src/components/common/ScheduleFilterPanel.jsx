@@ -84,10 +84,12 @@ const ScheduleFilterPanel = ({
     const query = (searchTexts.trainer || '').toLowerCase();
     if (!query) return trainers;
     return trainers.filter((trainer) => {
-      const name = (trainer.name || trainer.firstName || '').toLowerCase();
-      const lastName = (trainer.lastName || '').toLowerCase();
+      const name = (trainer.name || trainer.firstName || trainer.userId?.name || '').toLowerCase();
+      const lastName = (trainer.lastName || trainer.userId?.lastName || '').toLowerCase();
       const fullName = `${name} ${lastName}`.trim();
-      return fullName.includes(query) || name.includes(query);
+      const trainerId = (trainer.trainerId || '').toLowerCase();
+      const email = (trainer.email || trainer.userId?.email || '').toLowerCase();
+      return fullName.includes(query) || name.includes(query) || trainerId.includes(query) || email.includes(query);
     });
   }, [trainers, searchTexts.trainer]);
 
@@ -128,7 +130,10 @@ const ScheduleFilterPanel = ({
   const getTrainerDisplayName = (trainer) => {
     if (!trainer) return '';
     if (trainer.name) return trainer.name;
-    return `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim() || 'Unknown Trainer';
+    if (trainer.userId?.name) return trainer.userId.name;
+    const fl = `${trainer.firstName || ''} ${trainer.lastName || ''}`.trim();
+    if (fl) return fl;
+    return trainer.trainerId || trainer.email || 'Unknown Trainer';
   };
 
   const getCollegeDisplayName = (college) => {

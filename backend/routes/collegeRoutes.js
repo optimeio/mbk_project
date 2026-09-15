@@ -673,24 +673,19 @@ router.get('/:id/details', authenticate, async (req, res) => {
             return res.status(403).json({ message: 'Access denied for this department' });
         }
 
-        // Fetch trainers for this college + fallback to all active approved trainers
-        const approvedQuery = {
-            $or: [
-                { status: 'APPROVED' },
-                { verificationStatus: { $in: ['APPROVED', 'VERIFIED'] } },
-                { registrationStatus: 'approved' },
-                { isApproved: true },
-            ],
-            status: { $ne: 'REJECTED' },
+        // Fetch trainers for this college + fallback to all active non-rejected trainers
+        const activeTrainersQuery = {
+            status: { $nin: ['REJECTED', 'rejected'] },
+            verificationStatus: { $nin: ['REJECTED', 'rejected'] },
         };
 
         const collegeTrainers = await Trainer.find({
             _id: { $in: college.trainers || [] },
-            ...approvedQuery,
-        }).populate('userId', 'name email profilePicture isActive');
+            ...activeTrainersQuery,
+        }).populate('userId', 'name firstName lastName email phoneNumber profilePicture isActive');
 
-        const allActiveTrainers = await Trainer.find(approvedQuery)
-            .populate('userId', 'name email profilePicture isActive');
+        const allActiveTrainers = await Trainer.find(activeTrainersQuery)
+            .populate('userId', 'name firstName lastName email phoneNumber profilePicture isActive');
 
         const trainerMap = new Map();
         collegeTrainers.forEach((t) => {

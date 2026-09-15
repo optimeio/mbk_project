@@ -2870,14 +2870,44 @@ const mapAssociationsPayload = ({
     courseId: college.courseId,
     department: college.department,
   })),
-  trainers: trainersRaw.map((trainer) => ({
-    id: trainer._id,
-    _id: trainer._id,
-    name: trainer.name || [trainer.firstName, trainer.lastName].filter(Boolean).join(" ") || trainer.userId?.name || trainer.trainerId || "Trainer",
-    trainerId: trainer.trainerId,
-    companyId: trainer.companyId?._id || trainer.companyId || trainer.userId?.companyId || null,
-    companyCode: trainer.companyCode || null,
-  })),
+  trainers: trainersRaw
+    .filter((trainer) => trainer.userId?.isActive !== false)
+    .map((trainer) => {
+      const name =
+        trainer.name ||
+        [trainer.firstName, trainer.lastName].filter(Boolean).join(" ") ||
+        trainer.userId?.name ||
+        [trainer.userId?.firstName, trainer.userId?.lastName].filter(Boolean).join(" ") ||
+        trainer.trainerId ||
+        "Trainer";
+
+      return {
+        id: trainer._id,
+        _id: trainer._id,
+        name,
+        firstName: trainer.firstName || trainer.userId?.firstName || "",
+        lastName: trainer.lastName || trainer.userId?.lastName || "",
+        email: trainer.email || trainer.userId?.email || "",
+        phone: trainer.phone || trainer.mobile || trainer.userId?.phoneNumber || "",
+        mobile: trainer.mobile || trainer.phone || trainer.userId?.phoneNumber || "",
+        trainerId: trainer.trainerId || "",
+        companyId: trainer.companyId?._id || trainer.companyId || trainer.userId?.companyId || null,
+        companyCode: trainer.companyCode || null,
+        status: trainer.status || "APPROVED",
+        verificationStatus: trainer.verificationStatus || "VERIFIED",
+        registrationStatus: trainer.registrationStatus || "approved",
+        isApproved: trainer.isApproved ?? true,
+        isVerified: trainer.isVerified ?? true,
+        userId: trainer.userId
+          ? {
+              _id: trainer.userId._id,
+              name: trainer.userId.name,
+              email: trainer.userId.email,
+              isActive: trainer.userId.isActive !== false,
+            }
+          : null,
+      };
+    }),
   departments: departmentsRaw.map((department) => ({
     id: department._id,
     _id: department._id,
