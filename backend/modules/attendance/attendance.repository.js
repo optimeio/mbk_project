@@ -330,8 +330,14 @@ const findAttendanceVerificationPage = async ({
   let unrecordedSchedules = [];
   if (!filters.verificationStatus && !filters.geoVerificationStatus && !filters.checkOutVerificationStatus) {
     const scheduleFilters = {
-      trainerId: { $ne: null },
+      trainerId: filters.trainerId || { $ne: null },
     };
+    if (filters.collegeId) {
+      scheduleFilters.collegeId = filters.collegeId;
+    }
+    if (filters.dayNumber) {
+      scheduleFilters.dayNumber = filters.dayNumber;
+    }
     if (existingScheduleIds.size > 0) {
       scheduleFilters._id = {
         $nin: Array.from(existingScheduleIds).map((id) => new mongoose.Types.ObjectId(id)),

@@ -14,6 +14,10 @@ export const buildTrainerOverallAttendanceQueryKey = ({
   searchText = "",
   startDate = "",
   endDate = "",
+  date = "",
+  trainerId = "",
+  collegeId = "",
+  dayNumber = "",
 } = {}) => [
   ...TRAINER_OVERALL_ATTENDANCE_QUERY_KEY,
   {
@@ -22,6 +26,10 @@ export const buildTrainerOverallAttendanceQueryKey = ({
     searchText: String(searchText || "").trim().toLowerCase(),
     startDate: String(startDate || "").trim(),
     endDate: String(endDate || "").trim(),
+    date: String(date || "").trim(),
+    trainerId: String(trainerId || "").trim(),
+    collegeId: String(collegeId || "").trim(),
+    dayNumber: dayNumber || "",
   },
 ];
 
@@ -31,6 +39,10 @@ export const getTrainerOverallAttendanceQueryOptions = ({
   searchText = "",
   startDate = "",
   endDate = "",
+  date = "",
+  trainerId = "",
+  collegeId = "",
+  dayNumber = "",
 } = {}) => ({
   queryKey: buildTrainerOverallAttendanceQueryKey({
     page,
@@ -38,6 +50,10 @@ export const getTrainerOverallAttendanceQueryOptions = ({
     searchText,
     startDate,
     endDate,
+    date,
+    trainerId,
+    collegeId,
+    dayNumber,
   }),
   staleTime: QUERY_STALE_TIMES.HIGH_CHURN_LIST,
   gcTime: QUERY_GC_TIMES.STANDARD,
@@ -51,6 +67,10 @@ export const getTrainerOverallAttendanceQueryOptions = ({
         searchText,
         startDate,
         endDate,
+        date,
+        trainerId,
+        collegeId,
+        dayNumber,
       },
       { signal },
     ),
@@ -62,6 +82,10 @@ export default function useTrainerOverallAttendanceQuery({
   searchText = "",
   startDate = "",
   endDate = "",
+  date = "",
+  trainerId = "",
+  collegeId = "",
+  dayNumber = "",
 } = {}) {
   return useQuery(
     getTrainerOverallAttendanceQueryOptions({
@@ -70,6 +94,10 @@ export default function useTrainerOverallAttendanceQuery({
       searchText,
       startDate,
       endDate,
+      date,
+      trainerId,
+      collegeId,
+      dayNumber,
     }),
   );
 }

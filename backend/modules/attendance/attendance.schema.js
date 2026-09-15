@@ -119,11 +119,22 @@ const parseAttendanceListQuery = (query = {}) => {
   const checkOutVerificationStatus = parseCheckOutVerificationStatus(
     query.checkOutVerificationStatus,
   );
-  const startDate = parseAttendanceDateBoundary(query.startDate, "start");
-  const endDate = parseAttendanceDateBoundary(query.endDate, "end");
+  const trainerId = toSafeTrimmedString(query.trainerId || query.trainer);
+  const collegeId = toSafeTrimmedString(query.collegeId || query.college);
+  const dayNumber = query.dayNumber || query.day ? toPositiveInteger(query.dayNumber || query.day, 0) : null;
 
-  const hasInvalidStartDate = Boolean(query.startDate) && !startDate;
-  const hasInvalidEndDate = Boolean(query.endDate) && !endDate;
+  let rawStartDate = query.startDate;
+  let rawEndDate = query.endDate;
+  if (!rawStartDate && !rawEndDate && query.date) {
+    rawStartDate = query.date;
+    rawEndDate = query.date;
+  }
+
+  const startDate = parseAttendanceDateBoundary(rawStartDate, "start");
+  const endDate = parseAttendanceDateBoundary(rawEndDate, "end");
+
+  const hasInvalidStartDate = Boolean(rawStartDate) && !startDate;
+  const hasInvalidEndDate = Boolean(rawEndDate) && !endDate;
 
   return {
     page,
@@ -138,6 +149,9 @@ const parseAttendanceListQuery = (query = {}) => {
     verificationStatus,
     geoVerificationStatus,
     checkOutVerificationStatus,
+    trainerId,
+    collegeId,
+    dayNumber,
     startDate,
     endDate,
     hasInvalidStartDate,

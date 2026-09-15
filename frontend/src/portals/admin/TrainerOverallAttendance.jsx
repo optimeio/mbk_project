@@ -26,6 +26,7 @@ import {
   Badge,
   Dropdown,
   Spin,
+  Select,
 } from "antd";
 import {
   Building2,
@@ -44,8 +45,11 @@ import {
   Users,
   Image as ImageIcon,
   Pencil,
+  RotateCcw,
+  CalendarCheck,
+  Filter,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   flexRender,
   getCoreRowModel,
@@ -634,12 +638,46 @@ const TrainerOverallAttendance = () => {
     const queryClient = useQueryClient();
     const [searchText, setSearchText] = useState("");
     const [dateRange, setDateRange] = useState(null);
+    const [datePreset, setDatePreset] = useState("all");
+    const [selectedTrainerId, setSelectedTrainerId] = useState("");
+    const [selectedDayNumber, setSelectedDayNumber] = useState("");
     const [selectedGeoRecord, setSelectedGeoRecord] = useState(null);
     const [page, setPage] = useState(1);
     const [exporting, setExporting] = useState(false);
     const [sorting, setSorting] = useState([{ id: "date", desc: true }]);
     const [updatingStatusId, setUpdatingStatusId] = useState(null);
     const debouncedSearchText = useDebouncedValue(searchText, 300);
+
+    const { data: trainersList = [] } = useQuery({
+      queryKey: ["trainers-attendance-filter-options"],
+      queryFn: async () => {
+        try {
+          const res = await api.get("/trainers");
+          const raw = Array.isArray(res) ? res : (res?.data || res?.trainers || []);
+          return raw.map((t) => ({
+            value: String(t._id),
+            label: `${t.name || t.userId?.name || "Unknown Trainer"} (${t.trainerId || (t._id ? "ID: " + String(t._id).slice(-4) : "-")})`,
+            name: t.name || t.userId?.name || "Unknown Trainer",
+            trainerId: t.trainerId || "",
+          }));
+        } catch (err) {
+          console.warn("Failed to fetch trainers list for filter:", err);
+          return [];
+        }
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+
+    const dayOptions = useMemo(
+      () => [
+        { value: "", label: "All Days" },
+        ...Array.from({ length: 30 }, (_, i) => ({
+          value: i + 1,
+          label: `Day ${i + 1}`,
+        })),
+      ],
+      [],
+    );
 
     const handleToggleAttendanceStatus = async (record, newStatus) => {
       const attendanceId =
@@ -679,8 +717,16 @@ const TrainerOverallAttendance = () => {
         searchText: String(debouncedSearchText || "").trim(),
         startDate: normalizedDateRange.startDate || "",
         endDate: normalizedDateRange.endDate || "",
+        trainerId: selectedTrainerId || "",
+        dayNumber: selectedDayNumber || "",
       }),
-      [debouncedSearchText, normalizedDateRange.endDate, normalizedDateRange.startDate],
+      [
+        debouncedSearchText,
+        normalizedDateRange.endDate,
+        normalizedDateRange.startDate,
+        selectedTrainerId,
+        selectedDayNumber,
+      ],
     );
 
     const attendanceQuery = useTrainerOverallAttendanceQuery({
@@ -689,6 +735,8 @@ const TrainerOverallAttendance = () => {
       searchText: attendanceFilters.searchText,
       startDate: attendanceFilters.startDate,
       endDate: attendanceFilters.endDate,
+      trainerId: attendanceFilters.trainerId,
+      dayNumber: attendanceFilters.dayNumber,
     });
 
     useEffect(() => {
@@ -733,12 +781,16 @@ const TrainerOverallAttendance = () => {
           searchText: attendanceFilters.searchText,
           startDate: attendanceFilters.startDate,
           endDate: attendanceFilters.endDate,
+          trainerId: attendanceFilters.trainerId,
+          dayNumber: attendanceFilters.dayNumber,
         }),
       );
     }, [
       attendanceFilters.endDate,
       attendanceFilters.searchText,
       attendanceFilters.startDate,
+      attendanceFilters.trainerId,
+      attendanceFilters.dayNumber,
       page,
       pagination?.hasNextPage,
       pagination?.page,
@@ -753,6 +805,8 @@ const TrainerOverallAttendance = () => {
             searchText: String(attendanceFilters.searchText || "").toLowerCase(),
             startDate: attendanceFilters.startDate,
             endDate: attendanceFilters.endDate,
+            trainerId: attendanceFilters.trainerId,
+            dayNumber: attendanceFilters.dayNumber,
           },
         ],
         staleTime: QUERY_STALE_TIMES.DETAIL,
@@ -769,6 +823,8 @@ const TrainerOverallAttendance = () => {
               searchText: attendanceFilters.searchText,
               startDate: attendanceFilters.startDate,
               endDate: attendanceFilters.endDate,
+              trainerId: attendanceFilters.trainerId,
+              dayNumber: attendanceFilters.dayNumber,
             });
             aggregatedRows.push(...(pagePayload?.rows || []));
             hasNextPage = Boolean(pagePayload?.pagination?.hasNextPage);
@@ -782,8 +838,65 @@ const TrainerOverallAttendance = () => {
       attendanceFilters.endDate,
       attendanceFilters.searchText,
       attendanceFilters.startDate,
+      attendanceFilters.trainerId,
+      attendanceFilters.dayNumber,
       queryClient,
     ]);
+
+    const buildExportFileName = useCallback(
+      (ext = "xlsx") => {
+        const parts = ["Trainer_Overall_Attendance"];
+        if (selectedTrainerId && trainersList.length > 0) {
+          const matched = trainersList.find((t) => t.value === selectedTrainerId);
+          if (matched) {
+            parts.push(matched.name.replace(/[^a-zA-Z0-9_-]/g, "_"));
+          }
+        }
+        if (selectedDayNumber) {
+          parts.push(`Day${selectedDayNumber}`);
+        }
+        if (datePreset === "today") {
+          parts.push(`Today_${dayjs().format("YYYY-MM-DD")}`);
+        } else if (datePreset === "yesterday") {
+          parts.push(`Yesterday_${dayjs().subtract(1, "day").format("YYYY-MM-DD")}`);
+        } else if (dateRange?.[0] && dateRange?.[1]) {
+          const s = dayjs(dateRange[0]).format("YYYY-MM-DD");
+          const e = dayjs(dateRange[1]).format("YYYY-MM-DD");
+          parts.push(s === e ? s : `${s}_to_${e}`);
+        } else {
+          parts.push(dayjs().format("YYYY-MM-DD"));
+        }
+        return `${parts.join("_")}.${ext}`;
+      },
+      [selectedTrainerId, trainersList, selectedDayNumber, datePreset, dateRange],
+    );
+
+    const buildPdfTitle = useCallback(() => {
+      let title = "Trainer Overall Attendance Report";
+      const subtitles = [];
+      if (selectedTrainerId && trainersList.length > 0) {
+        const matched = trainersList.find((t) => t.value === selectedTrainerId);
+        if (matched) {
+          subtitles.push(`Trainer: ${matched.name}`);
+        }
+      }
+      if (selectedDayNumber) {
+        subtitles.push(`Day ${selectedDayNumber}`);
+      }
+      if (datePreset === "today") {
+        subtitles.push(`Today (${dayjs().format("DD MMM YYYY")})`);
+      } else if (datePreset === "yesterday") {
+        subtitles.push(`Yesterday (${dayjs().subtract(1, "day").format("DD MMM YYYY")})`);
+      } else if (dateRange?.[0] && dateRange?.[1]) {
+        const s = dayjs(dateRange[0]).format("DD MMM YYYY");
+        const e = dayjs(dateRange[1]).format("DD MMM YYYY");
+        subtitles.push(s === e ? s : `${s} to ${e}`);
+      }
+      if (subtitles.length > 0) {
+        title += ` - ${subtitles.join(" | ")}`;
+      }
+      return title;
+    }, [selectedTrainerId, trainersList, selectedDayNumber, datePreset, dateRange]);
 
     const handleExportExcel = async () => {
       try {
@@ -820,12 +933,10 @@ const TrainerOverallAttendance = () => {
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
+        const filename = buildExportFileName("xlsx");
         await new Promise((resolve) => {
           runOnIdle(() => {
-            XLSX.writeFile(
-              wb,
-              `Trainer_Overall_Attendance_${dayjs().format("YYYY-MM-DD")}.xlsx`,
-            );
+            XLSX.writeFile(wb, filename);
             resolve();
           }, 1500);
         });
@@ -881,7 +992,7 @@ const TrainerOverallAttendance = () => {
           { batchSize: 300 },
         );
 
-        doc.text("Trainer Overall Attendance Report", 14, 15);
+        doc.text(buildPdfTitle(), 14, 15);
         autoTable(doc, {
           head: [tableColumn],
           body: tableRows,
@@ -890,9 +1001,10 @@ const TrainerOverallAttendance = () => {
           headStyles: { fillColor: [24, 144, 255] },
         });
 
+        const filename = buildExportFileName("pdf");
         await new Promise((resolve) => {
           runOnIdle(() => {
-            doc.save(`Trainer_Overall_Attendance_${dayjs().format("YYYY-MM-DD")}.pdf`);
+            doc.save(filename);
             resolve();
           }, 1500);
         });
@@ -905,14 +1017,51 @@ const TrainerOverallAttendance = () => {
       }
     };
 
+    const handlePresetClick = useCallback((preset) => {
+      setDatePreset(preset);
+      setPage(1);
+      if (preset === "today") {
+        setDateRange([dayjs().startOf("day"), dayjs().endOf("day")]);
+      } else if (preset === "yesterday") {
+        setDateRange([
+          dayjs().subtract(1, "day").startOf("day"),
+          dayjs().subtract(1, "day").endOf("day"),
+        ]);
+      } else if (preset === "week") {
+        setDateRange([dayjs().startOf("week"), dayjs().endOf("week")]);
+      } else if (preset === "all") {
+        setDateRange(null);
+      }
+    }, []);
+
     const handleDateRangeChange = useCallback((values) => {
-        setDateRange(values);
-        setPage(1);
+      setDateRange(values);
+      setDatePreset(values ? "custom" : "all");
+      setPage(1);
+    }, []);
+
+    const handleTrainerChange = useCallback((val) => {
+      setSelectedTrainerId(val || "");
+      setPage(1);
+    }, []);
+
+    const handleDayNumberChange = useCallback((val) => {
+      setSelectedDayNumber(val || "");
+      setPage(1);
     }, []);
 
     const handleSearchChange = useCallback((event) => {
-        setSearchText(event.target.value);
-        setPage(1);
+      setSearchText(event.target.value);
+      setPage(1);
+    }, []);
+
+    const handleResetFilters = useCallback(() => {
+      setSearchText("");
+      setDateRange(null);
+      setDatePreset("all");
+      setSelectedTrainerId("");
+      setSelectedDayNumber("");
+      setPage(1);
     }, []);
 
     const columns = useMemo(
@@ -1387,22 +1536,28 @@ const TrainerOverallAttendance = () => {
         />
 
         <Card>
+          {/* Header Row: Title & Action Exports */}
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "24px",
+              alignItems: "center",
+              marginBottom: "16px",
               gap: "16px",
               flexWrap: "wrap",
             }}
           >
             <div>
-              <Title level={2} style={{ margin: 0 }}>
-                Overall Attendance
-              </Title>
-              <Text type="secondary" style={{ fontSize: "18px", fontWeight: 500 }}>
-                Report
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Title level={2} style={{ margin: 0 }}>
+                  Overall Attendance
+                </Title>
+                <Tag color="blue" style={{ fontSize: "12px", fontWeight: 600, padding: "2px 8px" }}>
+                  {pagination.total || data.length} Records
+                </Tag>
+              </div>
+              <Text type="secondary" style={{ fontSize: "14px", fontWeight: 500 }}>
+                View, filter, and download trainer attendance across dates, days, and individual trainers
               </Text>
               {isRefreshing ? (
                 <div>
@@ -1412,41 +1567,128 @@ const TrainerOverallAttendance = () => {
                 </div>
               ) : null}
             </div>
+
             <Space size="middle" style={{ flexWrap: "wrap" }}>
               <Button
                 type="primary"
-                icon={<FileSpreadsheet size={14} />}
+                icon={<FileSpreadsheet size={15} />}
                 onClick={handleExportExcel}
-                disabled={loading || exporting || pagination.total === 0}
+                disabled={loading || exporting || (pagination.total === 0 && data.length === 0)}
                 loading={exporting}
-                style={{ backgroundColor: "#1d7044", borderColor: "#1d7044" }}
+                style={{ backgroundColor: "#1d7044", borderColor: "#1d7044", fontWeight: 600 }}
               >
                 Export Excel
               </Button>
               <Button
                 type="primary"
                 danger
-                icon={<FileText size={14} />}
+                icon={<FileText size={15} />}
                 onClick={handleExportPDF}
-                disabled={loading || exporting || pagination.total === 0}
+                disabled={loading || exporting || (pagination.total === 0 && data.length === 0)}
                 loading={exporting}
+                style={{ fontWeight: 600 }}
               >
                 Export PDF
               </Button>
+            </Space>
+          </div>
+
+          {/* Quick Filter Presets & Filter Controls */}
+          <div
+            style={{
+              background: "#f8fafc",
+              padding: "14px 16px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              marginBottom: "20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            {/* Quick Date Presets */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <Text style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", textTransform: "uppercase", marginRight: "4px" }}>
+                Quick Date:
+              </Text>
+              <Button
+                size="small"
+                type={datePreset === "today" ? "primary" : "default"}
+                icon={<CalendarCheck size={13} />}
+                onClick={() => handlePresetClick("today")}
+                style={{ borderRadius: "6px", fontWeight: 500 }}
+              >
+                Today
+              </Button>
+              <Button
+                size="small"
+                type={datePreset === "yesterday" ? "primary" : "default"}
+                onClick={() => handlePresetClick("yesterday")}
+                style={{ borderRadius: "6px", fontWeight: 500 }}
+              >
+                Yesterday
+              </Button>
+              <Button
+                size="small"
+                type={datePreset === "week" ? "primary" : "default"}
+                onClick={() => handlePresetClick("week")}
+                style={{ borderRadius: "6px", fontWeight: 500 }}
+              >
+                This Week
+              </Button>
+              <Button
+                size="small"
+                type={datePreset === "all" && !dateRange ? "primary" : "default"}
+                onClick={() => handlePresetClick("all")}
+                style={{ borderRadius: "6px", fontWeight: 500 }}
+              >
+                All Dates
+              </Button>
+            </div>
+
+            {/* Granular Filters: Date Range, Day Number, Trainer, Search & Reset */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <RangePicker
+                value={dateRange}
                 onChange={handleDateRangeChange}
-                style={{ width: 280 }}
+                style={{ width: 260 }}
                 placeholder={["Start Date", "End Date"]}
+                allowClear
+              />
+              <Select
+                value={selectedDayNumber || undefined}
+                onChange={handleDayNumberChange}
+                options={dayOptions}
+                placeholder="Select Day Number"
+                style={{ width: 140 }}
+                allowClear
+              />
+              <Select
+                showSearch
+                optionFilterProp="label"
+                value={selectedTrainerId || undefined}
+                onChange={handleTrainerChange}
+                options={[{ value: "", label: "All Trainers" }, ...trainersList]}
+                placeholder="Filter Particular Trainer"
+                style={{ width: 260 }}
+                allowClear
               />
               <Input
-                placeholder="Search trainer or college..."
-                prefix={<Search size={14} />}
-                style={{ width: 300 }}
+                placeholder="Search trainer, college, course..."
+                prefix={<Search size={14} color="#94a3b8" />}
+                style={{ width: 260 }}
                 value={searchText}
                 onChange={handleSearchChange}
                 allowClear
               />
-            </Space>
+              <Button
+                icon={<RotateCcw size={13} />}
+                onClick={handleResetFilters}
+                style={{ borderRadius: "6px" }}
+              >
+                Reset
+              </Button>
+            </div>
           </div>
 
           <div style={{ overflowX: "auto", overflowY: "hidden", borderRadius: 8, border: "1px solid #f0f0f0", background: "#fff" }}>

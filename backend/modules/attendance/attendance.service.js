@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const {
   normalizeAttendanceVerificationStatus,
 } = require("../../utils/statusNormalizer");
@@ -147,6 +148,18 @@ const listAttendanceSubmissions = async ({ query, user }) => {
     } else {
       filters.checkOutVerificationStatus = query.checkOutVerificationStatus;
     }
+  }
+
+  if (query.trainerId && mongoose.Types.ObjectId.isValid(query.trainerId)) {
+    filters.trainerId = new mongoose.Types.ObjectId(query.trainerId);
+  }
+
+  if (query.collegeId && mongoose.Types.ObjectId.isValid(query.collegeId)) {
+    filters.collegeId = new mongoose.Types.ObjectId(query.collegeId);
+  }
+
+  if (query.dayNumber) {
+    filters.dayNumber = query.dayNumber;
   }
 
   if (query.startDate || query.endDate) {

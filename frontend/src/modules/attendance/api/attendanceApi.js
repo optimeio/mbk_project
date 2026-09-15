@@ -129,6 +129,10 @@ export const listTrainerActivity = async (
     searchText = "",
     startDate = "",
     endDate = "",
+    date = "",
+    trainerId = "",
+    collegeId = "",
+    dayNumber = "",
   } = {},
   requestOptions = {},
 ) => {
@@ -150,6 +154,26 @@ export const listTrainerActivity = async (
   const normalizedEndDate = String(endDate || "").trim();
   if (normalizedEndDate) {
     params.set("endDate", normalizedEndDate);
+  }
+
+  const normalizedDate = String(date || "").trim();
+  if (normalizedDate) {
+    params.set("date", normalizedDate);
+  }
+
+  const normalizedTrainerId = String(trainerId || "").trim();
+  if (normalizedTrainerId) {
+    params.set("trainerId", normalizedTrainerId);
+  }
+
+  const normalizedCollegeId = String(collegeId || "").trim();
+  if (normalizedCollegeId) {
+    params.set("collegeId", normalizedCollegeId);
+  }
+
+  const parsedDay = parseInt(dayNumber, 10);
+  if (Number.isFinite(parsedDay) && parsedDay > 0) {
+    params.set("dayNumber", String(parsedDay));
   }
 
   const response = await api.get(`/attendance?${params.toString()}`, {
