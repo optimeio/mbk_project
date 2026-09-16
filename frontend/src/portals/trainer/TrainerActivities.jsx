@@ -828,20 +828,9 @@ export default function TrainerActivities() {
                           </button>
                         </div>
                         <div className="flex items-center justify-center gap-3 mt-3">
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition">
-                            <Camera className="h-3.5 w-3.5" />
-                            Retake Photo
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="user"
-                              onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
-                              className="hidden"
-                            />
-                          </label>
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 text-xs font-semibold transition">
-                            <UploadCloud className="h-3.5 w-3.5" />
-                            Choose Another File
+                          <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition">
+                            <UploadCloud className="h-4 w-4" />
+                            Upload Different Photo
                             <input
                               type="file"
                               accept="image/*"
@@ -855,54 +844,27 @@ export default function TrainerActivities() {
                         </p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Option 1: Live Camera Selfie */}
-                        <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="user"
-                            onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
-                            className="hidden"
-                          />
-                          <div className="h-12 w-12 rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
-                            <Camera className="h-6 w-6" />
-                          </div>
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                            Take Live Selfie / Photo
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                            Opens camera directly to take an instant verification photo.
-                          </p>
-                          <span className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-sm group-hover:bg-emerald-700 transition">
-                            <Camera className="h-3.5 w-3.5" />
-                            Open Camera
-                          </span>
-                        </label>
-
-                        {/* Option 2: Upload from Gallery / Files */}
-                        <label className="border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/40 hover:bg-sky-50/80 dark:border-sky-800 dark:bg-sky-950/20 dark:hover:bg-sky-950/40 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
-                            className="hidden"
-                          />
-                          <div className="h-12 w-12 rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
-                            <UploadCloud className="h-6 w-6" />
-                          </div>
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                            Upload from Gallery / Files
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                            Upload pre-clicked GPS Map Camera photo or timestamped photo from device.
-                          </p>
-                          <span className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-semibold shadow-sm group-hover:bg-sky-700 transition">
-                            <UploadCloud className="h-3.5 w-3.5" />
-                            Browse Gallery / Files
-                          </span>
-                        </label>
-                      </div>
+                      <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
+                          className="hidden"
+                        />
+                        <div className="h-14 w-14 rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
+                          <UploadCloud className="h-7 w-7" />
+                        </div>
+                        <p className="text-base font-bold text-slate-800 dark:text-slate-100">
+                          Upload Geo-Tagged Check-In Photo
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                          Click to select photo with GPS timestamp from device gallery or files (JPG, PNG, WebP).
+                        </p>
+                        <span className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-md group-hover:bg-emerald-700 transition">
+                          <UploadCloud className="h-4 w-4" />
+                          Select &amp; Upload Photo
+                        </span>
+                      </label>
                     )}
                   </div>
 
@@ -1173,20 +1135,9 @@ export default function TrainerActivities() {
                           </button>
                         </div>
                         <div className="flex items-center justify-center gap-3 mt-3">
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition">
-                            <Camera className="h-3.5 w-3.5" />
-                            Retake Photo
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="user"
-                              onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
-                              className="hidden"
-                            />
-                          </label>
-                          <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold transition">
-                            <UploadCloud className="h-3.5 w-3.5" />
-                            Choose Another File
+                          <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition">
+                            <UploadCloud className="h-4 w-4" />
+                            Upload Different Photo
                             <input
                               type="file"
                               accept="image/*"
@@ -1200,54 +1151,27 @@ export default function TrainerActivities() {
                         </p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Option 1: Live Camera Selfie */}
-                        <label className="border-2 border-dashed border-rose-300 hover:border-rose-500 bg-rose-50/40 hover:bg-rose-50/80 dark:border-rose-800 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="user"
-                            onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
-                            className="hidden"
-                          />
-                          <div className="h-12 w-12 rounded-2xl bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
-                            <Camera className="h-6 w-6" />
-                          </div>
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                            Take Live Check-Out Photo
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                            Capture your departure photo directly using the device camera.
-                          </p>
-                          <span className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold shadow-sm group-hover:bg-rose-700 transition">
-                            <Camera className="h-3.5 w-3.5" />
-                            Open Camera
-                          </span>
-                        </label>
-
-                        {/* Option 2: Upload from Gallery / Files */}
-                        <label className="border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/40 hover:bg-sky-50/80 dark:border-sky-800 dark:bg-sky-950/20 dark:hover:bg-sky-950/40 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
-                            className="hidden"
-                          />
-                          <div className="h-12 w-12 rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-300 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
-                            <UploadCloud className="h-6 w-6" />
-                          </div>
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                            Upload from Gallery / Files
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                            Upload pre-clicked GPS Map Camera photo or timestamped photo from device.
-                          </p>
-                          <span className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-semibold shadow-sm group-hover:bg-sky-700 transition">
-                            <UploadCloud className="h-3.5 w-3.5" />
-                            Browse Gallery / Files
-                          </span>
-                        </label>
-                      </div>
+                      <label className="border-2 border-dashed border-rose-300 hover:border-rose-500 bg-rose-50/40 hover:bg-rose-50/80 dark:border-rose-800 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
+                          className="hidden"
+                        />
+                        <div className="h-14 w-14 rounded-2xl bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
+                          <UploadCloud className="h-7 w-7" />
+                        </div>
+                        <p className="text-base font-bold text-slate-800 dark:text-slate-100">
+                          Upload Geo-Tagged Check-Out Photo
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+                          Click to select departure photo with GPS timestamp from device gallery or files (JPG, PNG, WebP).
+                        </p>
+                        <span className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold shadow-md group-hover:bg-rose-700 transition">
+                          <UploadCloud className="h-4 w-4" />
+                          Select &amp; Upload Photo
+                        </span>
+                      </label>
                     )}
                   </div>
 

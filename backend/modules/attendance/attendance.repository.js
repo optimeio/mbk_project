@@ -332,18 +332,28 @@ const findAttendanceVerificationPage = async ({
   let unrecordedSchedules = [];
   if (!filters.verificationStatus && !filters.geoVerificationStatus && !filters.checkOutVerificationStatus) {
     const scheduleFilters = {
-      trainerId: filters.trainerId || { $ne: null },
+      isActive: { $ne: false },
     };
+    if (filters.trainerId) {
+      scheduleFilters.trainerId = filters.trainerId;
+    } else {
+      scheduleFilters.trainerId = { $ne: null };
+    }
     if (filters.collegeId) {
       scheduleFilters.collegeId = filters.collegeId;
+    }
+    if (filters.courseId) {
+      scheduleFilters.courseId = filters.courseId;
     }
     if (filters.dayNumber) {
       scheduleFilters.dayNumber = filters.dayNumber;
     }
-    if (existingScheduleIds.size > 0) {
-      scheduleFilters._id = {
-        $nin: Array.from(existingScheduleIds).map((id) => new mongoose.Types.ObjectId(id)),
-      };
+    const validScheduleObjectIds = Array.from(existingScheduleIds)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (validScheduleObjectIds.length > 0) {
+      scheduleFilters._id = { $nin: validScheduleObjectIds };
     }
     if (filters.date) {
       scheduleFilters.$or = [
@@ -388,15 +398,21 @@ const findAttendanceVerificationPage = async ({
         dayNumber: s.dayNumber || 1,
         subject: s.subject || s.topic || s.courseId?.title || s.courseId?.name || "",
         courseId: s.courseId || null,
+        session: s.session || "FULL_DAY",
+        startTime: s.startTime || "",
+        endTime: s.endTime || "",
       },
       trainerId: s.trainerId || null,
       collegeId: s.collegeId || null,
       courseId: s.courseId || null,
       dayNumber: s.dayNumber || 1,
+      session: s.session || "FULL_DAY",
+      startTime: s.startTime || "",
+      endTime: s.endTime || "",
       assignedDate: dateStr,
       date: schedDate,
-      status: "Absent",
-      attendanceStatus: "ABSENT",
+      status: "Not Submitted",
+      attendanceStatus: "NOT_SUBMITTED",
       verificationStatus: "pending",
       geoVerificationStatus: "pending",
       checkInTime: null,
