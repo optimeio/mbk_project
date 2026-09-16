@@ -1,5 +1,6 @@
 import scheduleService from "@/services/scheduleService";
 import { api } from "@/services/api";
+import { toCalendarYMD, formatCalendarDate } from "@/utils/dateUtils";
 
 const DASHBOARD_SCHEDULE_SUMMARY_TTL_MS = 45_000;
 const trainerScheduleSummaryCache = new Map();
@@ -80,7 +81,6 @@ export const buildScheduleItem = (schedule = {}) => {
   const hour24 = isPM ? startHour + 12 : startHour;
   const sessionType = hour24 < 13 ? "FN Session" : "AN Session";
 
-  const { toCalendarYMD, formatCalendarDate } = require("@/utils/dateUtils");
   const todayYMD = toCalendarYMD(new Date());
   const schedYMD = toCalendarYMD(schedule?.scheduledDate || schedule?.date);
   const isValidSchedDate = Boolean(schedYMD);
