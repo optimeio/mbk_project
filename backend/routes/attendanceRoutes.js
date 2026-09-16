@@ -2496,6 +2496,7 @@ const checkInHandler = async (req, res) => {
                 courseId: courseId || null,
                 scheduleId,
                 dayNumber: dayNumber || schedule?.dayNumber || null,
+                session: schedule?.session || req.body.session || 'FULL_DAY',
                 assignedDate: scheduledDateStr,
                 date: scheduledDateValue ? new Date(scheduledDateValue) : new Date(),
                 checkInTime: checkInTime || new Date().toTimeString().split(' ')[0],
@@ -3744,6 +3745,7 @@ router.get('/', async (req, res) => {
                     'courseId',
                     'scheduleId',
                     'dayNumber',
+                    'session',
                     'assignedDate',
                     'date',
                     'checkIn',
@@ -3852,6 +3854,7 @@ router.get('/', async (req, res) => {
                 'scheduleId',
                 'batchId',
                 'dayNumber',
+                'session',
                 'assignedDate',
                 'date',
                 'syllabus',
@@ -3998,6 +4001,7 @@ router.get('/', async (req, res) => {
         const syntheticRecords = uniqueUnrecordedSchedules.map(s => {
             const schedDate = s.scheduledDate || s.date || new Date();
             const dateStr = schedDate ? (schedDate instanceof Date ? schedDate.toISOString().split('T')[0] : String(schedDate).split('T')[0]) : null;
+            const resolvedSession = s.session || 'FULL_DAY';
             return {
                 _id: s._id,
                 scheduleId: {
@@ -4005,7 +4009,11 @@ router.get('/', async (req, res) => {
                     dayNumber: s.dayNumber || 1,
                     subject: s.subject || s.topic || s.courseId?.title || s.courseId?.name || '',
                     courseId: s.courseId || null,
+                    session: resolvedSession,
+                    startTime: s.startTime || null,
+                    endTime: s.endTime || null,
                 },
+                session: resolvedSession,
                 trainerId: s.trainerId || null,
                 collegeId: s.collegeId || null,
                 courseId: s.courseId || null,
@@ -4291,6 +4299,10 @@ router.post('/admin-upload', uploadAttendance, async (req, res) => {
                 scheduleId,
                 trainerId,
                 collegeId,
+                courseId: courseId || schedule?.courseId || null,
+                dayNumber: req.body.dayNumber || schedule?.dayNumber || null,
+                session: req.body.session || schedule?.session || 'FULL_DAY',
+                assignedDate: date ? String(date).slice(0, 10) : (schedule?.scheduledDate ? String(schedule.scheduledDate).slice(0, 10) : null),
                 date: date ? new Date(date) : new Date(),
                 attendancePdfUrl,
                 attendanceExcelUrl,

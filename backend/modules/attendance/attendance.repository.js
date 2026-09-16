@@ -152,6 +152,7 @@ const buildGeoVerificationAttendanceQuery = (filters = {}) =>
         "courseId",
         "scheduleId",
         "dayNumber",
+        "session",
         "assignedDate",
         "date",
         "syllabus",
@@ -215,7 +216,7 @@ const buildGeoVerificationAttendanceQuery = (filters = {}) =>
     })
     .populate({
       path: "scheduleId",
-      select: "subject dayNumber courseId",
+      select: "subject dayNumber courseId session startTime endTime",
       populate: { path: "courseId", select: "name title" },
     })
     .sort({ date: -1, createdAt: -1 })
@@ -232,6 +233,7 @@ const buildDefaultAttendanceQuery = (filters = {}) =>
         "scheduleId",
         "batchId",
         "dayNumber",
+        "session",
         "assignedDate",
         "date",
         "syllabus",
@@ -295,7 +297,7 @@ const buildDefaultAttendanceQuery = (filters = {}) =>
     })
     .populate({
       path: "scheduleId",
-      select: "dayNumber subject courseId",
+      select: "dayNumber subject courseId session startTime endTime",
       populate: { path: "courseId", select: "name title" },
     })
     .sort({ date: -1, createdAt: -1 })
@@ -434,6 +436,7 @@ const findAttendanceDetailsById = async (attendanceId) =>
         "courseId",
         "scheduleId",
         "dayNumber",
+        "session",
         "assignedDate",
         "date",
         "syllabus",
@@ -500,7 +503,7 @@ const findAttendanceDetailsById = async (attendanceId) =>
     })
     .populate({
       path: "scheduleId",
-      select: "subject courseId",
+      select: "subject dayNumber courseId session startTime endTime",
       populate: { path: "courseId", select: "name title" },
     })
     .populate({
@@ -522,6 +525,7 @@ const findAttendanceByScheduleId = async (scheduleId) =>
         "collegeId",
         "scheduleId",
         "dayNumber",
+        "session",
         "assignedDate",
         "date",
         "status",

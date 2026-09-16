@@ -416,16 +416,83 @@ const TrainerActivity = () => {
     }
   };
 
+  const loadLogoBase64 = async (logoUrl = "/logos/tsmg.png") => {
+    return new Promise((resolve) => {
+      try {
+        if (typeof window === "undefined") return resolve(null);
+        const img = new window.Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL("image/png");
+            resolve({ dataUrl, width: canvas.width, height: canvas.height });
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = logoUrl;
+      } catch {
+        resolve(null);
+      }
+    });
+  };
+
   const handleExportPDF = async () => {
     try {
       setExporting(true);
       const exportRows = await fetchExportRows();
-      const { jsPDF, autoTable } = await getPdfTools();
+      if (!exportRows || exportRows.length === 0) {
+        message.warning("No activity records found to export.");
+        return;
+      }
+
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+
       const doc = new jsPDF("l", "mm", "a4");
+      const logoImg = await loadLogoBase64("/logos/tsmg.png");
+
+      if (logoImg?.dataUrl) {
+        try {
+          const logoW = 54;
+          const logoH = logoImg.height && logoImg.width ? (logoImg.height / logoImg.width) * logoW : 14;
+          doc.addImage(logoImg.dataUrl, "PNG", 14, 8, logoW, Math.min(logoH, 16));
+        } catch (e) {
+          console.warn("Could not render logo to PDF:", e);
+        }
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(15);
+      doc.setTextColor(30, 41, 59);
+      doc.text("THE SM GROUPS", 283, 13, { align: "right" });
+
+      doc.setFontSize(10);
+      doc.setTextColor(220, 38, 38);
+      doc.text("TRAINER ACTIVITY REPORT", 283, 19, { align: "right" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${dayjs().format("DD MMM YYYY, hh:mm A")}`, 283, 24, { align: "right" });
+
+      doc.setDrawColor(220, 38, 38);
+      doc.setLineWidth(0.7);
+      doc.line(14, 26.5, 283, 26.5);
+
       const tableColumn = [
+        "#",
         "Date",
-        "Trainer",
-        "College",
+        "Trainer Name",
+        "College Name",
         "Check-In",
         "Check-Out",
         "Status",
@@ -433,9 +500,10 @@ const TrainerActivity = () => {
       ];
       const tableRows = await mapInBatches(
         exportRows,
-        (item) => [
+        (item, idx) => [
+          idx + 1,
           item.date ? dayjs(item.date).format("DD MMM YYYY") : "-",
-          item.trainerId?.userId?.name || "Unknown",
+          item.trainerId?.userId?.name || item.trainerId?.name || "Unknown",
           item.collegeId?.name || "-",
           formatActivityTime(resolveCheckInValue(item)) || "-",
           formatActivityTime(resolveCheckOutValue(item)) || "-",
@@ -445,22 +513,71 @@ const TrainerActivity = () => {
         { batchSize: 300 },
       );
 
-      doc.text("Trainer Activity Report", 14, 15);
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 20,
-        theme: "striped",
-        headStyles: { fillColor: [24, 144, 255] },
+        startY: 32,
+        theme: "grid",
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.2,
+          overflow: "linebreak",
+          lineColor: [226, 232, 240],
+          lineWidth: 0.15,
+        },
+        headStyles: {
+          fillColor: [30, 41, 59],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+          fontSize: 8.5,
+          halign: "center",
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 12, halign: "center" },
+          1: { cellWidth: 28, halign: "center" },
+          2: { cellWidth: 48, halign: "left" },
+          3: { cellWidth: 60, halign: "left" },
+          4: { cellWidth: 26, halign: "center" },
+          5: { cellWidth: 26, halign: "center" },
+          6: { cellWidth: 25, halign: "center", fontStyle: "bold" },
+          7: { cellWidth: 44, halign: "left" },
+        },
+        didDrawPage: (data) => {
+          const pageNum = data.pageNumber;
+          if (pageNum > 1) {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8);
+            doc.setTextColor(71, 85, 105);
+            doc.text("THE SM GROUPS  |  Trainer Activity Report", 14, 10);
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.3);
+            doc.line(14, 12, 283, 12);
+          }
+        },
       });
+
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.line(14, 200, 283, 200);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text("Confidential - For Official Use Only  |  THE SM GROUPS", 14, 204.5);
+        doc.text(`Page ${i} of ${totalPages}`, 283, 204.5, { align: "right" });
+      }
 
       await new Promise((resolve) => {
         runOnIdle(() => {
           doc.save(`Trainer_Activity_${dayjs().format("YYYY-MM-DD")}.pdf`);
           resolve();
-        }, 1500);
+        }, 1000);
       });
-      message.success("PDF exported successfully");
+      message.success("Trainer Activity PDF exported successfully");
     } catch (error) {
       console.error("PDF Export Error:", error);
       message.error("Failed to export PDF");

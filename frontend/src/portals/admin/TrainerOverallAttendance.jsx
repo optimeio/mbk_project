@@ -438,21 +438,34 @@ const resolveSessionMeta = (record = {}) => {
   if (rawSession === 'AN' || rawSession === 'AFTERNOON' || rawSession === 'EVENING') {
     return { label: 'AN', color: 'purple' };
   }
-  if (rawSession === 'FULL_DAY' || rawSession === 'FULL DAY' || rawSession === 'ALL_DAY') {
+  if (rawSession === 'FULL_DAY' || rawSession === 'FULL DAY' || rawSession === 'ALL_DAY' || rawSession === 'FULLDAY') {
     return { label: 'Full Day', color: 'green' };
   }
 
   const startTime = record.startTime || record.scheduleId?.startTime || '';
+  const endTime = record.endTime || record.scheduleId?.endTime || '';
+
   if (startTime) {
-    const match = String(startTime).match(/^(\d{1,2})/);
-    if (match) {
-      const hour = parseInt(match[1], 10);
-      if (hour < 12) return { label: 'FN', color: 'blue' };
-      if (hour >= 12) return { label: 'AN', color: 'purple' };
+    const startMatch = String(startTime).match(/^(\d{1,2})/);
+    const endMatch = String(endTime).match(/^(\d{1,2})/);
+    const startHour = startMatch ? parseInt(startMatch[1], 10) : null;
+    const endHour = endMatch ? parseInt(endMatch[1], 10) : null;
+
+    if (startHour !== null) {
+      if (startHour >= 12 || String(startTime).toUpperCase().includes('PM')) {
+        return { label: 'AN', color: 'purple' };
+      }
+      if (endHour !== null && (endHour >= 16 || String(endTime).toUpperCase().includes('PM'))) {
+        return { label: 'Full Day', color: 'green' };
+      }
+      if (endHour !== null && endHour <= 13) {
+        return { label: 'FN', color: 'blue' };
+      }
+      return { label: 'FN', color: 'blue' };
     }
   }
 
-  return { label: rawSession || 'FN', color: 'blue' };
+  return { label: rawSession || 'Full Day', color: 'green' };
 };
 
 const toFiniteNumber = (value) => {
@@ -949,69 +962,355 @@ const TrainerOverallAttendance = () => {
       }
     };
 
+    const loadLogoBase64 = async (logoUrl = "/logos/tsmg.png") => {
+      return new Promise((resolve) => {
+        try {
+          if (typeof window === "undefined") return resolve(null);
+          const img = new window.Image();
+          img.crossOrigin = "Anonymous";
+          img.onload = () => {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = img.naturalWidth || img.width;
+              canvas.height = img.naturalHeight || img.height;
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0);
+              const dataUrl = canvas.toDataURL("image/png");
+              resolve({ dataUrl, width: canvas.width, height: canvas.height });
+            } catch {
+              resolve(null);
+            }
+          };
+          img.onerror = () => resolve(null);
+          img.src = logoUrl;
+        } catch {
+          resolve(null);
+        }
+      });
+    };
+
     const handleExportPDF = async () => {
       try {
         setExporting(true);
         const exportRows = await fetchExportRows();
-        const { jsPDF, autoTable } = await getPdfTools();
+        if (!exportRows || exportRows.length === 0) {
+          message.warning("No attendance records found to export.");
+          return;
+        }
+
+        const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+          import("jspdf"),
+          import("jspdf-autotable"),
+        ]);
+
         const doc = new jsPDF("l", "mm", "a4");
+        const logoImg = await loadLogoBase64("/logos/tsmg.png");
+
+        // Compute metrics
+        let presentCount = 0;
+        let absentCount = 0;
+        let pendingCount = 0;
+        let verifiedCount = 0;
+
+        exportRows.forEach((item) => {
+          const rawStatus = String(item.status || "").trim().toLowerCase();
+          const checkInVal = formatTimeLabel(item.checkInTime || item.checkIn?.time);
+          const hasCheckIn = checkInVal !== "-";
+          const isPresent = rawStatus === "present" || (rawStatus === "pending" && hasCheckIn);
+          const isAbsent = rawStatus === "absent" || (rawStatus === "pending" && !hasCheckIn);
+
+          if (isPresent) presentCount++;
+          else if (isAbsent) absentCount++;
+          else pendingCount++;
+
+          const geoMeta = getGeoStatusMeta(item);
+          if (geoMeta.label === "Verified") verifiedCount++;
+        });
+
+        // Resolve single trainer context if filtered
+        const isSingleTrainer = Boolean(selectedTrainerId) || (
+          exportRows.length > 0 &&
+          exportRows.every(r => (r.trainerId?.trainerId || r.trainerId?._id) === (exportRows[0].trainerId?.trainerId || exportRows[0].trainerId?._id))
+        );
+
+        const matchedTrainer = selectedTrainerId ? trainersList.find(t => t.value === selectedTrainerId) : null;
+        const trainerDisplayName = matchedTrainer?.name || exportRows[0]?.trainerId?.userId?.name || exportRows[0]?.trainerId?.name || "All Trainers";
+        const trainerDisplayId = exportRows[0]?.trainerId?.trainerId || "-";
+        const collegeDisplayName = exportRows[0]?.collegeId?.name || "All Colleges";
+        const courseDisplayName = exportRows[0]?.courseId?.title || exportRows[0]?.courseId?.name || exportRows[0]?.scheduleId?.courseId?.title || exportRows[0]?.scheduleId?.courseId?.name || exportRows[0]?.scheduleId?.subject || exportRows[0]?.subject || "Multiple Courses";
+
+        // Date Period String
+        let periodLabel = "All Dates";
+        if (datePreset === "today") periodLabel = `Today (${dayjs().format("DD MMM YYYY")})`;
+        else if (datePreset === "yesterday") periodLabel = `Yesterday (${dayjs().subtract(1, "day").format("DD MMM YYYY")})`;
+        else if (datePreset === "week") periodLabel = `This Week (${dayjs().startOf("week").format("DD MMM")} - ${dayjs().endOf("week").format("DD MMM YYYY")})`;
+        else if (dateRange?.[0] && dateRange?.[1]) {
+          const s = dayjs(dateRange[0]).format("DD MMM YYYY");
+          const e = dayjs(dateRange[1]).format("DD MMM YYYY");
+          periodLabel = s === e ? s : `${s} to ${e}`;
+        }
+
+        // Draw First Page Header
+        if (logoImg?.dataUrl) {
+          try {
+            const logoW = 54;
+            const logoH = logoImg.height && logoImg.width ? (logoImg.height / logoImg.width) * logoW : 14;
+            doc.addImage(logoImg.dataUrl, "PNG", 14, 8, logoW, Math.min(logoH, 16));
+          } catch (e) {
+            console.warn("Could not render logo to PDF:", e);
+          }
+        }
+
+        // Title Header Block (Right-aligned)
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.setTextColor(30, 41, 59);
+        doc.text("THE SM GROUPS", 283, 13, { align: "right" });
+
+        doc.setFontSize(10);
+        doc.setTextColor(220, 38, 38);
+        doc.text("OFFICIAL TRAINER ATTENDANCE REPORT", 283, 19, { align: "right" });
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Generated: ${dayjs().format("DD MMM YYYY, hh:mm A")}`, 283, 24, { align: "right" });
+
+        // Accent Divider Bar
+        doc.setDrawColor(220, 38, 38);
+        doc.setLineWidth(0.7);
+        doc.line(14, 26.5, 283, 26.5);
+
+        // Summary Card Box
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(14, 29.5, 269, 16.5, 1.5, 1.5, "FD");
+
+        doc.setFontSize(8);
+        if (isSingleTrainer) {
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Trainer: `, 18, 34.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`${trainerDisplayName} (ID: ${trainerDisplayId})`, 32, 34.5);
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`College: `, 115, 34.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`${collegeDisplayName.substring(0, 40)}`, 128, 34.5);
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Period: `, 215, 34.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`${periodLabel}`, 226, 34.5);
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Course: `, 18, 41);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`${courseDisplayName.substring(0, 45)}`, 32, 41);
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Summary: `, 115, 41);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`Total: ${exportRows.length}  |  Present: ${presentCount}  |  Absent: ${absentCount}  |  Pending: ${pendingCount}  |  Geo Verified: ${verifiedCount}`, 130, 41);
+        } else {
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Scope: `, 18, 35.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`Overall Trainer Attendance Report (${exportRows.length} total entries)`, 30, 35.5);
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Period: `, 190, 35.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`${periodLabel}`, 202, 35.5);
+
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 41, 59);
+          doc.text(`Attendance Summary: `, 18, 41.5);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+          doc.text(`Present: ${presentCount}  |  Absent: ${absentCount}  |  Pending: ${pendingCount}  |  Geo Verified: ${verifiedCount}`, 52, 41.5);
+        }
+
+        // Table Data Preparation
         const tableColumn = [
+          "#",
           "Date",
           "Day",
           "Session",
-          "Trainer",
-          "College",
-          "Course",
+          "Trainer Name",
+          "College Name",
+          "Course Name",
           "Check-In",
           "Check-Out",
           "Status",
-          "Geo",
+          "Geo Status",
         ];
+
         const tableRows = await mapInBatches(
           exportRows,
-          (item) => [
-            (item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date)
-              ? dayjs(item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date).format("DD MMM YYYY")
-              : "-",
-            item.dayNumber || item.scheduleId?.dayNumber || "-",
-            resolveSessionMeta(item).label,
-            item.trainerId?.userId?.name || item.trainerId?.name || "Unknown",
-            item.collegeId?.name || "-",
-            item.courseId?.title ||
+          (item, idx) => {
+            const rawDate = item.assignedDate || item.scheduleId?.scheduledDate || item.scheduleId?.date || item.date;
+            const dateStr = rawDate ? dayjs(rawDate).format("DD MMM YYYY") : "-";
+            const dayNum = item.dayNumber || item.scheduleId?.dayNumber;
+            const dayStr = dayNum ? `Day ${dayNum}` : "-";
+            const sessionLabel = resolveSessionMeta(item).label;
+            const tName = item.trainerId?.userId?.name || item.trainerId?.name || "Unknown";
+            const tId = item.trainerId?.trainerId ? ` (${item.trainerId.trainerId})` : "";
+            const collegeName = item.collegeId?.name || "-";
+            const courseName =
+              item.courseId?.title ||
               item.courseId?.name ||
               item.scheduleId?.courseId?.title ||
               item.scheduleId?.courseId?.name ||
               item.scheduleId?.subject ||
               item.subject ||
-              "-",
-            formatTimeLabel(item.checkInTime || item.checkIn?.time),
-            formatTimeLabel(item.checkOutTime || item.checkOut?.time),
-            item.status || "-",
-            getGeoStatusMeta(item).label,
-          ],
+              "-";
+            const inTime = formatTimeLabel(item.checkInTime || item.checkIn?.time);
+            const outTime = formatTimeLabel(item.checkOutTime || item.checkOut?.time);
+
+            const rawStatus = String(item.status || "").trim().toLowerCase();
+            let displayStatus = item.status || "-";
+            if (!item.status || rawStatus === "pending") {
+              displayStatus = inTime !== "-" ? "Present" : "Absent";
+            }
+
+            const geoStatus = getGeoStatusMeta(item).label;
+
+            return [
+              idx + 1,
+              dateStr,
+              dayStr,
+              sessionLabel,
+              `${tName}${tId}`,
+              collegeName,
+              courseName,
+              inTime,
+              outTime,
+              displayStatus,
+              geoStatus,
+            ];
+          },
           { batchSize: 300 },
         );
 
-        doc.text(buildPdfTitle(), 14, 15);
         autoTable(doc, {
           head: [tableColumn],
           body: tableRows,
-          startY: 20,
-          theme: "striped",
-          headStyles: { fillColor: [24, 144, 255] },
+          startY: 49,
+          theme: "grid",
+          styles: {
+            fontSize: 7.5,
+            cellPadding: 2,
+            overflow: "linebreak",
+            lineColor: [226, 232, 240],
+            lineWidth: 0.15,
+            valign: "middle",
+          },
+          headStyles: {
+            fillColor: [30, 41, 59],
+            textColor: [255, 255, 255],
+            fontStyle: "bold",
+            fontSize: 8,
+            halign: "center",
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252],
+          },
+          columnStyles: {
+            0: { cellWidth: 10, halign: "center" },
+            1: { cellWidth: 23, halign: "center" },
+            2: { cellWidth: 14, halign: "center" },
+            3: { cellWidth: 16, halign: "center", fontStyle: "bold" },
+            4: { cellWidth: 40, halign: "left" },
+            5: { cellWidth: 46, halign: "left" },
+            6: { cellWidth: 38, halign: "left" },
+            7: { cellWidth: 22, halign: "center" },
+            8: { cellWidth: 22, halign: "center" },
+            9: { cellWidth: 20, halign: "center", fontStyle: "bold" },
+            10: { cellWidth: 18, halign: "center" },
+          },
+          willDrawCell: (data) => {
+            if (data.section === "body") {
+              // Colorize Session Column
+              if (data.column.index === 3) {
+                const sess = String(data.cell.raw || "");
+                if (sess === "FN") data.cell.styles.textColor = [2, 132, 199];
+                else if (sess === "AN") data.cell.styles.textColor = [147, 51, 234];
+                else if (sess === "Full Day") data.cell.styles.textColor = [22, 163, 74];
+              }
+              // Colorize Status Column
+              if (data.column.index === 9) {
+                const st = String(data.cell.raw || "").toLowerCase();
+                if (st.includes("present")) data.cell.styles.textColor = [22, 163, 74];
+                else if (st.includes("absent")) data.cell.styles.textColor = [220, 38, 38];
+                else if (st.includes("pending") || st.includes("late")) data.cell.styles.textColor = [217, 119, 6];
+              }
+            }
+          },
+          didDrawPage: (data) => {
+            const pageNum = data.pageNumber;
+            // Mini Header on subsequent pages
+            if (pageNum > 1) {
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(8);
+              doc.setTextColor(71, 85, 105);
+              doc.text("THE SM GROUPS  |  Trainer Attendance Report", 14, 10);
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(7.5);
+              doc.setTextColor(148, 163, 184);
+              doc.text(`Period: ${periodLabel}`, 283, 10, { align: "right" });
+              doc.setDrawColor(226, 232, 240);
+              doc.setLineWidth(0.3);
+              doc.line(14, 12, 283, 12);
+            }
+          },
         });
 
-        const filename = buildExportFileName("pdf");
+        // 2nd Pass: Page Footers with total page count
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          doc.setDrawColor(226, 232, 240);
+          doc.setLineWidth(0.3);
+          doc.line(14, 200, 283, 200);
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(148, 163, 184);
+          doc.text("Confidential - For Official Use Only  |  THE SM GROUPS", 14, 204.5);
+          doc.text(`Page ${i} of ${totalPages}`, 283, 204.5, { align: "right" });
+        }
+
+        const filename = isSingleTrainer
+          ? `Trainer_Attendance_${trainerDisplayName.replace(/[^a-zA-Z0-9]/g, "_")}_${dayjs().format("YYYY-MM-DD")}.pdf`
+          : buildExportFileName("pdf");
+
         await new Promise((resolve) => {
           runOnIdle(() => {
             doc.save(filename);
             resolve();
-          }, 1500);
+          }, 1000);
         });
-        message.success("PDF exported successfully");
+
+        message.success("Professional Attendance PDF exported successfully");
       } catch (error) {
         console.error("PDF Export Error:", error);
-        message.error("Failed to export PDF");
+        message.error("Failed to export PDF report");
       } finally {
         setExporting(false);
       }
