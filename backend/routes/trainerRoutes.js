@@ -1562,11 +1562,19 @@ router.post("/save-step", async (req, res) => {
 // GET /api/trainers/profile/me - Get current trainer profile
 router.get("/profile/me", authenticate, async (req, res) => {
   try {
-    if (req.user.role !== "Trainer") {
+    const userRole = String(req.user?.role || "").trim().toLowerCase();
+    if (userRole !== "trainer") {
       return res.status(403).json({ message: "Access denied. Trainers only." });
     }
 
-    let trainer = await Trainer.findOne({ userId: req.user.id }).populate(
+    let trainer = await Trainer.findOne({
+      $or: [
+        { userId: req.user.id },
+        { userId: req.user.userId },
+        { _id: req.user.id },
+        { email: req.user.email?.toLowerCase?.() },
+      ].filter(Boolean),
+    }).populate(
       "userId",
       "name email role city phoneNumber profileCompletedOnce isActive",
     );
@@ -1676,11 +1684,19 @@ router.get("/profile/me", authenticate, async (req, res) => {
 // PUT /api/trainers/profile/me - Update current trainer profile
 router.put("/profile/me", authenticate, async (req, res) => {
   try {
-    if (req.user.role !== "Trainer") {
+    const userRole = String(req.user?.role || "").trim().toLowerCase();
+    if (userRole !== "trainer") {
       return res.status(403).json({ success: false, message: "Access denied. Trainers only." });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id }).populate(
+    const trainer = await Trainer.findOne({
+      $or: [
+        { userId: req.user.id },
+        { userId: req.user.userId },
+        { _id: req.user.id },
+        { email: req.user.email?.toLowerCase?.() },
+      ].filter(Boolean),
+    }).populate(
       "userId",
       "name email phoneNumber city specialization profileCompletedOnce isActive",
     );
@@ -1802,11 +1818,19 @@ router.post("/submit-registration", authenticateOptional, async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ message: "Authentication required" });
     }
-    if (req.user.role !== "Trainer") {
+    const userRole = String(req.user?.role || "").trim().toLowerCase();
+    if (userRole !== "trainer") {
       return res.status(403).json({ message: "Access denied. Trainers only." });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await Trainer.findOne({
+      $or: [
+        { userId: req.user.id },
+        { userId: req.user.userId },
+        { _id: req.user.id },
+        { email: req.user.email?.toLowerCase?.() },
+      ].filter(Boolean),
+    });
     if (!trainer) {
       return res.status(404).json({ message: "Trainer profile not found" });
     }

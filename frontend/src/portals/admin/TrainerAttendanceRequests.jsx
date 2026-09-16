@@ -165,6 +165,7 @@ export default function TrainerAttendanceRequests() {
       render: (_, record) => {
         const sched = record.scheduleId || {};
         const schedDate = sched.scheduledDate || record.date;
+        const dayNum = record.dayNumber || sched.dayNumber || null;
         const session = String(record.session || sched.session || "FN").toUpperCase() === "AN" ? "AN" : "FN";
         const sessionColor = session === "AN" ? "purple" : "blue";
 
@@ -173,7 +174,7 @@ export default function TrainerAttendanceRequests() {
             <div style={{ fontWeight: 600, fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
               {schedDate ? dayjs(schedDate).format("DD MMM YYYY") : "-"}
             </div>
-            <Space orientation="horizontal" size={4}>
+            <Space direction="horizontal" size={4}>
               {dayNum ? <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>Day {dayNum}</Tag> : null}
               <Tag color={sessionColor} style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>
                 {session}

@@ -247,17 +247,26 @@ export default function TrainerActivities() {
 
   // Helper: Detect if a schedule session is FN
   const isSessionFN = (info) => {
+    if (!info) return true;
     const s = String(info?.session || info?.sessionType || '').toUpperCase().trim();
     if (s === 'FN') return true;
     if (s === 'AN') return false;
-    // Derive from startTime (e.g. '09:00 AM')
+
+    // Check if title, subject, or time text includes session tag
+    const allText = `${info?.title || ''} ${info?.subject || ''} ${info?.time || ''} ${info?.startTime || ''}`.toUpperCase();
+    if (allText.includes('AN SESSION') || allText.includes('(AN)') || allText.includes(' AN')) return false;
+    if (allText.includes('FN SESSION') || allText.includes('(FN)') || allText.includes(' FN')) return true;
+
+    // Derive from startTime (e.g. '13:00' or '09:00 AM' or '01:00 PM')
     const startRaw = String(info?.startTime || info?.time || '').trim().toUpperCase().split('-')[0].trim();
     const match = startRaw.match(/(\d{1,2}):(\d{2})(?:\s*([AP]M))?/);
     if (match) {
       let h = parseInt(match[1], 10);
-      if (match[3] === 'PM' && h < 12) h += 12;
-      if (match[3] === 'AM' && h === 12) h = 0;
-      return h < 13 || (h === 13 && (parseInt(match[2], 10) || 0) <= 30);
+      const ampm = match[3];
+      if (ampm === 'PM' && h < 12) h += 12;
+      if (ampm === 'AM' && h === 12) h = 0;
+      // In 24h: 13:00, 14:00, etc. are Afternoon (AN) sessions
+      return h < 13;
     }
     return true;
   };

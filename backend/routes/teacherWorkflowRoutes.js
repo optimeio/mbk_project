@@ -23,10 +23,63 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const findTrainerSafely = async (reqUser, populateUser = false) => {
+  if (!reqUser) return null;
+  const lookupIds = [
+    reqUser.id,
+    reqUser._id,
+    reqUser.userId,
+    reqUser.trainerId,
+  ].filter(Boolean);
+
+  const queryOr = [
+    { userId: { $in: lookupIds } },
+    { _id: { $in: lookupIds.filter((id) => mongoose.Types.ObjectId.isValid(id)) } },
+  ];
+
+  if (reqUser.email) {
+    queryOr.push({ email: String(reqUser.email).toLowerCase().trim() });
+  }
+
+  let query = Trainer.findOne({ $or: queryOr });
+  if (populateUser) {
+    query = query.populate("userId");
+  }
+  let trainer = await query;
+  if (!trainer && reqUser.email) {
+    try {
+      const User = mongoose.model("User");
+      const user = await User.findOne({ email: String(reqUser.email).toLowerCase().trim() }).lean();
+      if (user) {
+        let q = Trainer.findOne({ userId: user._id });
+        if (populateUser) q = q.populate("userId");
+        trainer = await q;
+      }
+    } catch (e) {}
+  }
+  return trainer;
+};
+
+const resolveScheduleSession = (sched) => {
+  if (!sched) return 'FN';
+  const s = String(sched.session || sched.sessionType || '').toUpperCase().trim();
+  if (s === 'FN' || s === 'AN') return s;
+  const rawStart = String(sched.startTime || sched.time || '').trim();
+  const match = rawStart.match(/(\d{1,2}):(\d{2})(?:\s*([AP]M))?/i);
+  if (match) {
+    let h = parseInt(match[1], 10);
+    const ampm = (match[3] || '').toUpperCase();
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return h >= 13 ? 'AN' : 'FN';
+  }
+  return 'FN';
+};
+
 // 1. GET /api/teacher/current-assignment
 router.get("/current-assignment", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
+    const trainer = await findTrainerSafely(req.user, true);
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
@@ -76,7 +129,7 @@ router.get("/current-assignment", authenticate, async (req, res) => {
 // 1b. GET /api/attendance/today-status
 router.get("/attendance/today-status", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
@@ -99,12 +152,20 @@ router.get("/attendance/today-status", authenticate, async (req, res) => {
     }
 
     if (!todaySchedule) {
-      todaySchedule = await Schedule.findOne({
+      const candidateSchedules = await Schedule.find({
         trainerId: trainer._id,
         scheduledDate: { $gte: todayStart, $lte: todayEnd },
         status: { $nin: ['cancelled', 'CANCELLED'] },
         isActive: { $ne: false },
-      }).populate('collegeId', 'name').lean();
+      }).populate('collegeId', 'name').sort({ scheduledDate: -1, updatedAt: -1 }).lean();
+
+      if (candidateSchedules.length > 0) {
+        const now = new Date();
+        const currentHour = now.getHours();
+        const anSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'AN');
+        const fnSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'FN');
+        todaySchedule = (currentHour >= 13 && anSchedule) ? anSchedule : (fnSchedule || candidateSchedules[0]);
+      }
     }
 
     let attendanceRecord = null;
@@ -123,11 +184,14 @@ router.get("/attendance/today-status", authenticate, async (req, res) => {
     }
 
     const hasScheduleToday = Boolean(todaySchedule);
+    const resolvedSession = todaySchedule ? resolveScheduleSession(todaySchedule) : 'FN';
     const scheduleInfo = todaySchedule
       ? {
           scheduleId: todaySchedule._id,
           collegeName: todaySchedule.collegeId?.name || todaySchedule.collegeName || null,
           dayNumber: todaySchedule.dayNumber,
+          session: resolvedSession,
+          sessionType: resolvedSession,
           startTime: todaySchedule.startTime,
           endTime: todaySchedule.endTime,
           subject: todaySchedule.subject || null,
@@ -212,7 +276,7 @@ router.post("/location/validate", authenticate, async (req, res) => {
   try {
     let { latitude, longitude } = req.body;
 
-    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
+    const trainer = await findTrainerSafely(req.user, true);
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
@@ -295,7 +359,7 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
     if (latitude == null) latitude = 0;
     if (longitude == null) longitude = 0;
 
-    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
+    const trainer = await findTrainerSafely(req.user, true);
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
@@ -486,7 +550,7 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
       return res.status(400).json({ success: false, message: "Attendance document (Excel, PDF, or Photo) is required" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
@@ -618,7 +682,7 @@ router.post("/student-attendance/photo", authenticate, uploadAttendance, async (
       return res.status(400).json({ success: false, message: "Attendance photo is required" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer) {
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
@@ -705,7 +769,7 @@ router.post("/student-attendance/live", authenticate, async (req, res) => {
       return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer || String(attendanceRecord.trainerId) !== String(trainer._id)) {
       return res.status(403).json({ success: false, message: "Unauthorized attendance session access" });
     }
@@ -809,7 +873,7 @@ router.post("/student-activities", authenticate, uploadAttendance, async (req, r
       return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer || String(attendanceRecord.trainerId) !== String(trainer._id)) {
       return res.status(403).json({ success: false, message: "Unauthorized attendance session access" });
     }
@@ -907,7 +971,7 @@ router.post("/attendance/clock-out", authenticate, uploadAttendance, async (req,
       return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
     }
 
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer || String(attendanceRecord.trainerId) !== String(trainer._id)) {
       return res.status(403).json({ success: false, message: "Unauthorized attendance session access" });
     }

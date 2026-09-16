@@ -1,5 +1,6 @@
 const express = require("express");
 const xlsx = require("xlsx");
+const mongoose = require("mongoose");
 const router = express.Router();
 const teacherWorkflowRoutes = require("./teacherWorkflowRoutes.js");
 const { authenticate } = require("../middleware/auth");
@@ -14,6 +15,43 @@ const { getActiveAssignment } = require("../utils/trainerAssignmentResolver");
 
 const escapeRegex = (value = "") =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const findTrainerSafely = async (reqUser, populateUser = true) => {
+  if (!reqUser) return null;
+  const lookupIds = [
+    reqUser.id,
+    reqUser._id,
+    reqUser.userId,
+    reqUser.trainerId,
+  ].filter(Boolean);
+
+  const queryOr = [
+    { userId: { $in: lookupIds } },
+    { _id: { $in: lookupIds.filter((id) => mongoose.Types.ObjectId.isValid(id)) } },
+  ];
+
+  if (reqUser.email) {
+    queryOr.push({ email: String(reqUser.email).toLowerCase().trim() });
+  }
+
+  let query = Trainer.findOne({ $or: queryOr });
+  if (populateUser) {
+    query = query.populate("userId");
+  }
+  let trainer = await query;
+  if (!trainer && reqUser.email) {
+    try {
+      const User = mongoose.model("User");
+      const user = await User.findOne({ email: String(reqUser.email).toLowerCase().trim() }).lean();
+      if (user) {
+        let q = Trainer.findOne({ userId: user._id });
+        if (populateUser) q = q.populate("userId");
+        trainer = await q;
+      }
+    } catch (e) {}
+  }
+  return trainer;
+};
 
 const getDateRangeForPeriod = (period = "", dateValue) => {
   const today = new Date();
@@ -92,9 +130,23 @@ const fetchTrainerAttendanceRecords = async (trainerId, query = {}) => {
 
 router.get("/dashboard", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
+    const trainer = await findTrainerSafely(req.user, true);
     if (!trainer) {
-      return res.status(404).json({ success: false, message: "Trainer profile not found" });
+      return res.json({
+        success: true,
+        data: {
+          hasAssignment: false,
+          assignmentMessage: "No college has been assigned by Admin.",
+          assignedCollege: null,
+          totalStudents: 0,
+          presentStudents: 0,
+          absentStudents: 0,
+          attendancePercentage: 0,
+          todaysActivities: 0,
+          clockInStatus: { checkedIn: false },
+          clockOutStatus: { checkedOut: false },
+        },
+      });
     }
 
     const assignmentResult = await getActiveAssignment(trainer, req.user);
@@ -150,9 +202,9 @@ router.get("/dashboard", authenticate, async (req, res) => {
 
 router.get("/assignment", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id }).populate("userId");
+    const trainer = await findTrainerSafely(req.user, true);
     if (!trainer) {
-      return res.status(404).json({ success: false, message: "Trainer profile not found" });
+      return res.json({ success: true, data: { hasAssignment: false, message: "No active college assignment found" } });
     }
 
     const assignmentResult = await getActiveAssignment(trainer, req.user);
@@ -163,7 +215,7 @@ router.get("/assignment", authenticate, async (req, res) => {
     const { assignment, college } = assignmentResult;
     const resolvedAssignment = {
       hasAssignment: true,
-      collegeName: college ? college.name : assignment.collegeName,
+      collegeName: college ? college.name : assignment?.collegeName,
       collegeId: college ? college._id : null,
       latitude: college ? (college.latitude != null ? college.latitude : college.location?.lat) : null,
       longitude: college ? (college.longitude != null ? college.longitude : college.location?.lng) : null,
@@ -190,9 +242,9 @@ router.post("/attendance-excel/upload", authenticate, (req, res, next) => {
 
 router.get("/attendance-records", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer) {
-      return res.status(404).json({ success: false, message: "Trainer profile not found" });
+      return res.json({ success: true, data: [] });
     }
 
     const records = await fetchTrainerAttendanceRecords(trainer._id, {
@@ -210,9 +262,9 @@ router.get("/attendance-records", authenticate, async (req, res) => {
 
 router.get("/attendance-records/export", authenticate, async (req, res) => {
   try {
-    const trainer = await Trainer.findOne({ userId: req.user.id });
+    const trainer = await findTrainerSafely(req.user, false);
     if (!trainer) {
-      return res.status(404).json({ success: false, message: "Trainer profile not found" });
+      return res.json({ success: true, data: [] });
     }
 
     const records = await fetchTrainerAttendanceRecords(trainer._id, {
