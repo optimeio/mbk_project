@@ -425,6 +425,18 @@ const getGeoStatusMeta = (recordOrStatus) => {
 };
 
 const resolveSessionMeta = (record = {}) => {
+  const parseTimeToMins = (str) => {
+    if (!str) return null;
+    const match = String(str).trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (!match) return null;
+    let h = parseInt(match[1], 10);
+    const m = match[2] ? parseInt(match[2], 10) : 0;
+    const mod = match[3] ? match[3].toUpperCase() : null;
+    if (mod === 'PM' && h < 12) h += 12;
+    if (mod === 'AM' && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
   const rawSession = String(
     record.session ||
     record.scheduleId?.session ||
@@ -438,31 +450,32 @@ const resolveSessionMeta = (record = {}) => {
   if (rawSession === 'AN' || rawSession === 'AFTERNOON' || rawSession === 'EVENING') {
     return { label: 'AN', color: 'purple' };
   }
-  if (rawSession === 'FULL_DAY' || rawSession === 'FULL DAY' || rawSession === 'ALL_DAY' || rawSession === 'FULLDAY') {
-    return { label: 'Full Day', color: 'green' };
-  }
 
   const startTime = record.startTime || record.scheduleId?.startTime || '';
   const endTime = record.endTime || record.scheduleId?.endTime || '';
 
-  if (startTime) {
-    const startMatch = String(startTime).match(/^(\d{1,2})/);
-    const endMatch = String(endTime).match(/^(\d{1,2})/);
-    const startHour = startMatch ? parseInt(startMatch[1], 10) : null;
-    const endHour = endMatch ? parseInt(endMatch[1], 10) : null;
+  const startMins = parseTimeToMins(startTime);
+  const endMins = parseTimeToMins(endTime);
 
-    if (startHour !== null) {
-      if (startHour >= 12 || String(startTime).toUpperCase().includes('PM')) {
-        return { label: 'AN', color: 'purple' };
-      }
-      if (endHour !== null && (endHour >= 16 || String(endTime).toUpperCase().includes('PM'))) {
-        return { label: 'Full Day', color: 'green' };
-      }
-      if (endHour !== null && endHour <= 13) {
-        return { label: 'FN', color: 'blue' };
-      }
+  if (startMins !== null && endMins !== null) {
+    if (endMins <= 13 * 60 + 30 && startMins < 12 * 60) {
       return { label: 'FN', color: 'blue' };
     }
+    if (startMins >= 12 * 60) {
+      return { label: 'AN', color: 'purple' };
+    }
+    if (startMins < 12 * 60 && endMins >= 15 * 60) {
+      return { label: 'Full Day', color: 'green' };
+    }
+  } else if (startMins !== null) {
+    if (startMins >= 12 * 60) {
+      return { label: 'AN', color: 'purple' };
+    }
+    return { label: 'FN', color: 'blue' };
+  }
+
+  if (rawSession === 'FULL_DAY' || rawSession === 'FULL DAY' || rawSession === 'ALL_DAY' || rawSession === 'FULLDAY' || rawSession === 'BOTH') {
+    return { label: 'Full Day', color: 'green' };
   }
 
   return { label: rawSession || 'Full Day', color: 'green' };

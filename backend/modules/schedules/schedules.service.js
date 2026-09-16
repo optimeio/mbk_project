@@ -126,6 +126,49 @@ const isSpocRole = (role) => {
     || normalizedRole === "companyadmin";
 };
 
+const normalizeSessionType = (session, startTime, endTime) => {
+  if (session) {
+    const s = String(session).trim().toUpperCase();
+    if (s === "FN" || s === "FORENOON" || s === "MORNING") return "FN";
+    if (s === "AN" || s === "AFTERNOON" || s === "EVENING") return "AN";
+    if (s === "FULL_DAY" || s === "FULL DAY" || s === "FULL" || s === "BOTH" || s === "ALL_DAY") return "FULL_DAY";
+  }
+
+  if (startTime || endTime) {
+    const parseToMins = (str) => {
+      if (!str) return null;
+      const match = String(str).trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+      if (!match) return null;
+      let h = parseInt(match[1], 10);
+      const m = match[2] ? parseInt(match[2], 10) : 0;
+      const mod = match[3] ? match[3].toUpperCase() : null;
+      if (mod === "PM" && h < 12) h += 12;
+      if (mod === "AM" && h === 12) h = 0;
+      return h * 60 + m;
+    };
+
+    const startMins = parseToMins(startTime);
+    const endMins = parseToMins(endTime);
+
+    if (startMins !== null && endMins !== null) {
+      if (endMins <= 13 * 60 + 30 && startMins < 12 * 60) {
+        return "FN";
+      }
+      if (startMins >= 12 * 60) {
+        return "AN";
+      }
+      if (startMins < 12 * 60 && endMins >= 15 * 60) {
+        return "FULL_DAY";
+      }
+    } else if (startMins !== null) {
+      if (startMins >= 12 * 60) return "AN";
+      return "FN";
+    }
+  }
+
+  return "FULL_DAY";
+};
+
 const listSchedulesFeed = async ({
   query,
   user,
@@ -1381,7 +1424,7 @@ const createScheduleFeed = async ({
     ? { ...(folderFields || {}), ...nmFolderFields }
     : folderFields || {};
 
-  const resolvedSession = session || "FULL_DAY";
+  const resolvedSession = normalizeSessionType(session, startTime, endTime);
   const defaultStartTime = resolvedSession === "AN" ? "13:00" : "09:00";
   const defaultEndTime = resolvedSession === "FN" ? "13:00" : "17:30";
 
@@ -1681,6 +1724,8 @@ const bulkCreateSchedulesFeed = async ({
       ? { ...(folderFields || {}), ...nmFolderFields }
       : folderFields || {};
 
+    const sessionForRecord = normalizeSessionType(schedulePayload.session, schedulePayload.startTime, schedulePayload.endTime);
+
     if (existingDaySlot?._id) {
       updateOps.push({
         updateOne: {
@@ -1696,6 +1741,7 @@ const bulkCreateSchedulesFeed = async ({
               scheduledDate: schedulePayload.scheduledDate,
               startTime: schedulePayload.startTime,
               endTime: schedulePayload.endTime,
+              session: sessionForRecord,
               subject: schedulePayload.subject || null,
               status: "scheduled",
               isActive: true,
@@ -1724,6 +1770,7 @@ const bulkCreateSchedulesFeed = async ({
     seenInsertKeys.add(insertKey);
     schedulesToInsert.push({
       ...schedulePayload,
+      session: sessionForRecord,
       collegeLocation: collegeMap[String(schedule.collegeId)]?.location || {},
       createdBy: createdBy || actorUserId,
       status: "scheduled",
@@ -2138,6 +2185,8 @@ const bulkUploadSchedulesFeed = async ({
         schedule.trainerId = trainersCache[trainerCustomId]._id;
         schedule.startTime = startTime;
         schedule.endTime = endTime;
+        const sessionFromRow = getCaseInsensitiveCellValue(row, "Session")?.toString().trim();
+        schedule.session = normalizeSessionType(sessionFromRow, startTime, endTime);
 
         const validDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
         if (dayName && validDays.includes(dayName)) {
@@ -2348,7 +2397,7 @@ const assignScheduleFeed = async ({
   schedule.scheduledDate = scheduledDate;
   schedule.startTime = startTime || schedule.startTime;
   schedule.endTime = endTime || schedule.endTime;
-  schedule.session = session || schedule.session || "FULL_DAY";
+  schedule.session = normalizeSessionType(session || schedule.session, schedule.startTime, schedule.endTime);
   schedule.status = "scheduled";
 
   const { TrainerAssignment } = require("../../models");
@@ -2539,13 +2588,15 @@ const updateScheduleFeed = async ({
   if (payload?.startTime !== undefined) schedule.startTime = payload.startTime;
   if (payload?.endTime !== undefined) schedule.endTime = payload.endTime;
   if (payload?.session !== undefined) {
-    schedule.session = payload.session;
+    schedule.session = normalizeSessionType(payload.session, schedule.startTime, schedule.endTime);
     if (payload?.startTime === undefined) {
-      schedule.startTime = payload.session === "AN" ? "13:00" : "09:00";
+      schedule.startTime = schedule.session === "AN" ? "13:00" : "09:00";
     }
     if (payload?.endTime === undefined) {
-      schedule.endTime = payload.session === "FN" ? "13:00" : "17:30";
+      schedule.endTime = schedule.session === "FN" ? "13:00" : "17:30";
     }
+  } else if (payload?.startTime !== undefined || payload?.endTime !== undefined) {
+    schedule.session = normalizeSessionType(schedule.session, schedule.startTime, schedule.endTime);
   }
   
   if (schedule.trainerId && schedule.scheduledDate && (payload?.trainerId !== undefined || payload?.scheduledDate !== undefined || payload?.startTime !== undefined || payload?.endTime !== undefined || payload?.session !== undefined)) {

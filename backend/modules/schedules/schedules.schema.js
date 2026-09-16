@@ -67,6 +67,8 @@ const parseCreateScheduleBody = (body = {}) => {
     subject: body?.subject,
     createdBy: body?.createdBy,
   };
+  if (body?.session !== undefined) result.session = body.session;
+  if (body?.sessionType !== undefined && result.session === undefined) result.session = body.sessionType;
   if (body?.venue !== undefined) result.venue = body.venue;
   if (body?.remarks !== undefined) result.remarks = body.remarks;
   return result;
@@ -82,12 +84,17 @@ const parseBulkUploadScheduleContext = ({ file = null, user = null } = {}) => ({
   user,
 });
 
-const parseAssignScheduleBody = (body = {}) => ({
-  trainerId: body?.trainerId,
-  scheduledDate: body?.scheduledDate,
-  startTime: body?.startTime,
-  endTime: body?.endTime,
-});
+const parseAssignScheduleBody = (body = {}) => {
+  const result = {
+    trainerId: body?.trainerId,
+    scheduledDate: body?.scheduledDate,
+    startTime: body?.startTime,
+    endTime: body?.endTime,
+  };
+  if (body?.session !== undefined) result.session = body.session;
+  if (body?.sessionType !== undefined && result.session === undefined) result.session = body.sessionType;
+  return result;
+};
 
 const parseUpdateScheduleParams = (params = {}) => ({
   scheduleId: String(params.id || "").trim(),

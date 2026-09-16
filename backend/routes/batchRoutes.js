@@ -51,6 +51,31 @@ const syncBatchSchedules = async ({
             const existing = existingByTrainerId.get(trainerId);
             let scheduleRecord = existing;
 
+            let batchSession = 'FULL_DAY';
+            if (batch.sessionType === 'FN') {
+                batchSession = 'FN';
+            } else if (batch.sessionType === 'AN') {
+                batchSession = 'AN';
+            } else if (scheduleStartTime || scheduleEndTime) {
+                const parseToMins = (str) => {
+                    if (!str) return null;
+                    const match = String(str).trim().match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+                    if (!match) return null;
+                    let h = parseInt(match[1], 10);
+                    const m = match[2] ? parseInt(match[2], 10) : 0;
+                    const mod = match[3] ? match[3].toUpperCase() : null;
+                    if (mod === 'PM' && h < 12) h += 12;
+                    if (mod === 'AM' && h === 12) h = 0;
+                    return h * 60 + m;
+                };
+                const sMins = parseToMins(scheduleStartTime);
+                const eMins = parseToMins(scheduleEndTime);
+                if (sMins !== null && eMins !== null) {
+                    if (eMins <= 13 * 60 + 30 && sMins < 12 * 60) batchSession = 'FN';
+                    else if (sMins >= 12 * 60) batchSession = 'AN';
+                }
+            }
+
             if (existing) {
                 existing.companyId = companyId;
                 existing.courseId = batch.courseId;
@@ -61,6 +86,7 @@ const syncBatchSchedules = async ({
                 existing.scheduledDate = null;
                 existing.startTime = scheduleStartTime;
                 existing.endTime = scheduleEndTime;
+                existing.session = batchSession;
                 existing.status = 'scheduled';
                 existing.isActive = true;
                 existing.createdBy = existing.createdBy || actorUserId;
@@ -77,6 +103,7 @@ const syncBatchSchedules = async ({
                     scheduledDate: null,
                     startTime: scheduleStartTime,
                     endTime: scheduleEndTime,
+                    session: batchSession,
                     status: 'scheduled',
                     isActive: true,
                     createdBy: actorUserId,
