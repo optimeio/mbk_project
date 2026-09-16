@@ -97,9 +97,7 @@ function AttendanceUploadSection() {
   const [scheduleLoading, setScheduleLoading] = useState(false);
 
   const checkInFileInputRef = useRef(null);
-  const checkInCameraInputRef = useRef(null);
   const checkOutFileInputRef = useRef(null);
-  const checkOutCameraInputRef = useRef(null);
 
   /* ── get trainer ID from current user ─────────────────────── */
   const trainerId =
@@ -629,38 +627,20 @@ function AttendanceUploadSection() {
               )}
 
               {!checkInImagePreview && (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => checkInFileInputRef.current?.click()}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <ImagePlus className="h-3.5 w-3.5" />
-                    Browse file
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => checkInCameraInputRef.current?.click()}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#1a6b9e]/30 bg-blue-50 px-2 py-2 text-xs font-bold text-[#1a6b9e] transition hover:bg-blue-100"
-                  >
-                    <Camera className="h-3.5 w-3.5" />
-                    Take Photo
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => checkInFileInputRef.current?.click()}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <ImagePlus className="h-4 w-4 text-[#1a6b9e]" />
+                  Select & Upload Check-In Photo
+                </button>
               )}
 
               <input
                 ref={checkInFileInputRef}
                 type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleCheckInFileInput}
-              />
-              <input
-                ref={checkInCameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
+                accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                 className="hidden"
                 onChange={handleCheckInFileInput}
               />
@@ -684,10 +664,10 @@ function AttendanceUploadSection() {
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-semibold text-slate-700 group-hover:text-[#1a6b9e] transition">
-                        Capture check-out photo
+                        Upload check-out photo
                       </p>
                       <p className="mt-0.5 text-[10px] text-slate-400">
-                        Take photo or browse files
+                        Select geo-tagged photo from files / gallery
                       </p>
                     </div>
                   </div>
@@ -716,38 +696,20 @@ function AttendanceUploadSection() {
                 )}
 
                 {!checkOutImagePreview && (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => checkOutFileInputRef.current?.click()}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      <ImagePlus className="h-3.5 w-3.5" />
-                      Browse file
+                  <button
+                    type="button"
+                    onClick={() => checkOutFileInputRef.current?.click()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <ImagePlus className="h-4 w-4 text-[#1a6b9e]" />
+                    Select & Upload Check-Out Photo
                   </button>
-                    <button
-                      type="button"
-                      onClick={() => checkOutCameraInputRef.current?.click()}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#1a6b9e]/30 bg-blue-50 px-2 py-2 text-xs font-bold text-[#1a6b9e] transition hover:bg-blue-100"
-                    >
-                      <Camera className="h-3.5 w-3.5" />
-                      Take Photo
-                    </button>
-                  </div>
                 )}
 
                 <input
                   ref={checkOutFileInputRef}
                   type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleCheckOutFileInput}
-                />
-                <input
-                  ref={checkOutCameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
+                  accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                   className="hidden"
                   onChange={handleCheckOutFileInput}
                 />

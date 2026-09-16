@@ -376,15 +376,14 @@ const CheckInModal = ({
                 <div className="relative">
                   <button className="w-full flex items-center justify-center gap-2 px-3 py-4 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50/50 hover:border-indigo-500 hover:bg-indigo-50 transition-all group">
                     <div className="text-center">
-                      <CameraIcon className="h-6 w-6 mx-auto text-indigo-400 group-hover:text-indigo-600" />
+                      <PhotoIcon className="h-6 w-6 mx-auto text-indigo-400 group-hover:text-indigo-600" />
                       <span className="block text-xs font-medium text-indigo-600 mt-1">
-                        {scannedImages.length ? `Add Page (${scannedImages.length} captured)` : "Scan / Take Photo"}
+                        {scannedImages.length ? `Add Page (${scannedImages.length} uploaded)` : "Upload Attendance Page Photo"}
                       </span>
                     </div>
                     <input
                       type="file"
-                      accept="image/*"
-                      capture="environment"
+                      accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                       onChange={handlePdfScan}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
@@ -505,8 +504,7 @@ const CheckInModal = ({
                 <div className="relative rounded-xl border border-dashed border-gray-300 px-3 py-4 text-center bg-white hover:border-indigo-500 transition-all">
                   <input
                     type="file"
-                    accept="image/*"
-                    capture="environment"
+                    accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                     onChange={(event) =>
                       setAttendanceData((previous) => ({
                         ...previous,

@@ -397,43 +397,19 @@ const CheckOutModal = ({
                             Verified image locked. Replacement is blocked.
                           </p>
                         ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className={`cursor-pointer rounded-xl border-2 border-dashed px-3 py-3 text-center transition-all ${
+                          <div className="w-full">
+                            <label className={`cursor-pointer rounded-xl border-2 border-dashed px-4 py-3.5 text-center flex items-center justify-center gap-2 transition-all ${
                               slotDisabled
                                 ? "cursor-not-allowed border-indigo-100 bg-indigo-50/50 opacity-60"
                                 : "border-indigo-200 bg-indigo-50 hover:border-indigo-300 hover:bg-indigo-100/60"
                             }`}>
-                              <CameraIcon className="mx-auto h-5 w-5 text-indigo-500" />
-                              <span className="mt-1 block text-[10px] font-black uppercase text-indigo-700">
-                                {slot.uploaded ? "Recapture" : "Capture"}
+                              <PhotoIcon className="h-5 w-5 text-indigo-600 shrink-0" />
+                              <span className="text-xs font-bold uppercase text-indigo-700">
+                                {slot.uploaded ? "Upload Different Photo" : "Upload Geo-Tagged Photo"}
                               </span>
                               <input
                                 type="file"
-                                accept="image/jpeg,image/jpg"
-                                capture="environment"
-                                disabled={slotDisabled}
-                                onChange={(event) => {
-                                  const nextFile = event.target.files?.[0];
-                                  if (nextFile) {
-                                    handleGeoImageUpload(slot.slotIndex, nextFile);
-                                  }
-                                  event.target.value = "";
-                                }}
-                                className="hidden"
-                              />
-                            </label>
-                            <label className={`cursor-pointer rounded-xl border-2 border-dashed px-3 py-3 text-center transition-all ${
-                              slotDisabled
-                                ? "cursor-not-allowed border-gray-100 bg-gray-50 opacity-60"
-                                : "border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100"
-                            }`}>
-                              <PhotoIcon className="mx-auto h-5 w-5 text-gray-500" />
-                              <span className="mt-1 block text-[10px] font-black uppercase text-gray-700">
-                                {slot.uploaded ? "Replace" : "Upload"}
-                              </span>
-                              <input
-                                type="file"
-                                accept="image/jpeg,image/jpg,image/png"
+                                accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                                 disabled={slotDisabled}
                                 onChange={(event) => {
                                   const nextFile = event.target.files?.[0];

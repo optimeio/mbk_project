@@ -1285,8 +1285,8 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
 
     const getSessionBounds = (sessionType, startStr, endStr) => {
       const normalizedSession = String(sessionType || "").trim().toUpperCase();
-      if (normalizedSession === 'FN') return { start: 9 * 60, end: 13 * 60 };
-      if (normalizedSession === 'AN') return { start: 13 * 60, end: 17 * 60 };
+      if (normalizedSession === 'FN') return { start: 9 * 60, end: 13 * 60 + 30 };
+      if (normalizedSession === 'AN') return { start: 14 * 60, end: 18 * 60 };
 
       if (startStr && endStr) {
         const parsedStart = parseTimeToMinutes(startStr, false);
@@ -1296,11 +1296,11 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
         }
       }
 
-      if (normalizedSession === 'FULL_DAY') return { start: 9 * 60, end: 17 * 60 };
+      if (normalizedSession === 'FULL_DAY') return { start: 9 * 60, end: 18 * 60 };
       
       return {
         start: 9 * 60,
-        end: 17 * 60
+        end: 18 * 60
       };
     };
 

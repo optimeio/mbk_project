@@ -266,15 +266,15 @@ scheduleSchema.pre('save', function (next) {
             const endMins = parseToMins(this.endTime);
 
             if (startMins !== null && endMins !== null) {
-                if (endMins <= 13 * 60 + 30 && startMins < 12 * 60) {
+                if (endMins <= 13 * 60 + 30 && startMins < 13 * 60 + 30) {
                     this.session = 'FN';
-                } else if (startMins >= 12 * 60) {
+                } else if (startMins >= 13 * 60 + 30 || (startMins >= 13 * 60 && endMins <= 18 * 60 + 30)) {
                     this.session = 'AN';
-                } else if (startMins < 12 * 60 && endMins >= 15 * 60) {
+                } else if (startMins < 13 * 60 + 30 && endMins > 14 * 60) {
                     this.session = 'FULL_DAY';
                 }
             } else if (startMins !== null) {
-                if (startMins >= 12 * 60) {
+                if (startMins >= 13 * 60 + 30) {
                     this.session = 'AN';
                 } else {
                     this.session = 'FN';

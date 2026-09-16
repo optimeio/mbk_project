@@ -458,17 +458,17 @@ const resolveSessionMeta = (record = {}) => {
   const endMins = parseTimeToMins(endTime);
 
   if (startMins !== null && endMins !== null) {
-    if (endMins <= 13 * 60 + 30 && startMins < 12 * 60) {
+    if (endMins <= 13 * 60 + 30 && startMins < 13 * 60 + 30) {
       return { label: 'FN', color: 'blue' };
     }
-    if (startMins >= 12 * 60) {
+    if (startMins >= 13 * 60 + 30 || (startMins >= 13 * 60 && endMins <= 18 * 60 + 30)) {
       return { label: 'AN', color: 'purple' };
     }
-    if (startMins < 12 * 60 && endMins >= 15 * 60) {
+    if (startMins < 13 * 60 + 30 && endMins > 14 * 60) {
       return { label: 'Full Day', color: 'green' };
     }
   } else if (startMins !== null) {
-    if (startMins >= 12 * 60) {
+    if (startMins >= 13 * 60 + 30) {
       return { label: 'AN', color: 'purple' };
     }
     return { label: 'FN', color: 'blue' };

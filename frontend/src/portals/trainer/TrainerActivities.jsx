@@ -215,7 +215,7 @@ export default function TrainerActivities() {
   const searchParams = useSearchParams();
   const targetScheduleId = searchParams?.get('scheduleId') || '';
 
-  // Helper: Is current IST time past 1:00 PM (FN session close)?
+  // Helper: Is current IST time past 1:30 PM (FN session close)?
   const isFNSessionClosedNow = () => {
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-IN', {
@@ -226,10 +226,11 @@ export default function TrainerActivities() {
     });
     const parts = formatter.formatToParts(now);
     const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
-    return hour >= 13;
+    const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+    return hour > 13 || (hour === 13 && minute >= 30);
   };
 
-  // Helper: Is current IST time past 5:30 PM (AN session close)?
+  // Helper: Is current IST time past 6:00 PM (AN session close)?
   const isANSessionClosedNow = () => {
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-IN', {
@@ -241,7 +242,7 @@ export default function TrainerActivities() {
     const parts = formatter.formatToParts(now);
     const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
     const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
-    return hour > 17 || (hour === 17 && minute >= 30);
+    return hour >= 18;
   };
 
   // Helper: Detect if a schedule session is FN
@@ -256,7 +257,7 @@ export default function TrainerActivities() {
       let h = parseInt(match[1], 10);
       if (match[3] === 'PM' && h < 12) h += 12;
       if (match[3] === 'AM' && h === 12) h = 0;
-      return h < 13;
+      return h < 13 || (h === 13 && (parseInt(match[2], 10) || 0) <= 30);
     }
     return true;
   };
@@ -293,7 +294,7 @@ export default function TrainerActivities() {
           } else if (res.step === 4) {
             toast.success('Student attendance uploaded. Resuming at Classroom Activities.');
           } else if (res.step === 5) {
-            toast.success('Activities logged. Ready for Check-Out.');
+            toast.success('Activities logged. Ready for Check-Out photo.');
           }
         } else {
           setStep(2);
@@ -303,13 +304,13 @@ export default function TrainerActivities() {
         // Not yet clocked in — check if FN or AN session is already closed
         const fnOnly = isSessionFN(res.scheduleInfo);
         if (fnOnly && isFNSessionClosedNow()) {
-          toast('FN session closed at 1:00 PM. Redirecting to your dashboard.', {
+          toast('FN session closed at 1:30 PM. Redirecting to your dashboard.', {
             icon: '🕐',
             duration: 4000,
           });
           setTimeout(() => { if (!cancelledRef.current) router.push('/trainer/dashboard'); }, 1500);
         } else if (!fnOnly && isANSessionClosedNow()) {
-          toast('AN session closed at 5:30 PM. Redirecting to your dashboard.', {
+          toast('AN session closed at 6:00 PM. Redirecting to your dashboard.', {
             icon: '🕐',
             duration: 4000,
           });
@@ -1006,6 +1007,16 @@ export default function TrainerActivities() {
                 </div>
 
                 <div className="p-6 space-y-4">
+                  {attendanceId && (
+                    <div className="p-3.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-300 text-xs flex items-start gap-2.5">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-sky-600 mt-0.5" />
+                      <div>
+                        <span className="font-bold block">Check-In &amp; Attendance Sheet are already recorded.</span>
+                        <span className="text-slate-600 dark:text-slate-400">Upload your classroom activity photos below. Existing photos and drive records will not be overwritten.</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
                       Activity / Syllabus Topic <span className="text-rose-500">*</span>
@@ -1112,6 +1123,16 @@ export default function TrainerActivities() {
                 </div>
 
                 <div className="p-6 space-y-5">
+                  {attendanceId && (
+                    <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-300 text-xs flex items-start gap-2.5">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                      <div>
+                        <span className="font-bold block">Check-In, Attendance &amp; Classroom Activities are safely recorded.</span>
+                        <span className="text-slate-600 dark:text-slate-400">Only upload your Check-Out departure photo below to complete today's session. Earlier uploads are preserved safely.</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
                       Check-Out Photo (With GPS Tag) <span className="text-rose-500">*</span>
@@ -1295,10 +1316,17 @@ export default function TrainerActivities() {
             </div>
           </div>
 
-          <div className="pt-4 flex justify-center gap-3">
+          <div className="pt-4 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => { setStep(3); }}
+              className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs transition inline-flex items-center gap-2"
+            >
+              <ImageIcon className="h-4 w-4 text-sky-600" />
+              Upload Additional Classroom Photos
+            </button>
             <button
               onClick={() => router.push('/trainer/dashboard')}
-              className="px-6 py-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-sm transition shadow-md"
+              className="px-6 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs transition shadow-md"
             >
               Return to Dashboard
             </button>
