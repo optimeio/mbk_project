@@ -4199,7 +4199,7 @@ router.post('/admin-upload', uploadAttendance, async (req, res) => {
     const adminUploadCorrelationId = createCorrelationId('attendance_admin_upload');
     try {
         adminUploadStage = 'reading request payload';
-        const { scheduleId, trainerId, collegeId, latitude, longitude, date } = req.body;
+        const { scheduleId, trainerId, collegeId, courseId, latitude, longitude, date } = req.body;
         const requestedVerificationStatus = normalizeVerificationStatus(
             req.body.verificationStatus,
             null
@@ -4215,7 +4215,7 @@ router.post('/admin-upload', uploadAttendance, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Schedule ID is required' });
         }
         adminUploadStage = 'loading schedule';
-        const schedule = await Schedule.findById(scheduleId).select('dayFolderId dayFolderName dayFolderLink attendanceFolderId attendanceFolderName attendanceFolderLink geoTagFolderId geoTagFolderName geoTagFolderLink driveFolderId driveFolderName driveFolderLink departmentId dayNumber');
+        const schedule = await Schedule.findById(scheduleId).select('courseId dayFolderId dayFolderName dayFolderLink attendanceFolderId attendanceFolderName attendanceFolderLink geoTagFolderId geoTagFolderName geoTagFolderLink driveFolderId driveFolderName driveFolderLink departmentId dayNumber');
         if (!schedule) {
             return res.status(404).json({ success: false, message: 'Schedule not found' });
         }
@@ -5221,10 +5221,41 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             req.files?.clock_out_image?.[0] ||
             req.files?.checkOutGeoImage?.[0];
 
-        const hasCheckIn = Boolean(checkInFile || attendance.imageUrl || attendance.checkInPhoto);
-        const hasStudentDoc = Boolean(studentAttendanceFile || attendance.attendancePdfUrl || attendance.attendanceExcelUrl || attendance.studentsPhotoUrl);
-        const hasActivities = Boolean((activityFiles && activityFiles.length > 0) || (attendance.activityPhotos && attendance.activityPhotos.length > 0));
-        const hasCheckOut = Boolean(checkOutFile || attendance.checkOutGeoImageUrl || (attendance.checkOut && attendance.checkOut.photos && attendance.checkOut.photos.length > 0));
+        const hasCheckIn = Boolean(
+            checkInFile ||
+            attendance.imageUrl ||
+            attendance.checkInPhoto ||
+            attendance.checkInImage ||
+            attendance.checkInTime ||
+            attendance.checkIn?.time ||
+            schedule.checkInImage ||
+            schedule.checkInTime
+        );
+
+        const hasStudentDoc = Boolean(
+            studentAttendanceFile ||
+            attendance.attendancePdfUrl ||
+            attendance.attendanceExcelUrl ||
+            attendance.studentsPhotoUrl ||
+            attendance.attendancePhotoUrl ||
+            attendance.attendanceDocumentUrl ||
+            schedule.attendancePdfUrl
+        );
+
+        const hasActivities = Boolean(
+            (activityFiles && activityFiles.length > 0) ||
+            (Array.isArray(attendance.activityPhotos) && attendance.activityPhotos.length > 0) ||
+            (Array.isArray(schedule.activityPhotos) && schedule.activityPhotos.length > 0)
+        );
+
+        const hasCheckOut = Boolean(
+            checkOutFile ||
+            attendance.checkOutGeoImageUrl ||
+            (attendance.checkOut && Array.isArray(attendance.checkOut.photos) && attendance.checkOut.photos.length > 0) ||
+            attendance.checkOutTime ||
+            attendance.checkOut?.time ||
+            schedule.checkOut?.time
+        );
 
         const missingProofs = [];
         if (!hasCheckIn) missingProofs.push('Check-In Photo');

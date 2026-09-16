@@ -60,6 +60,20 @@ const findTrainerSafely = async (reqUser, populateUser = false) => {
   return trainer;
 };
 
+function getCurrentISTTotalMinutes() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+  return hour * 60 + minute;
+}
+
 const resolveScheduleSession = (sched) => {
   if (!sched) return 'FN';
   const s = String(sched.session || sched.sessionType || '').toUpperCase().trim();
@@ -74,6 +88,89 @@ const resolveScheduleSession = (sched) => {
     return h >= 13 ? 'AN' : 'FN';
   }
   return 'FN';
+};
+
+const resolveAttendanceRecordForSession = async ({
+  trainer,
+  attendanceId = null,
+  scheduleId = null,
+  user = null,
+  autoCreate = false,
+}) => {
+  const totalMins = getCurrentISTTotalMinutes();
+  const targetSession = totalMins >= 13 * 60 + 30 ? 'AN' : 'FN';
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  let attendanceRecord = null;
+  let targetSchedule = null;
+
+  if (scheduleId && mongoose.Types.ObjectId.isValid(String(scheduleId))) {
+    targetSchedule = await Schedule.findById(scheduleId).populate('collegeId');
+    if (targetSchedule) {
+      attendanceRecord = await Attendance.findOne({
+        trainerId: trainer._id,
+        scheduleId: targetSchedule._id,
+      });
+    }
+  }
+
+  if (attendanceId && !attendanceRecord && mongoose.Types.ObjectId.isValid(String(attendanceId))) {
+    const candidateRecord = await Attendance.findById(attendanceId);
+    if (candidateRecord) {
+      if (candidateRecord.session === targetSession || scheduleId) {
+        attendanceRecord = candidateRecord;
+      }
+    }
+  }
+
+  if (!attendanceRecord) {
+    attendanceRecord = await Attendance.findOne({
+      trainerId: trainer._id,
+      date: { $gte: todayStart, $lte: todayEnd },
+      session: targetSession,
+    });
+  }
+
+  if (!targetSchedule) {
+    const candidateSchedules = await Schedule.find({
+      trainerId: trainer._id,
+      scheduledDate: { $gte: todayStart, $lte: todayEnd },
+      status: { $nin: ['cancelled', 'CANCELLED'] },
+      isActive: { $ne: false },
+    }).populate('collegeId').sort({ scheduledDate: -1, updatedAt: -1 });
+
+    if (candidateSchedules.length > 0) {
+      const anSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'AN');
+      const fnSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'FN');
+      targetSchedule = (targetSession === 'AN' && anSchedule)
+        ? anSchedule
+        : (fnSchedule || candidateSchedules[0]);
+    }
+  }
+
+  if (!attendanceRecord && autoCreate) {
+    const activeAssignment = await getActiveAssignment(trainer, user, targetSchedule?._id || scheduleId || null);
+    const collegeId = targetSchedule?.collegeId?._id || targetSchedule?.collegeId || activeAssignment?.college?._id || trainer.collegeId || null;
+    const sessionToUse = targetSchedule ? resolveScheduleSession(targetSchedule) : (activeAssignment?.session || targetSession);
+
+    attendanceRecord = new Attendance({
+      trainerId: trainer._id,
+      collegeId,
+      scheduleId: targetSchedule?._id || activeAssignment?.scheduleId || null,
+      session: sessionToUse,
+      date: new Date(),
+      dayNumber: targetSchedule?.dayNumber || activeAssignment?.schedule?.dayNumber || 1,
+      status: 'clocked_in',
+      attendanceStatus: 'PRESENT',
+      checkIn: { time: new Date() }
+    });
+    await attendanceRecord.save();
+  }
+
+  return { attendanceRecord, targetSession, targetSchedule };
 };
 
 // 1. GET /api/teacher/current-assignment
@@ -95,12 +192,14 @@ router.get("/current-assignment", authenticate, async (req, res) => {
           collegeName: college.name || schedule.collegeName,
           driveFolderId: college.googleDriveFolderId || trainer.collegeDriveFolderId,
           active: true,
+          scheduleId: schedule._id,
+          session: resolveScheduleSession(schedule),
         };
       }
     }
 
     if (!college) {
-      const result = await getActiveAssignment(trainer, req.user);
+      const result = await getActiveAssignment(trainer, req.user, req.query.scheduleId || null);
       if (result) {
         college = result.college;
         assignment = result.assignment;
@@ -116,7 +215,9 @@ router.get("/current-assignment", authenticate, async (req, res) => {
       collegeId: college ? college._id : null,
       latitude: college ? (college.latitude != null ? college.latitude : college.location?.lat) : null,
       longitude: college ? (college.longitude != null ? college.longitude : college.location?.lng) : null,
-      geofenceRadius: college ? (college.geofenceRadius || 150) : 150
+      geofenceRadius: college ? (college.geofenceRadius || 150) : 150,
+      scheduleId: assignment?.scheduleId || null,
+      session: assignment?.session || 'FN',
     };
 
     return res.json({ success: true, assignment: resolvedAssignment });
@@ -135,60 +236,20 @@ router.get("/attendance/today-status", authenticate, async (req, res) => {
     }
 
     const { scheduleId } = req.query;
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-
-    let todaySchedule = null;
-    if (scheduleId) {
-      todaySchedule = await Schedule.findOne({
-        _id: scheduleId,
-        trainerId: trainer._id,
-        status: { $nin: ['cancelled', 'CANCELLED'] },
-        isActive: { $ne: false },
-      }).populate('collegeId', 'name').lean();
-    }
-
-    if (!todaySchedule) {
-      const candidateSchedules = await Schedule.find({
-        trainerId: trainer._id,
-        scheduledDate: { $gte: todayStart, $lte: todayEnd },
-        status: { $nin: ['cancelled', 'CANCELLED'] },
-        isActive: { $ne: false },
-      }).populate('collegeId', 'name').sort({ scheduledDate: -1, updatedAt: -1 }).lean();
-
-      if (candidateSchedules.length > 0) {
-        const now = new Date();
-        const currentHour = now.getHours();
-        const anSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'AN');
-        const fnSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'FN');
-        todaySchedule = (currentHour >= 13 && anSchedule) ? anSchedule : (fnSchedule || candidateSchedules[0]);
-      }
-    }
-
-    let attendanceRecord = null;
-    if (todaySchedule?._id) {
-      attendanceRecord = await Attendance.findOne({
-        trainerId: trainer._id,
-        scheduleId: todaySchedule._id,
-      }).lean();
-    }
-
-    if (!attendanceRecord && !scheduleId) {
-      attendanceRecord = await Attendance.findOne({
-        trainerId: trainer._id,
-        date: { $gte: todayStart, $lte: todayEnd }
-      }).lean();
-    }
+    const { attendanceRecord, targetSession, targetSchedule: todaySchedule } = await resolveAttendanceRecordForSession({
+      trainer,
+      scheduleId,
+      user: req.user,
+      autoCreate: false,
+    });
 
     const hasScheduleToday = Boolean(todaySchedule);
-    const resolvedSession = todaySchedule ? resolveScheduleSession(todaySchedule) : 'FN';
+    const resolvedSession = todaySchedule ? resolveScheduleSession(todaySchedule) : targetSession;
     const scheduleInfo = todaySchedule
       ? {
           scheduleId: todaySchedule._id,
           collegeName: todaySchedule.collegeId?.name || todaySchedule.collegeName || null,
+          collegeId: todaySchedule.collegeId?._id || todaySchedule.collegeId || null,
           dayNumber: todaySchedule.dayNumber,
           session: resolvedSession,
           sessionType: resolvedSession,
@@ -364,7 +425,8 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const result = await getActiveAssignment(trainer, req.user);
+    const reqScheduleId = req.body.scheduleId || req.query.scheduleId || null;
+    const result = await getActiveAssignment(trainer, req.user, reqScheduleId);
     // Bypass mode: allow clock-in even with no assignment
     const college = result?.college || null;
     let distance = 0;
@@ -390,16 +452,54 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
       return res.status(400).json({ success: false, message: "Clock-in photo capture is required" });
     }
 
-    // Check duplicate clock-in for today
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const existingAttendance = await Attendance.findOne({
-      trainerId: trainer._id,
-      date: { $gte: todayStart, $lte: todayEnd }
-    });
+    const checkInTime = timestamp ? new Date(timestamp) : new Date();
+    const checkInDateObj = new Date(checkInTime);
+    const checkInMins = checkInDateObj.getHours() * 60 + checkInDateObj.getMinutes();
+
+    // Resolve schedule: either from explicit scheduleId or by time window (FN before 1:30 PM, AN after 1:30 PM)
+    const { Schedule } = require("../models");
+    let schedule = null;
+    if (reqScheduleId) {
+      schedule = await Schedule.findById(reqScheduleId).populate('collegeId').lean();
+    }
+    if (!schedule) {
+      const candidateSchedules = await Schedule.find({
+        trainerId: trainer._id,
+        scheduledDate: { $gte: todayStart, $lte: todayEnd },
+        status: { $nin: ['cancelled', 'CANCELLED'] },
+        isActive: { $ne: false }
+      }).populate('collegeId').lean();
+
+      if (candidateSchedules.length > 0) {
+        const totalMins = getCurrentISTTotalMinutes();
+        const anSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'AN');
+        const fnSchedule = candidateSchedules.find((s) => resolveScheduleSession(s) === 'FN');
+        // Before 1:30 PM (810 mins): pick FN schedule. After 1:30 PM: pick AN schedule.
+        schedule = (totalMins >= 13 * 60 + 30 && anSchedule)
+          ? anSchedule
+          : (fnSchedule || candidateSchedules[0]);
+      }
+    }
+
+    const dayNumber = schedule?.dayNumber || 1;
+    const targetScheduleId = schedule?._id || null;
+    const sessionType = schedule ? resolveScheduleSession(schedule) : (checkInMins >= 13 * 60 + 30 ? "AN" : "FN");
+
+    // Check duplicate clock-in for this specific schedule/session
+    let existingAttendanceQuery = { trainerId: trainer._id };
+    if (targetScheduleId) {
+      existingAttendanceQuery.scheduleId = targetScheduleId;
+    } else {
+      existingAttendanceQuery.date = { $gte: todayStart, $lte: todayEnd };
+      existingAttendanceQuery.session = sessionType;
+    }
+
+    const existingAttendance = await Attendance.findOne(existingAttendanceQuery);
 
     if (existingAttendance && existingAttendance.checkIn && existingAttendance.checkIn.time) {
       if (existingAttendance.finalStatus === "COMPLETED") {
@@ -415,41 +515,25 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
     }
 
     const checkInUrl = `/uploads/attendance/images/${checkInImageFile.filename}`;
-    const checkInTime = timestamp ? new Date(timestamp) : new Date();
-
-    // Resolve dayNumber from today's schedule
-    const { Schedule } = require("../models");
-    const schedule = await Schedule.findOne({
-      trainerId: trainer._id,
-      scheduledDate: { $gte: todayStart, $lte: todayEnd },
-      isActive: { $ne: false }
-    });
-    const dayNumber = schedule?.dayNumber || 1;
 
     // Calculate late cutoff deadline based on session type
-    const sessionType = schedule?.session || "FULL_DAY";
-    let deadlineMins = 10 * 60 + 30; // 10:30 AM default for FN/FULL_DAY
+    let deadlineMins = 10 * 60 + 30; // 10:30 AM default for FN
     if (sessionType === "AN") {
       deadlineMins = 15 * 60; // 3:00 PM for AN
     }
-
-    const checkInDateObj = new Date(checkInTime);
-    const checkInMins = checkInDateObj.getHours() * 60 + checkInDateObj.getMinutes();
     
     // Check if session has ended
     let sessionEnded = false;
-    if (sessionType === "FN" && checkInMins >= 13 * 60) {
-      sessionEnded = true; // after 1:00 PM FN is ended
-    } else if (sessionType === "AN" && checkInMins >= 17 * 60) {
-      sessionEnded = true; // after 5:00 PM AN is ended
-    } else if (sessionType === "FULL_DAY" && checkInMins >= 17 * 60) {
-      sessionEnded = true;
+    if (sessionType === "FN" && checkInMins >= 13 * 60 + 30) {
+      sessionEnded = true; // after 1:30 PM FN is ended
+    } else if (sessionType === "AN" && checkInMins >= 18 * 60) {
+      sessionEnded = true; // after 6:00 PM AN is ended
     }
 
     if (sessionEnded) {
       return res.status(400).json({
         success: false,
-        message: "Session has already ended. Check-in is not allowed."
+        message: `${sessionType} Session has already ended. Check-in is not allowed.`
       });
     }
 
@@ -458,12 +542,12 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
     const computedAttendanceStatus = isLate ? "LATE" : "PRESENT";
 
     const attendanceRecord = await Attendance.findOneAndUpdate(
-      { trainerId: trainer._id, date: { $gte: todayStart, $lte: todayEnd } },
+      existingAttendanceQuery,
       {
         $set: {
           trainerId: trainer._id,
-          collegeId: schedule?.collegeId || college?._id || null,
-          scheduleId: schedule?._id || null,
+          collegeId: schedule?.collegeId?._id || schedule?.collegeId || college?._id || null,
+          scheduleId: targetScheduleId,
           date: new Date(),
           dayNumber: dayNumber,
           session: sessionType,
@@ -494,11 +578,12 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
     );
 
     // Asynchronously upload check-in image to Google Drive
-    if (checkInImageFile && (schedule?.collegeId || college?._id)) {
+    const resolvedCollegeId = schedule?.collegeId?._id || schedule?.collegeId || college?._id;
+    if (checkInImageFile && resolvedCollegeId) {
       uploadTrainerFileToDrive({
         trainer,
-        collegeId: schedule?.collegeId || college?._id,
-        scheduleId: schedule?._id,
+        collegeId: resolvedCollegeId,
+        scheduleId: targetScheduleId,
         attendanceId: attendanceRecord._id,
         dayNumber,
         session: sessionType,
@@ -555,35 +640,13 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
       return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    let attendanceRecord = null;
-    if (attendanceId && mongoose.Types.ObjectId.isValid(String(attendanceId))) {
-      attendanceRecord = await Attendance.findById(attendanceId);
-    }
-    if (!attendanceRecord) {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
-      attendanceRecord = await Attendance.findOne({
-        trainerId: trainer._id,
-        date: { $gte: todayStart, $lte: todayEnd }
-      });
-    }
-
-    if (!attendanceRecord) {
-      const activeAssignment = await getActiveAssignment(trainer, req.user);
-      const collegeId = activeAssignment?.college?._id || trainer.collegeId || null;
-      attendanceRecord = new Attendance({
-        trainerId: trainer._id,
-        collegeId,
-        date: new Date(),
-        dayNumber: 1,
-        status: 'clocked_in',
-        attendanceStatus: 'PRESENT',
-        checkIn: { time: new Date() }
-      });
-      await attendanceRecord.save();
-    }
+    const { attendanceRecord, targetSession } = await resolveAttendanceRecordForSession({
+      trainer,
+      attendanceId,
+      scheduleId: req.body?.scheduleId || null,
+      user: req.user,
+      autoCreate: true,
+    });
 
     const ext = path.extname(uploadedFile.originalname || '').toLowerCase();
     const relativePath = path.relative(path.join(__dirname, '..'), uploadedFile.path).replace(/\\/g, '/');
@@ -637,7 +700,7 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
         scheduleId: attendanceRecord.scheduleId,
         attendanceId: attendanceRecord._id,
         dayNumber: attendanceRecord.dayNumber || 1,
-        session: new Date().getHours() >= 13 ? 'AN' : 'FN',
+        session: attendanceRecord.session || targetSession,
         file: uploadedFile,
         isExcel: isExcel,
         folderType: 'attendance'
@@ -688,37 +751,16 @@ router.post("/student-attendance/photo", authenticate, uploadAttendance, async (
     }
 
     const { attendanceId } = req.body || {};
-    let attendanceRecord = null;
-    if (attendanceId) {
-      attendanceRecord = await Attendance.findById(attendanceId);
-    }
-
-    if (!attendanceRecord) {
-      attendanceRecord = await Attendance.findOne({
-        trainerId: trainer._id,
-        status: { $in: ['clocked_in', 'active', 'pending'] }
-      }).sort({ createdAt: -1 });
-    }
-
-    if (!attendanceRecord) {
-      // Auto-create daily session if not clocked in yet
-      const activeAssignment = await getActiveAssignment(trainer, req.user);
-      const collegeId = activeAssignment?.college?._id || trainer.collegeId || null;
-      attendanceRecord = new Attendance({
-        trainerId: trainer._id,
-        collegeId,
-        date: new Date(),
-        dayNumber: 1,
-        status: 'clocked_in',
-        checkIn: { time: new Date() }
-      });
-      await attendanceRecord.save();
-    }
+    const { attendanceRecord, targetSession } = await resolveAttendanceRecordForSession({
+      trainer,
+      attendanceId,
+      scheduleId: req.body?.scheduleId || null,
+      user: req.user,
+      autoCreate: true,
+    });
 
     const photoUrl = `/uploads/attendance/images/${photoFile.filename}`;
     attendanceRecord.attendancePhotoUrl = photoUrl;
-    // We can also default present/absent counts if needed, but since it's just a photo we may skip modifying counts
-    // or just leave them as whatever they are.
     await attendanceRecord.save();
 
     // Asynchronously upload attendance photo to Google Drive (in attendance folder)
@@ -729,10 +771,10 @@ router.post("/student-attendance/photo", authenticate, uploadAttendance, async (
         scheduleId: attendanceRecord.scheduleId,
         attendanceId: attendanceRecord._id,
         dayNumber: attendanceRecord.dayNumber || 1,
-        session: new Date().getHours() >= 13 ? 'AN' : 'FN',
+        session: attendanceRecord.session || targetSession,
         file: photoFile,
         isExcel: false,
-        folderType: 'attendance' // Forces it to the attendance folder
+        folderType: 'attendance'
       }).then(driveFile => {
         const fileId = driveFile?.fileId || driveFile?.driveFileId || driveFile?.id;
         if (fileId) {
@@ -757,22 +799,22 @@ router.post("/student-attendance/photo", authenticate, uploadAttendance, async (
 router.post("/student-attendance/live", authenticate, async (req, res) => {
   try {
     const { attendanceId, students, signatureBase64 } = req.body;
-    if (!attendanceId) {
-      return res.status(400).json({ success: false, message: "attendanceId is required" });
-    }
     if (!students || !Array.isArray(students)) {
       return res.status(400).json({ success: false, message: "Students attendance array is required" });
     }
 
-    const attendanceRecord = await Attendance.findById(attendanceId);
-    if (!attendanceRecord) {
-      return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
+    const trainer = await findTrainerSafely(req.user, false);
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const trainer = await findTrainerSafely(req.user, false);
-    if (!trainer || String(attendanceRecord.trainerId) !== String(trainer._id)) {
-      return res.status(403).json({ success: false, message: "Unauthorized attendance session access" });
-    }
+    const { attendanceRecord, targetSession } = await resolveAttendanceRecordForSession({
+      trainer,
+      attendanceId,
+      scheduleId: req.body?.scheduleId || null,
+      user: req.user,
+      autoCreate: true,
+    });
 
     // Save signature image
     let signatureUrl = attendanceRecord.signatureUrl;
@@ -839,7 +881,7 @@ router.post("/student-attendance/live", authenticate, async (req, res) => {
           scheduleId: attendanceRecord.scheduleId,
           attendanceId: attendanceRecord._id,
           dayNumber: attendanceRecord.dayNumber || 1,
-          session: new Date().getHours() >= 13 ? 'AN' : 'FN',
+          session: attendanceRecord.session || targetSession,
           folderType: 'attendance',
           file: { path: sigLocalPath, originalname: path.basename(sigLocalPath), mimetype: 'image/png' },
           isExcel: false,
@@ -861,22 +903,22 @@ router.post("/student-attendance/live", authenticate, async (req, res) => {
 router.post("/student-activities", authenticate, uploadAttendance, async (req, res) => {
   try {
     const { attendanceId, title, description, latitude, longitude } = req.body;
-    if (!attendanceId) {
-      return res.status(400).json({ success: false, message: "attendanceId is required" });
-    }
     if (!title || !description) {
       return res.status(400).json({ success: false, message: "Activity title and description are required" });
     }
 
-    const attendanceRecord = await Attendance.findById(attendanceId);
-    if (!attendanceRecord) {
-      return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
+    const trainer = await findTrainerSafely(req.user, false);
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const trainer = await findTrainerSafely(req.user, false);
-    if (!trainer || String(attendanceRecord.trainerId) !== String(trainer._id)) {
-      return res.status(403).json({ success: false, message: "Unauthorized attendance session access" });
-    }
+    const { attendanceRecord, targetSession } = await resolveAttendanceRecordForSession({
+      trainer,
+      attendanceId,
+      scheduleId: req.body?.scheduleId || null,
+      user: req.user,
+      autoCreate: true,
+    });
 
     const photoFiles = req.files && req.files['activityPhotos'] ? req.files['activityPhotos'] : [];
     const photoUrls = photoFiles.map(f => `/uploads/attendance/photos/${f.filename}`);
@@ -888,14 +930,17 @@ router.post("/student-activities", authenticate, uploadAttendance, async (req, r
     for (const file of photoFiles) {
       await StudentActivity.create({
         photoUrl: `/uploads/attendance/photos/${file.filename}`,
-        classId: attendanceRecord.collegeId.toString(),
+        classId: attendanceRecord.collegeId ? attendanceRecord.collegeId.toString() : "",
         className: collegeName,
         trainerId: trainer._id,
         trainerName: req.user.name || "Teacher",
         uploadedAt: new Date(),
-        latitude: Number(latitude || college.latitude || 0),
-        longitude: Number(longitude || college.longitude || 0),
-        address: req.body.address || collegeName
+        latitude: Number(latitude || college?.latitude || 0),
+        longitude: Number(longitude || college?.longitude || 0),
+        address: req.body.address || collegeName,
+        scheduleId: attendanceRecord.scheduleId || null,
+        attendanceId: attendanceRecord._id,
+        session: attendanceRecord.session || targetSession
       });
     }
 
@@ -917,7 +962,7 @@ router.post("/student-activities", authenticate, uploadAttendance, async (req, r
           scheduleId: attendanceRecord.scheduleId,
           attendanceId: attendanceRecord._id,
           dayNumber: attendanceRecord.dayNumber || 1,
-          session: new Date().getHours() >= 13 ? 'AN' : 'FN',
+          session: attendanceRecord.session || targetSession,
           file: file,
           isExcel: false,
           folderType: 'studentActivities'
@@ -960,27 +1005,29 @@ router.post("/student-activities", authenticate, uploadAttendance, async (req, r
 router.post("/attendance/clock-out", authenticate, uploadAttendance, async (req, res) => {
   try {
     let { attendanceId, latitude, longitude, timestamp } = req.body;
-    if (!attendanceId) {
-      return res.status(400).json({ success: false, message: "attendanceId is required" });
-    }
     if (latitude == null) latitude = 0;
     if (longitude == null) longitude = 0;
 
-    const attendanceRecord = await Attendance.findById(attendanceId);
-    if (!attendanceRecord) {
-      return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
+    const trainer = await findTrainerSafely(req.user, false);
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: "Trainer profile not found" });
     }
 
-    const trainer = await findTrainerSafely(req.user, false);
-    if (!trainer || String(attendanceRecord.trainerId) !== String(trainer._id)) {
-      return res.status(403).json({ success: false, message: "Unauthorized attendance session access" });
+    const { attendanceRecord, targetSession } = await resolveAttendanceRecordForSession({
+      trainer,
+      attendanceId,
+      scheduleId: req.body?.scheduleId || null,
+      user: req.user,
+      autoCreate: false,
+    });
+
+    if (!attendanceRecord) {
+      return res.status(404).json({ success: false, message: "Active daily attendance session not found" });
     }
 
     if (!attendanceRecord.checkIn || !attendanceRecord.checkIn.time) {
       return res.status(400).json({ success: false, message: "You have not clocked in for this session yet" });
     }
-
-    // Allow updating or completing the clock-out record smoothly
 
     // Geofence check
     const college = await College.findById(attendanceRecord.collegeId);
@@ -1040,7 +1087,7 @@ router.post("/attendance/clock-out", authenticate, uploadAttendance, async (req,
         scheduleId: attendanceRecord.scheduleId,
         attendanceId: attendanceRecord._id,
         dayNumber: attendanceRecord.dayNumber || 1,
-        session: new Date().getHours() >= 13 ? 'AN' : 'FN',
+        session: attendanceRecord.session || targetSession,
         file: checkOutImageFile,
         isExcel: false,
         folderType: 'checkOut',

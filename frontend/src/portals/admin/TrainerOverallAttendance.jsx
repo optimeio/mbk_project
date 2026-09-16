@@ -2095,7 +2095,7 @@ const TrainerOverallAttendance = () => {
                   <Space>
                     <UserRound size={18} color="#1890ff" />
                     <span style={{ fontSize: "16px", fontWeight: 600 }}>
-                      Day {selectedGeoRecord?.dayNumber || selectedGeoRecord?.scheduleId?.dayNumber || "1"} Attendance & Evidence Details - {selectedGeoRecord?.trainerId?.userId?.name || selectedGeoRecord?.trainerId?.name || 'Trainer'}
+                      Day {selectedGeoRecord?.dayNumber || selectedGeoRecord?.scheduleId?.dayNumber || "1"} ({selectedGeoRecord?.session || selectedGeoRecord?.scheduleId?.session || "FN"}) Attendance & Evidence Details - {selectedGeoRecord?.trainerId?.userId?.name || selectedGeoRecord?.trainerId?.name || 'Trainer'} {selectedGeoRecord?.collegeId?.name ? `(${selectedGeoRecord.collegeId.name})` : (selectedGeoRecord?.scheduleId?.collegeId?.name ? `(${selectedGeoRecord.scheduleId.collegeId.name})` : '')}
                     </span>
                   </Space>
                 }

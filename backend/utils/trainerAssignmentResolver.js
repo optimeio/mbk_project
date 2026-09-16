@@ -54,38 +54,98 @@ async function syncTrainerAssignmentRecord({ trainer, trainerName, collegeName, 
   }
 }
 
+function getCurrentISTTotalMinutes() {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+  return hour * 60 + minute;
+}
+
+function resolveScheduleSessionToken(sched) {
+  if (!sched) return 'FN';
+  const s = String(sched.session || sched.sessionType || '').toUpperCase().trim();
+  if (s === 'FN' || s === 'AN') return s;
+  const rawStart = String(sched.startTime || sched.time || '').trim();
+  const match = rawStart.match(/(\d{1,2}):(\d{2})(?:\s*([AP]M))?/i);
+  if (match) {
+    let h = parseInt(match[1], 10);
+    const ampm = (match[3] || '').toUpperCase();
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return h >= 13 ? 'AN' : 'FN';
+  }
+  return 'FN';
+}
+
 /**
  * Finds the active college assignment for a trainer.
  * @param {Object} trainer 
  * @param {Object} [user] 
- * @returns {Promise<{assignment: Object, college: Object}|null>}
+ * @param {string} [targetScheduleId]
+ * @returns {Promise<{assignment: Object, college: Object, schedule: Object}|null>}
  */
-async function getActiveAssignment(trainer, user) {
+async function getActiveAssignment(trainer, user, targetScheduleId = null) {
   try {
     if (!trainer) return null;
 
-    // 0. Priority: Check if trainer has a non-cancelled schedule for today
     const { Schedule } = require('../models');
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(todayStart);
     todayEnd.setHours(23, 59, 59, 999);
 
-    const todaySchedule = await Schedule.findOne({
+    // 0a. If specific scheduleId is requested
+    if (targetScheduleId) {
+      const schedule = await Schedule.findById(targetScheduleId).populate('collegeId').lean();
+      if (schedule?.collegeId) {
+        const college = schedule.collegeId;
+        const mockAssignment = {
+          collegeName: college.name || schedule.collegeName,
+          driveFolderId: college.googleDriveFolderId || trainer.collegeDriveFolderId,
+          active: true,
+          scheduleId: schedule._id,
+          session: resolveScheduleSessionToken(schedule),
+        };
+        return { assignment: mockAssignment, college, schedule };
+      }
+    }
+
+    // 0b. Priority: Check trainer's non-cancelled schedules for today
+    const candidateSchedules = await Schedule.find({
       trainerId: trainer._id,
       scheduledDate: { $gte: todayStart, $lte: todayEnd },
       status: { $nin: ['cancelled', 'CANCELLED'] },
       isActive: { $ne: false },
     }).populate('collegeId').lean();
 
-    if (todaySchedule?.collegeId) {
-      const college = todaySchedule.collegeId;
-      const mockAssignment = {
-        collegeName: college.name || todaySchedule.collegeName,
-        driveFolderId: college.googleDriveFolderId || trainer.collegeDriveFolderId,
-        active: true,
-      };
-      return { assignment: mockAssignment, college };
+    if (candidateSchedules.length > 0) {
+      const totalMins = getCurrentISTTotalMinutes();
+      const anSchedule = candidateSchedules.find((s) => resolveScheduleSessionToken(s) === 'AN');
+      const fnSchedule = candidateSchedules.find((s) => resolveScheduleSessionToken(s) === 'FN');
+
+      // Before 1:30 PM (810 mins): pick FN session. At/After 1:30 PM (810 mins): pick AN session.
+      const activeSchedule = totalMins >= 13 * 60 + 30
+        ? (anSchedule || fnSchedule || candidateSchedules[0])
+        : (fnSchedule || anSchedule || candidateSchedules[0]);
+
+      if (activeSchedule?.collegeId) {
+        const college = activeSchedule.collegeId;
+        const mockAssignment = {
+          collegeName: college.name || activeSchedule.collegeName,
+          driveFolderId: college.googleDriveFolderId || trainer.collegeDriveFolderId,
+          active: true,
+          scheduleId: activeSchedule._id,
+          session: resolveScheduleSessionToken(activeSchedule),
+        };
+        return { assignment: mockAssignment, college, schedule: activeSchedule };
+      }
     }
 
     // 1. Find the latest active TrainerAssignment

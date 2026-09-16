@@ -649,16 +649,18 @@ function TrainerAttendanceHistory() {
                 const verifNorm = String(record.verificationStatus || "").toLowerCase();
                 const statusNorm = String(record.status || record.attendanceStatus || "").toLowerCase();
 
+                const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkIn?.time || record.checkInTime);
+                const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl || record.attendancePhotoUrl || record.attendanceDocumentUrl);
+                const hasActivities = Boolean(Array.isArray(record.activityPhotos) && record.activityPhotos.length > 0);
+                const hasCheckOut = Boolean(record.checkOutGeoImageUrl || (Array.isArray(record.checkOut?.photos) && record.checkOut.photos.length > 0) || record.checkOutTime || record.checkOut?.time);
+
+                const hasAllProofs = hasCheckIn && hasStudentDoc && hasActivities && hasCheckOut;
+
                 const isPendingApproval = lateReqNorm === "pending" || (record.isLateRequest && verifNorm === "pending") || (verifNorm === "pending" && statusNorm === "pending" && !record.isSyntheticSchedule);
-                const isApprovedPresent = lateReqNorm === "approved" || verifNorm === "approved" || statusNorm === "present";
+                const isApprovedPresent = (lateReqNorm === "approved" && hasCheckIn) || (verifNorm === "approved" && hasCheckIn && hasCheckOut);
                 const isRejected = lateReqNorm === "rejected" || verifNorm === "rejected";
 
-                const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkIn?.time || record.checkInTime);
-                const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl);
-                const hasActivities = Boolean(Array.isArray(record.activityPhotos) && record.activityPhotos.length > 0);
-                const hasCheckOut = Boolean(record.checkOutGeoImageUrl || (Array.isArray(record.checkOut?.photos) && record.checkOut.photos.length > 0));
-
-                const isMissingProofs = !record.isSyntheticSchedule && !isPendingApproval && !isApprovedPresent && !(hasCheckIn && hasStudentDoc && hasActivities && hasCheckOut);
+                const isMissingProofs = !record.isSyntheticSchedule && !isPendingApproval && !isApprovedPresent && !isRejected && hasCheckIn && !hasAllProofs;
 
                 let activeStatusKey = "Pending";
                 if (isPendingApproval) {
@@ -892,7 +894,7 @@ function TrainerAttendanceHistory() {
                           ) : isMissingProofs ? (
                             <button
                               type="button"
-                              onClick={() => setRequestModalSchedule(record.scheduleId || record)}
+                              onClick={() => setRequestModalSchedule({ ...(typeof record.scheduleId === 'object' ? record.scheduleId : {}), ...record, attendance: record, attendanceRecord: record })}
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition active:scale-95 cursor-pointer"
                             >
                               <UploadCloud className="h-3.5 w-3.5" />

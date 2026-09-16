@@ -11,7 +11,10 @@ const StudentActivitySchema = new mongoose.Schema({
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   accuracy: { type: Number },
-  address: { type: String }
+  address: { type: String },
+  scheduleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Schedule', default: null },
+  attendanceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attendance', default: null },
+  session: { type: String, enum: ['FN', 'AN'], default: 'FN' }
 });
 
 module.exports = mongoose.model('StudentActivity', StudentActivitySchema);

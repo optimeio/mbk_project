@@ -37,21 +37,28 @@ function LateAttendanceRequestModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState("");
 
-  const att = selectedSchedule?.attendance || selectedSchedule?.attendanceRecord || {};
+  const att = selectedSchedule?.attendance || selectedSchedule?.attendanceRecord || selectedSchedule || {};
 
-  const existingCheckInUrl = selectedSchedule?.imageUrl || selectedSchedule?.checkInPhoto || att?.imageUrl || att?.checkInPhoto;
-  const existingStudentDocUrl = selectedSchedule?.attendancePdfUrl || selectedSchedule?.attendanceExcelUrl || selectedSchedule?.studentsPhotoUrl || att?.attendancePdfUrl || att?.attendanceExcelUrl || att?.studentsPhotoUrl;
+  const existingCheckInUrl = selectedSchedule?.imageUrl || selectedSchedule?.checkInPhoto || selectedSchedule?.checkInImage || att?.imageUrl || att?.checkInPhoto || att?.checkInImage;
+  const existingStudentDocUrl = selectedSchedule?.attendancePdfUrl || selectedSchedule?.attendanceExcelUrl || selectedSchedule?.studentsPhotoUrl || selectedSchedule?.attendancePhotoUrl || selectedSchedule?.attendanceDocumentUrl || att?.attendancePdfUrl || att?.attendanceExcelUrl || att?.studentsPhotoUrl || att?.attendancePhotoUrl || att?.attendanceDocumentUrl;
   const existingActivityPhotos = Array.isArray(selectedSchedule?.activityPhotos) && selectedSchedule.activityPhotos.length > 0
     ? selectedSchedule.activityPhotos
     : Array.isArray(att?.activityPhotos) && att.activityPhotos.length > 0
     ? att.activityPhotos
     : [];
-  const existingCheckOutUrl = selectedSchedule?.checkOutGeoImageUrl || selectedSchedule?.checkOut?.photos?.[0]?.url || att?.checkOutGeoImageUrl || att?.checkOut?.photos?.[0]?.url;
+  const existingCheckOutUrl = selectedSchedule?.checkOutGeoImageUrl || selectedSchedule?.checkOutImage || selectedSchedule?.checkOut?.photos?.[0]?.url || att?.checkOutGeoImageUrl || att?.checkOutImage || att?.checkOut?.photos?.[0]?.url;
 
-  const hasCheckIn = Boolean(checkInImage || existingCheckInUrl);
-  const hasStudentDoc = Boolean(studentDoc || existingStudentDocUrl);
-  const hasActivities = Boolean(activityPhotos.length > 0 || existingActivityPhotos.length > 0);
-  const hasCheckOut = Boolean(checkOutImage || existingCheckOutUrl);
+  const isCheckInAlreadyUploaded = Boolean(existingCheckInUrl);
+  const isStudentDocAlreadyUploaded = Boolean(existingStudentDocUrl);
+  const isActivitiesAlreadyUploaded = Boolean(existingActivityPhotos.length > 0);
+  const isCheckOutAlreadyUploaded = Boolean(existingCheckOutUrl);
+
+  const hasCheckIn = Boolean(checkInImage || isCheckInAlreadyUploaded);
+  const hasStudentDoc = Boolean(studentDoc || isStudentDocAlreadyUploaded);
+  const hasActivities = Boolean(activityPhotos.length > 0 || isActivitiesAlreadyUploaded);
+  const hasCheckOut = Boolean(checkOutImage || isCheckOutAlreadyUploaded);
+
+  const isPartialUpload = isCheckInAlreadyUploaded || isStudentDocAlreadyUploaded || isActivitiesAlreadyUploaded || isCheckOutAlreadyUploaded;
 
   useEffect(() => {
     setMounted(true);
@@ -132,35 +139,37 @@ function LateAttendanceRequestModal({
     }
 
     if (!hasCheckIn) {
-      if (showToast) showToast("warning", "Mandatory: Please upload the Check-In photo.");
-      else alert("Mandatory: Please upload the Check-In photo.");
+      if (showToast) showToast("warning", "Mandatory: Please upload the missing Check-In photo.");
+      else alert("Mandatory: Please upload the missing Check-In photo.");
       return;
     }
 
     if (!hasStudentDoc) {
-      if (showToast) showToast("warning", "Mandatory: Please upload the Student Attendance Sheet (PDF/Excel).");
-      else alert("Mandatory: Please upload the Student Attendance Sheet (PDF/Excel).");
+      if (showToast) showToast("warning", "Mandatory: Please upload the missing Student Attendance Sheet (PDF/Excel).");
+      else alert("Mandatory: Please upload the missing Student Attendance Sheet (PDF/Excel).");
       return;
     }
 
     if (!hasActivities) {
-      if (showToast) showToast("warning", "Mandatory: Please upload at least one Student Activities photo.");
-      else alert("Mandatory: Please upload at least one Student Activities photo.");
+      if (showToast) showToast("warning", "Mandatory: Please upload at least one missing Student Activities photo.");
+      else alert("Mandatory: Please upload at least one missing Student Activities photo.");
       return;
     }
 
     if (!hasCheckOut) {
-      if (showToast) showToast("warning", "Mandatory: Please upload the Check-Out photo.");
-      else alert("Mandatory: Please upload the Check-Out photo.");
+      if (showToast) showToast("warning", "Mandatory: Please upload the missing Check-Out photo.");
+      else alert("Mandatory: Please upload the missing Check-Out photo.");
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const scheduleId = selectedSchedule?.id || selectedSchedule?._id;
+      const scheduleId = selectedSchedule?.id || selectedSchedule?._id || selectedSchedule?.scheduleId?._id || selectedSchedule?.scheduleId;
       const formData = new FormData();
 
-      formData.append("scheduleId", scheduleId);
+      if (scheduleId) {
+        formData.append("scheduleId", scheduleId);
+      }
       formData.append("reason", reason.trim());
       formData.append("session", sessionLabel.includes("AN") ? "AN" : "FN");
 
@@ -195,7 +204,7 @@ function LateAttendanceRequestModal({
         if (showToast) {
           showToast(
             "success",
-            "Attendance request submitted successfully! Awaiting Admin verification."
+            "Attendance proof submitted successfully! Awaiting Admin verification."
           );
         }
         if (onSuccess) onSuccess();
@@ -205,7 +214,7 @@ function LateAttendanceRequestModal({
       }
     } catch (err) {
       console.error("Attendance request error:", err);
-      const errorMsg = err?.response?.message || err?.message || "Failed to submit request";
+      const errorMsg = err?.response?.data?.message || err?.response?.message || err?.message || "Failed to submit request";
       if (showToast) showToast("error", errorMsg);
       else alert(errorMsg);
     } finally {
@@ -231,9 +240,13 @@ function LateAttendanceRequestModal({
               <ClockIcon className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">Request Attendance for Trainers</h2>
+              <h2 className="text-lg font-bold">
+                {isPartialUpload ? "Upload Missing Attendance Proofs" : "Request Late Attendance"}
+              </h2>
               <p className="text-xs text-indigo-200">
-                Submit past session attendance proof for Admin verification
+                {isPartialUpload
+                  ? "Submit missing proofs only to complete your attendance record"
+                  : "Submit all 4 attendance proofs for Admin verification"}
               </p>
             </div>
           </div>
@@ -307,190 +320,224 @@ function LateAttendanceRequestModal({
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Explain why attendance could not be marked on the scheduled date/time..."
+                placeholder="Explain why proofs were missing or attendance could not be marked on the scheduled time..."
                 className="w-full rounded-xl border border-gray-300 p-3 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition"
               />
             </div>
 
-            {/* Mandatory Uploads Section Banner */}
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 flex items-start gap-2.5">
-              <ExclamationCircleIcon className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                Please upload any missing proofs below. Proofs already uploaded for this session are marked as <strong>Already Uploaded</strong> and do not need to be re-uploaded unless you wish to replace them.
+            {/* Upload Guidance Banner */}
+            <div className="rounded-lg bg-indigo-50/80 border border-indigo-200 p-3 flex items-start gap-2.5">
+              <ExclamationCircleIcon className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-indigo-900 leading-relaxed font-medium">
+                {isPartialUpload
+                  ? "Already uploaded proofs are locked to protect verified session data. Please upload only the missing proofs below to complete your record."
+                  : "All 4 proofs (Check-In photo, Student attendance document, Classroom activity photos, and Check-Out photo) are mandatory for approval."}
               </p>
             </div>
 
             {/* 4 Proof Upload Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Proof 1: Check-In Photo */}
-              <div className="border border-gray-200 rounded-xl p-3.5 bg-gray-50/50 hover:bg-gray-50 transition space-y-2">
+              <div className={`border rounded-xl p-3.5 transition space-y-2 ${isCheckInAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <CameraIcon className="h-4 w-4 text-indigo-600" />
-                    1. Check-In Photo {!existingCheckInUrl && <span className="text-red-500">*</span>}
+                    1. Check-In Photo {!isCheckInAlreadyUploaded && <span className="text-red-500">*</span>}
                   </span>
-                  {checkInImage ? (
-                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> New File Selected
+                  {isCheckInAlreadyUploaded ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> Uploaded & Locked
                     </span>
-                  ) : existingCheckInUrl ? (
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> Already Uploaded
+                  ) : checkInImage ? (
+                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> File Selected
                     </span>
                   ) : (
-                    <span className="text-[10px] text-red-500 font-semibold">Required</span>
+                    <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
                   )}
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCheckInChange}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                />
-                {checkInPreview ? (
-                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
-                    <img src={checkInPreview} alt="Check-In New" className="w-full h-full object-cover" />
-                  </div>
-                ) : existingCheckInUrl ? (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300">
+
+                {isCheckInAlreadyUploaded ? (
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300 shadow-xs">
                       <img src={getSecureImageUrl(existingCheckInUrl)} alt="Check-In Existing" className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-[10px] text-gray-500 font-medium">Current Check-In Image</span>
+                    <div className="text-xs text-slate-500">
+                      <p className="font-semibold text-emerald-800">Check-in photo recorded</p>
+                      <p className="text-[11px] text-slate-400">Preserved in system & Drive</p>
+                    </div>
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCheckInChange}
+                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                    />
+                    {checkInPreview && (
+                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
+                        <img src={checkInPreview} alt="Check-In New" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Proof 2: Students Attendance Sheet */}
-              <div className="border border-gray-200 rounded-xl p-3.5 bg-gray-50/50 hover:bg-gray-50 transition space-y-2">
+              <div className={`border rounded-xl p-3.5 transition space-y-2 ${isStudentDocAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <DocumentArrowUpIcon className="h-4 w-4 text-blue-600" />
-                    2. Student Attendance {!existingStudentDocUrl && <span className="text-red-500">*</span>}
+                    2. Student Attendance {!isStudentDocAlreadyUploaded && <span className="text-red-500">*</span>}
                   </span>
-                  {studentDoc ? (
-                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> New File Selected
+                  {isStudentDocAlreadyUploaded ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> Uploaded & Locked
                     </span>
-                  ) : existingStudentDocUrl ? (
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> Already Uploaded
+                  ) : studentDoc ? (
+                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> File Selected
                     </span>
                   ) : (
-                    <span className="text-[10px] text-red-500 font-semibold">PDF / Excel</span>
+                    <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
                   )}
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.xls,.xlsx,.csv,image/*"
-                  onChange={handleStudentDocChange}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                />
-                {studentDoc ? (
-                  <p className="text-[11px] text-gray-600 truncate bg-white px-2 py-1 rounded border border-gray-200">
-                    {studentDoc.name}
-                  </p>
-                ) : existingStudentDocUrl ? (
-                  <a
-                    href={getSecureImageUrl(existingStudentDocUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] text-indigo-600 underline font-medium block truncate mt-1"
-                  >
-                    View Existing Roster Document
-                  </a>
-                ) : null}
+
+                {isStudentDocAlreadyUploaded ? (
+                  <div className="pt-1">
+                    <a
+                      href={getSecureImageUrl(existingStudentDocUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-indigo-600 underline font-semibold hover:text-indigo-800"
+                    >
+                      <span>View Uploaded Attendance Document / Sheet</span>
+                    </a>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Preserved in system & Drive</p>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      accept=".pdf,.xls,.xlsx,.csv,image/*"
+                      onChange={handleStudentDocChange}
+                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    />
+                    {studentDoc && (
+                      <p className="text-[11px] text-gray-600 truncate bg-white px-2 py-1 rounded border border-gray-200">
+                        {studentDoc.name}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Proof 3: Students Classroom Activities */}
-              <div className="border border-gray-200 rounded-xl p-3.5 bg-gray-50/50 hover:bg-gray-50 transition space-y-2 sm:col-span-2">
+              <div className={`border rounded-xl p-3.5 transition space-y-2 sm:col-span-2 ${isActivitiesAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <PhotoIcon className="h-4 w-4 text-purple-600" />
-                    3. Student Classroom Activities {existingActivityPhotos.length === 0 && <span className="text-red-500">*</span>}
+                    3. Student Classroom Activities {!isActivitiesAlreadyUploaded && <span className="text-red-500">*</span>}
                   </span>
-                  {activityPhotos.length > 0 ? (
-                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length} New Photo(s)
+                  {isActivitiesAlreadyUploaded ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> {existingActivityPhotos.length} Uploaded & Locked
                     </span>
-                  ) : existingActivityPhotos.length > 0 ? (
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {existingActivityPhotos.length} Uploaded
+                  ) : activityPhotos.length > 0 ? (
+                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length} Photo(s) Selected
                     </span>
                   ) : (
-                    <span className="text-[10px] text-red-500 font-semibold">Class photos</span>
+                    <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
                   )}
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleActivityPhotosChange}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
-                />
-                {activityPreviews.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {activityPreviews.map((src, i) => (
-                      <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-300 group">
-                        <img src={src} alt={`Activity ${i + 1}`} className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeActivityPhoto(i)}
-                          className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <XMarkIcon className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+
+                {isActivitiesAlreadyUploaded ? (
+                  <div className="space-y-1 pt-1">
+                    <div className="flex flex-wrap gap-2">
+                      {existingActivityPhotos.map((photoUrl, i) => (
+                        <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300 shadow-2xs">
+                          <img src={getSecureImageUrl(photoUrl)} alt={`Existing Activity ${i + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400">Preserved in system & Drive</p>
                   </div>
-                ) : existingActivityPhotos.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {existingActivityPhotos.map((photoUrl, i) => (
-                      <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300">
-                        <img src={getSecureImageUrl(photoUrl)} alt={`Existing Activity ${i + 1}`} className="w-full h-full object-cover" />
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleActivityPhotosChange}
+                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
+                    />
+                    {activityPreviews.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {activityPreviews.map((src, i) => (
+                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-300 group">
+                            <img src={src} alt={`Activity ${i + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeActivityPhoto(i)}
+                              className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                            >
+                              <XMarkIcon className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ) : null}
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Proof 4: Check-Out Photo */}
-              <div className="border border-gray-200 rounded-xl p-3.5 bg-gray-50/50 hover:bg-gray-50 transition space-y-2 sm:col-span-2">
+              <div className={`border rounded-xl p-3.5 transition space-y-2 sm:col-span-2 ${isCheckOutAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <CameraIcon className="h-4 w-4 text-emerald-600" />
-                    4. Check-Out Photo {!existingCheckOutUrl && <span className="text-red-500">*</span>}
+                    4. Check-Out Photo {!isCheckOutAlreadyUploaded && <span className="text-red-500">*</span>}
                   </span>
-                  {checkOutImage ? (
-                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> New File Selected
+                  {isCheckOutAlreadyUploaded ? (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> Uploaded & Locked
                     </span>
-                  ) : existingCheckOutUrl ? (
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> Already Uploaded
+                  ) : checkOutImage ? (
+                    <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> File Selected
                     </span>
                   ) : (
-                    <span className="text-[10px] text-red-500 font-semibold">Required</span>
+                    <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
                   )}
                 </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCheckOutChange}
-                  className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
-                />
-                {checkOutPreview ? (
-                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
-                    <img src={checkOutPreview} alt="Check-Out New" className="w-full h-full object-cover" />
-                  </div>
-                ) : existingCheckOutUrl ? (
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300">
+
+                {isCheckOutAlreadyUploaded ? (
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300 shadow-xs">
                       <img src={getSecureImageUrl(existingCheckOutUrl)} alt="Check-Out Existing" className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-[10px] text-gray-500 font-medium">Current Check-Out Image</span>
+                    <div className="text-xs text-slate-500">
+                      <p className="font-semibold text-emerald-800">Check-out photo recorded</p>
+                      <p className="text-[11px] text-slate-400">Preserved in system & Drive</p>
+                    </div>
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCheckOutChange}
+                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+                    />
+                    {checkOutPreview && (
+                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
+                        <img src={checkOutPreview} alt="Check-Out New" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </form>

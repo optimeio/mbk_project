@@ -228,9 +228,24 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
     const todayEnd = new Date(targetDate);
     todayEnd.setHours(23, 59, 59, 999);
 
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+    const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+    const totalMins = hour * 60 + minute;
+    const sessionType = req.body?.session || (totalMins >= 13 * 60 + 30 ? 'AN' : 'FN');
+    attendancePayload.session = sessionType;
+
     let attendanceRecord = await Attendance.findOne({
       trainerId,
-      date: { $gte: todayStart, $lte: todayEnd }
+      date: { $gte: todayStart, $lte: todayEnd },
+      session: sessionType
     });
 
     if (attendanceRecord) {

@@ -264,14 +264,16 @@ scheduleSchema.pre('save', function (next) {
             const startMins = parseToMins(this.startTime);
             const endMins = parseToMins(this.endTime);
 
-            if (startMins !== null && endMins !== null) {
-                if (endMins <= 13 * 60 + 30 || startMins < 13 * 60 + 30) {
-                    this.session = 'FN';
-                } else {
+            if (startMins !== null) {
+                if (startMins >= 13 * 60) {
                     this.session = 'AN';
+                } else if (endMins !== null && endMins > 13 * 60 + 30 && startMins >= 12 * 60) {
+                    this.session = 'AN';
+                } else {
+                    this.session = 'FN';
                 }
-            } else if (startMins !== null) {
-                if (startMins >= 13 * 60 + 30) {
+            } else if (endMins !== null) {
+                if (endMins > 13 * 60 + 30) {
                     this.session = 'AN';
                 } else {
                     this.session = 'FN';

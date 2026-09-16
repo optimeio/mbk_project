@@ -8,32 +8,34 @@ const DaysGrid = ({ days, department = "General", onDayClick }) => {
       <h2 className="text-xl font-bold mb-4">{department} Training Days</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {days.map((day) => {
+        {(days || []).map((day) => {
           const isTrainerAssigned = Boolean(
-            day.trainerId ||
-            (day.trainerName && day.trainerName !== "Unknown" && day.trainerName !== "Not Assigned" && day.trainerName !== "N/A") ||
-            (day.trainer?.name && day.trainer.name !== "Unknown")
+            day?.trainerId ||
+            (day?.trainerName && day?.trainerName !== "Unknown" && day?.trainerName !== "Not Assigned" && day?.trainerName !== "N/A") ||
+            (day?.trainer?.name && day?.trainer?.name !== "Unknown")
           );
-          const trainerName = isTrainerAssigned ? (day.trainerName || day.trainer?.name || "Trainer Assigned") : "Not Assigned";
-          const timeRange = day.startTime && day.endTime
+          const trainerName = isTrainerAssigned ? (day?.trainerName || day?.trainer?.name || "Trainer Assigned") : "Not Assigned";
+          const timeRange = day?.startTime && day?.endTime
             ? `${day.startTime} - ${day.endTime}`
-            : (day.time || "09:00 - 17:00");
+            : (day?.time || "09:00 - 17:00");
 
-          const sessionLabel = day.session === 'AN' ? 'AN (Afternoon)' : 'FN (Forenoon)';
+          const sessionLabel = day?.session === 'AN' ? 'AN (Afternoon)' : 'FN (Forenoon)';
           const sessionBadge = sessionLabel ? ` (${sessionLabel})` : '';
 
-          const hasAttendance = typeof day.hasAttendanceDocs === "boolean"
+          const hasAttendance = typeof day?.hasAttendanceDocs === "boolean"
             ? day.hasAttendanceDocs
-            : !!day.attendancePdfUrl || !!day.attendanceExcelUrl;
-          const docsStatusLabel = day.docsStatusLabel || (hasAttendance ? "Docs Uploaded" : "Pending");
-          const normalizedGeoStatus = String(day.geoVerificationStatus || "").trim().toLowerCase();
-          const geoStatusLabel = day.geoStatusLabel || (
+            : !!day?.attendancePdfUrl || !!day?.attendanceExcelUrl;
+          const docsStatusLabel = day?.docsStatusLabel || (hasAttendance ? "Docs Uploaded" : "Pending");
+          const normalizedGeoStatus = String(day?.geoVerificationStatus || "").trim().toLowerCase();
+          const geoStatusLabel = day?.geoStatusLabel || (
             normalizedGeoStatus === "approved"
               ? "Geo Verified"
               : normalizedGeoStatus === "rejected"
                 ? "Geo Rejected"
                 : "Geo Pending"
           );
+
+          const status = day?.status || day?.dayStatus || (isTrainerAssigned ? "Pending" : "Not Assigned");
 
           const statusStyles = {
             Pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -47,15 +49,15 @@ const DaysGrid = ({ days, department = "General", onDayClick }) => {
 
           return (
             <div
-              key={day.id || day.dayNumber}
-              onClick={() => onDayClick(day)}
+              key={day?.id || day?.dayNumber || Math.random()}
+              onClick={() => onDayClick && onDayClick(day)}
               className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-300 p-5 flex flex-col justify-between group cursor-pointer"
             >
               <div className="flex-1">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-5">
                   <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                    {day.name || `Day ${day.dayNumber}`}
+                    {day?.name || `Day ${day?.dayNumber || 1}`}
                   </h3>
 
                   <span

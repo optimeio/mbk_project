@@ -280,15 +280,15 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
   const isToday = Boolean(scheduleDay && today && scheduleDay.getTime() === today.getTime());
 
   // Time Window Calculations for Today's FN / AN Sessions
-  const startTimeVal = schedule.startTime || (schedule.time ? String(schedule.time).split("-")[0].trim() : "09:00 AM");
+  const startTimeVal = schedule?.startTime || (schedule?.time ? String(schedule.time).split("-")[0].trim() : "09:00 AM");
   const sessionStartObj = parseScheduleTime(scheduleDateRaw, startTimeVal);
   const startHour = sessionStartObj ? sessionStartObj.getHours() : 9;
   // FN = Forenoon (starts before 13:00), AN = Afternoon (starts 13:00+)
   const isFNSession = startHour < 13;
   const sessionLabel = isFNSession ? "FN Session" : "AN Session";
-  const sessionType = schedule.session ? String(schedule.session).toUpperCase().trim() : (isFNSession ? "FN" : "AN");
+  const sessionType = schedule?.session ? String(schedule.session).toUpperCase().trim() : (isFNSession ? "FN" : "AN");
 
-  const endTimeVal = schedule.endTime || (schedule.time ? String(schedule.time).split("-")[1]?.trim() : (isFNSession || sessionType === "FN" ? "01:00 PM" : "05:30 PM"));
+  const endTimeVal = schedule?.endTime || (schedule?.time ? String(schedule.time).split("-")[1]?.trim() : (isFNSession || sessionType === "FN" ? "01:00 PM" : "05:30 PM"));
   const sessionEndObj = parseScheduleEndTime(scheduleDateRaw, endTimeVal);
 
   // 1-hour check-in cutoff window (e.g. 9:00 AM -> cutoff at 10:00 AM)
@@ -298,19 +298,19 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
 
   const isPastCutoffTime = isToday && checkInCutoffObj ? now > checkInCutoffObj : false;
 
-  // FN session hard-closes at 13:00 IST (1:00 PM)
-  // AN session hard-closes at 17:30 IST (5:30 PM)
+  // FN session hard-closes at 13:30 IST (1:30 PM)
+  // AN session hard-closes at 18:00 IST (6:00 PM)
   let isSessionClosedByTime = false;
   if (isToday) {
     if (isFNSession || sessionType === "FN") {
-      // FN hard-close: 1:00 PM (13:00)
+      // FN hard-close: 1:30 PM (13:30)
       const fnCloseHour = new Date(now);
-      fnCloseHour.setHours(13, 0, 0, 0);
+      fnCloseHour.setHours(13, 30, 0, 0);
       isSessionClosedByTime = now >= fnCloseHour;
     } else if (sessionType === "AN" || !isFNSession) {
-      // AN hard-close: 5:30 PM (17:30)
+      // AN hard-close: 6:00 PM (18:00)
       const anCloseHour = new Date(now);
-      anCloseHour.setHours(17, 30, 0, 0);
+      anCloseHour.setHours(18, 0, 0, 0);
       isSessionClosedByTime = now >= anCloseHour;
     } else if (sessionEndObj) {
       isSessionClosedByTime = now >= sessionEndObj;
@@ -467,9 +467,9 @@ export const transformScheduleRecord = (
       college: schedule.collegeId?.name || "",
       dayNumber: schedule.dayNumber,
       date: formatScheduleDateLabel(schedule.scheduledDate),
-      time: schedule.startTime && schedule.endTime
+      time: schedule?.startTime && schedule?.endTime
         ? `${schedule.startTime} - ${schedule.endTime}`
-        : "Time not set",
+        : (schedule?.time || "Time not set"),
       status: normalizeStatusValue ? normalizeStatus(statusValue) : statusValue,
       rawStatus: statusValue,
       isActive: schedule.isActive !== false,
