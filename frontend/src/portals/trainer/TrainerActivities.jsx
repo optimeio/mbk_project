@@ -833,7 +833,7 @@ export default function TrainerActivities() {
                             Upload Different Photo
                             <input
                               type="file"
-                              accept="image/*"
+                              accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                               onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
                               className="hidden"
                             />
@@ -847,7 +847,7 @@ export default function TrainerActivities() {
                       <label className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                           onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckInFile, setCheckInPreview)}
                           className="hidden"
                         />
@@ -1140,7 +1140,7 @@ export default function TrainerActivities() {
                             Upload Different Photo
                             <input
                               type="file"
-                              accept="image/*"
+                              accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                               onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
                               className="hidden"
                             />
@@ -1154,7 +1154,7 @@ export default function TrainerActivities() {
                       <label className="border-2 border-dashed border-rose-300 hover:border-rose-500 bg-rose-50/40 hover:bg-rose-50/80 dark:border-rose-800 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition group shadow-sm">
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
                           onChange={(e) => handleSingleImageUpload(e.target.files?.[0], setCheckOutFile, setCheckOutPreview)}
                           className="hidden"
                         />
