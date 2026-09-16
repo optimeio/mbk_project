@@ -718,7 +718,7 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                                             }
                                                                         }
                                                                         
-                                                                        const sessionTag = day.session === 'FN' ? ' (FN)' : day.session === 'AN' ? ' (AN)' : day.session === 'FULL_DAY' ? ' (Full Day)' : (day.session ? ` (${day.session})` : '');
+                                                                        const sessionTag = day.session === 'AN' ? ' (AN)' : ' (FN)';
                                                                         const fullTimeStr = `${time}${sessionTag}`;
                                                                         return dateStr !== 'N/A' && dateStr ? `${dateStr} • ${fullTimeStr}` : fullTimeStr;
                                                                     })()}

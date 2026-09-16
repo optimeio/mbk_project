@@ -219,7 +219,7 @@ export default function TrainerUpcomingSchedule() {
               const isToday = dayjs(schedDate).format("YYYY-MM-DD") === dayjs().format("YYYY-MM-DD");
               const collegeName = sched.collegeId?.name || sched.collegeName || "Assigned College";
               const courseName = sched.courseId?.title || sched.courseId?.name || sched.courseName || sched.subject || "Course";
-              const sessionLabel = String(sched.session || "FULL_DAY").toUpperCase();
+              const sessionLabel = String(sched.session || "FN").toUpperCase() === "AN" ? "AN" : "FN";
 
               return (
                 <div

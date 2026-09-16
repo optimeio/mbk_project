@@ -19,8 +19,7 @@ const DaysGrid = ({ days, department = "General", onDayClick }) => {
             ? `${day.startTime} - ${day.endTime}`
             : (day.time || "09:00 - 17:00");
 
-          const status = day.status || "Pending";
-          const sessionLabel = day.session === 'FN' ? 'FN (Morning)' : day.session === 'AN' ? 'AN (Afternoon)' : day.session === 'FULL_DAY' ? 'Full Day' : day.session;
+          const sessionLabel = day.session === 'AN' ? 'AN (Afternoon)' : 'FN (Forenoon)';
           const sessionBadge = sessionLabel ? ` (${sessionLabel})` : '';
 
           const hasAttendance = typeof day.hasAttendanceDocs === "boolean"

@@ -131,7 +131,6 @@ const normalizeSessionType = (session, startTime, endTime) => {
     const s = String(session).trim().toUpperCase();
     if (s === "FN" || s === "FORENOON" || s === "MORNING") return "FN";
     if (s === "AN" || s === "AFTERNOON" || s === "EVENING") return "AN";
-    if (s === "FULL_DAY" || s === "FULL DAY" || s === "FULL" || s === "BOTH" || s === "ALL_DAY") return "FULL_DAY";
   }
 
   if (startTime || endTime) {
@@ -151,22 +150,17 @@ const normalizeSessionType = (session, startTime, endTime) => {
     const endMins = parseToMins(endTime);
 
     if (startMins !== null && endMins !== null) {
-      if (endMins <= 13 * 60 + 30 && startMins < 12 * 60) {
+      if (endMins <= 13 * 60 + 30 || startMins < 13 * 60 + 30) {
         return "FN";
       }
-      if (startMins >= 12 * 60) {
-        return "AN";
-      }
-      if (startMins < 12 * 60 && endMins >= 15 * 60) {
-        return "FULL_DAY";
-      }
+      return "AN";
     } else if (startMins !== null) {
-      if (startMins >= 12 * 60) return "AN";
+      if (startMins >= 13 * 60 + 30) return "AN";
       return "FN";
     }
   }
 
-  return "FULL_DAY";
+  return "FN";
 };
 
 const listSchedulesFeed = async ({
@@ -1285,8 +1279,8 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
 
     const getSessionBounds = (sessionType, startStr, endStr) => {
       const normalizedSession = String(sessionType || "").trim().toUpperCase();
-      if (normalizedSession === 'FN') return { start: 9 * 60, end: 13 * 60 + 30 };
       if (normalizedSession === 'AN') return { start: 14 * 60, end: 18 * 60 };
+      if (normalizedSession === 'FN') return { start: 9 * 60, end: 13 * 60 + 30 };
 
       if (startStr && endStr) {
         const parsedStart = parseTimeToMinutes(startStr, false);
@@ -1296,11 +1290,9 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
         }
       }
 
-      if (normalizedSession === 'FULL_DAY') return { start: 9 * 60, end: 18 * 60 };
-      
       return {
         start: 9 * 60,
-        end: 18 * 60
+        end: 13 * 60 + 30
       };
     };
 
@@ -1316,7 +1308,7 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
         const collegeName = existing.collegeId?.name || "Another College";
         const trainerName = existing.trainerId?.name || existing.trainerId?.userId?.name || "This trainer";
         const formattedDate = dayjs(existing.scheduledDate || existing.date).format("DD-MM-YYYY");
-        const existingSessionLabel = existing.session || "FULL_DAY";
+        const existingSessionLabel = existing.session || "FN";
 
         return {
           conflict: true,

@@ -58,8 +58,8 @@ const scheduleSchema = new mongoose.Schema({
     },
     session: {
         type: String,
-        enum: ['FN', 'AN', 'FULL_DAY'],
-        default: 'FULL_DAY',
+        enum: ['FN', 'AN'],
+        default: 'FN',
     },
     dayNumber: {
         type: Number,
@@ -246,7 +246,6 @@ scheduleSchema.pre('save', function (next) {
         this.driveFolderLink = this.dayFolderLink;
     }
 
-    // Automatically derive session (FN, AN, or FULL_DAY) from startTime and endTime if not explicitly FN/AN
     const rawSession = String(this.session || '').toUpperCase().trim();
     if (rawSession !== 'FN' && rawSession !== 'AN') {
         if (this.startTime || this.endTime) {
@@ -266,12 +265,10 @@ scheduleSchema.pre('save', function (next) {
             const endMins = parseToMins(this.endTime);
 
             if (startMins !== null && endMins !== null) {
-                if (endMins <= 13 * 60 + 30 && startMins < 13 * 60 + 30) {
+                if (endMins <= 13 * 60 + 30 || startMins < 13 * 60 + 30) {
                     this.session = 'FN';
-                } else if (startMins >= 13 * 60 + 30 || (startMins >= 13 * 60 && endMins <= 18 * 60 + 30)) {
+                } else {
                     this.session = 'AN';
-                } else if (startMins < 13 * 60 + 30 && endMins > 14 * 60) {
-                    this.session = 'FULL_DAY';
                 }
             } else if (startMins !== null) {
                 if (startMins >= 13 * 60 + 30) {
@@ -279,7 +276,11 @@ scheduleSchema.pre('save', function (next) {
                 } else {
                     this.session = 'FN';
                 }
+            } else {
+                this.session = 'FN';
             }
+        } else {
+            this.session = 'FN';
         }
     }
 

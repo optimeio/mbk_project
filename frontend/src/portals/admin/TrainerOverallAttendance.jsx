@@ -458,15 +458,10 @@ const resolveSessionMeta = (record = {}) => {
   const endMins = parseTimeToMins(endTime);
 
   if (startMins !== null && endMins !== null) {
-    if (endMins <= 13 * 60 + 30 && startMins < 13 * 60 + 30) {
+    if (endMins <= 13 * 60 + 30 || startMins < 13 * 60 + 30) {
       return { label: 'FN', color: 'blue' };
     }
-    if (startMins >= 13 * 60 + 30 || (startMins >= 13 * 60 && endMins <= 18 * 60 + 30)) {
-      return { label: 'AN', color: 'purple' };
-    }
-    if (startMins < 13 * 60 + 30 && endMins > 14 * 60) {
-      return { label: 'Full Day', color: 'green' };
-    }
+    return { label: 'AN', color: 'purple' };
   } else if (startMins !== null) {
     if (startMins >= 13 * 60 + 30) {
       return { label: 'AN', color: 'purple' };
@@ -474,11 +469,7 @@ const resolveSessionMeta = (record = {}) => {
     return { label: 'FN', color: 'blue' };
   }
 
-  if (rawSession === 'FULL_DAY' || rawSession === 'FULL DAY' || rawSession === 'ALL_DAY' || rawSession === 'FULLDAY' || rawSession === 'BOTH') {
-    return { label: 'Full Day', color: 'green' };
-  }
-
-  return { label: rawSession || 'Full Day', color: 'green' };
+  return { label: 'FN', color: 'blue' };
 };
 
 const toFiniteNumber = (value) => {

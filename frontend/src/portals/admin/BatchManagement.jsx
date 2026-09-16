@@ -63,8 +63,8 @@ const BatchManagement = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [capacity, setCapacity] = useState(60);
-    const [sessionType, setSessionType] = useState('Both');
-    const [endSessionType, setEndSessionType] = useState('Both');
+    const [sessionType, setSessionType] = useState('FN');
+    const [endSessionType, setEndSessionType] = useState('FN');
     const [status, setStatus] = useState('active');
     const [scheduleDayOfWeek, setScheduleDayOfWeek] = useState('Monday');
     const [scheduleStartTime, setScheduleStartTime] = useState('09:00');
@@ -573,15 +573,15 @@ const BatchManagement = () => {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setSessionType(prev => prev === 'Both' ? 'FN' : prev === 'FN' ? 'AN' : 'Both')}
+                                                onClick={() => setSessionType(prev => prev === 'FN' ? 'AN' : 'FN')}
                                                 className={`px-3 py-2 text-[11px] font-bold border-l border-slate-200 transition-colors shrink-0 ${
-                                                    sessionType !== 'Both' 
-                                                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
-                                                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                                                    sessionType === 'AN' 
+                                                        ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' 
+                                                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                                                 }`}
-                                                title="Toggle Session (Both / FN / AN)"
+                                                title="Toggle Session (FN / AN)"
                                             >
-                                                {sessionType === 'Both' ? 'Both' : sessionType}
+                                                {sessionType}
                                             </button>
                                         </div>
                                         <div className="relative flex-1 flex items-center border border-slate-200 rounded-xl focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500 bg-white overflow-hidden">
@@ -596,15 +596,15 @@ const BatchManagement = () => {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setEndSessionType(prev => prev === 'Both' ? 'FN' : prev === 'FN' ? 'AN' : 'Both')}
+                                                onClick={() => setEndSessionType(prev => prev === 'FN' ? 'AN' : 'FN')}
                                                 className={`px-3 py-2 text-[11px] font-bold border-l border-slate-200 transition-colors shrink-0 ${
-                                                    endSessionType !== 'Both' 
-                                                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
-                                                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                                                    endSessionType === 'AN' 
+                                                        ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' 
+                                                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                                                 }`}
-                                                title="Toggle End Session (Both / FN / AN)"
+                                                title="Toggle End Session (FN / AN)"
                                             >
-                                                {endSessionType === 'Both' ? 'Both' : endSessionType}
+                                                {endSessionType}
                                             </button>
                                         </div>
                                     </div>

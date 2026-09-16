@@ -57,7 +57,7 @@ function ScheduleList({
                       <p className="text-sm font-medium text-indigo-600 truncate">Day {schedule.dayNumber}</p>
                       <div className="ml-2 flex-shrink-0 flex items-center space-x-2">
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                          {schedule.session || "FULL_DAY"}
+                          {String(schedule.session || "FN").toUpperCase() === "AN" ? "AN" : "FN"}
                         </span>
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${schedule.ui.badgeClass}`}>
                           {schedule.ui.badgeText}

@@ -165,12 +165,8 @@ export default function TrainerAttendanceRequests() {
       render: (_, record) => {
         const sched = record.scheduleId || {};
         const schedDate = sched.scheduledDate || record.date;
-        const dayNum = record.dayNumber || sched.dayNumber;
-        const session = String(record.session || sched.session || "FULL_DAY").toUpperCase();
-        
-        let sessionColor = "blue";
-        if (session === "AN") sessionColor = "purple";
-        if (session === "FULL_DAY") sessionColor = "green";
+        const session = String(record.session || sched.session || "FN").toUpperCase() === "AN" ? "AN" : "FN";
+        const sessionColor = session === "AN" ? "purple" : "blue";
 
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -448,8 +444,8 @@ export default function TrainerAttendanceRequests() {
                   </Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="Session">
-                  <Tag color="blue" style={{ fontWeight: 600 }}>
-                    {String(selectedRecord.session || selectedRecord.scheduleId?.session || "FULL_DAY").toUpperCase()}
+                  <Tag color={String(selectedRecord.session || selectedRecord.scheduleId?.session || "FN").toUpperCase() === "AN" ? "purple" : "blue"} style={{ fontWeight: 600 }}>
+                    {String(selectedRecord.session || selectedRecord.scheduleId?.session || "FN").toUpperCase() === "AN" ? "AN" : "FN"}
                   </Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="College" span={2}>

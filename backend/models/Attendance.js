@@ -53,8 +53,8 @@ const attendanceSchema = new mongoose.Schema({
     },
     session: {
         type: String,
-        enum: ['FN', 'AN', 'FULL_DAY'],
-        default: 'FULL_DAY',
+        enum: ['FN', 'AN'],
+        default: 'FN',
     },
     isLateRequest: {
         type: Boolean,
