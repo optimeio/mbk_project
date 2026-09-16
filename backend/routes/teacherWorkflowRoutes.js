@@ -305,22 +305,16 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
     const college = result?.college || null;
     let distance = 0;
 
-    // Only enforce geofence if we have a real college with coordinates
+    // Calculate distance to college location if coordinates are available
+    let isInside = true;
     if (college) {
       const collegeLat = college.latitude != null ? college.latitude : college.location?.lat;
       const collegeLng = college.longitude != null ? college.longitude : college.location?.lng;
 
       if (collegeLat != null && collegeLng != null) {
         distance = getDistanceInMeters(latitude, longitude, collegeLat, collegeLng);
-        const radius = college.geofenceRadius || 9999999;
-        const isFallbackCoords = (Number(latitude) === 0 && Number(longitude) === 0);
-        // Only block if geofenceRadius is explicitly set small (< 10km), trainer is outside, and we don't have fallback coords
-        if (!isFallbackCoords && radius < 10000 && distance > radius) {
-          return res.status(400).json({
-            success: false,
-            message: `You are outside the assigned college location. Distance: ${Math.round(distance)}m, Geofence: ${radius}m`
-          });
-        }
+        const radius = college.geofenceRadius || 150;
+        isInside = distance <= radius;
       }
     }
 
@@ -408,6 +402,7 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
           scheduleId: schedule?._id || null,
           date: new Date(),
           dayNumber: dayNumber,
+          session: sessionType,
           status: computedStatus,
           attendanceStatus: computedAttendanceStatus,
           isLate: isLate,
@@ -427,7 +422,7 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
           checkInImage: checkInUrl,
           checkInGeoImageUrl: checkInUrl,
           verificationStatus: "pending",
-          geoVerificationStatus: "pending",
+          geoVerificationStatus: isInside ? "approved" : "pending",
           finalStatus: "PENDING"
         }
       },
@@ -929,16 +924,11 @@ router.post("/attendance/clock-out", authenticate, uploadAttendance, async (req,
     const collegeLng = college ? (college.longitude != null ? college.longitude : college.location?.lng) : null;
 
     let distance = 0;
+    let isInside = true;
     if (collegeLat != null && collegeLng != null) {
       distance = getDistanceInMeters(latitude, longitude, collegeLat, collegeLng);
       const radius = college.geofenceRadius || 150;
-      const isFallbackCoords = (Number(latitude) === 0 && Number(longitude) === 0);
-      if (!isFallbackCoords && distance > radius) {
-        return res.status(400).json({
-          success: false,
-          message: `You are outside the assigned college location. Distance: ${Math.round(distance)}m, Geofence: ${radius}m`
-        });
-      }
+      isInside = distance <= radius;
     }
 
     // File validation
