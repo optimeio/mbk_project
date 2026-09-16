@@ -23,6 +23,7 @@ import scheduleService from '@/services/scheduleService';
 import { notify } from '@/lib/toast';
 import RescheduleModal from '@/components/modals/RescheduleModal';
 import CreateScheduleModal from '@/components/modals/CreateScheduleModal';
+import { formatCalendarDate } from '@/utils/dateUtils';
 
 const ScheduleMonitor = () => {
     const queryClient = useQueryClient();
@@ -475,11 +476,7 @@ const ScheduleMonitor = () => {
                                             ? rawT.name || [rawT.firstName, rawT.lastName].filter(Boolean).join(' ') || rawT.userId?.name || rawT.email
                                             : trainersMap.get(String(rawT))
                                     ) || 'Unassigned';
-                                    const dateStr = schedule.scheduledDate ? new Date(schedule.scheduledDate).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'short',
-                                        day: 'numeric'
-                                    }) : 'Date TBD';
+                                    const dateStr = formatCalendarDate(schedule.scheduledDate, { fallback: 'Date TBD' });
                                     const timeStr = `${schedule.startTime || '09:00'} - ${schedule.endTime || '17:00'}`;
 
                                     return (

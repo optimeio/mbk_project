@@ -80,18 +80,26 @@ export const buildScheduleItem = (schedule = {}) => {
   const hour24 = isPM ? startHour + 12 : startHour;
   const sessionType = hour24 < 13 ? "FN Session" : "AN Session";
 
-  const now = new Date();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const schedDateObj = schedule?.scheduledDate ? new Date(schedule.scheduledDate) : null;
-  const isValidSchedDate = Boolean(schedDateObj && !isNaN(schedDateObj.getTime()));
-  const schedDayTime = isValidSchedDate ? new Date(schedDateObj).setHours(0, 0, 0, 0) : null;
+  const { toCalendarYMD, formatCalendarDate } = require("@/utils/dateUtils");
+  const todayYMD = toCalendarYMD(new Date());
+  const schedYMD = toCalendarYMD(schedule?.scheduledDate || schedule?.date);
+  const isValidSchedDate = Boolean(schedYMD);
 
   let isTimeOut = false;
-  if (schedDayTime && schedDayTime < today.getTime()) {
+  if (schedYMD && schedYMD < todayYMD) {
     isTimeOut = true;
-  } else if (schedDayTime && schedDayTime === today.getTime()) {
+  } else if (schedYMD && schedYMD === todayYMD) {
+    const formatter = new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const currentHour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+    const currentMinute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+    const currentMins = currentHour * 60 + currentMinute;
+
     const endMatch = String(endTime).match(/(\d+):(\d+)\s*(AM|PM)?/i);
     if (endMatch) {
       let endH = parseInt(endMatch[1], 10);
@@ -99,9 +107,7 @@ export const buildScheduleItem = (schedule = {}) => {
       const endP = (endMatch[3] || "").toUpperCase();
       if (endP === "PM" && endH < 12) endH += 12;
       if (endP === "AM" && endH === 12) endH = 0;
-      const endObj = new Date(today);
-      endObj.setHours(endH, endM, 0, 0);
-      if (now >= endObj) {
+      if (currentMins >= endH * 60 + endM) {
         isTimeOut = true;
       }
     }
@@ -137,19 +143,9 @@ export const buildScheduleItem = (schedule = {}) => {
     ? "timeout"
     : schedule?.attendanceStatus || schedule?.status || "scheduled";
 
-  const dateLabel = (() => {
-    if (!isValidSchedDate) return "Unscheduled";
-    try {
-      return schedDateObj.toLocaleDateString(undefined, {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return "Unscheduled";
-    }
-  })();
+  const dateLabel = isValidSchedDate
+    ? formatCalendarDate(schedule?.scheduledDate || schedule?.date, { includeWeekday: true })
+    : "Unscheduled";
 
   return {
     id: schedule?._id || schedule?.id,

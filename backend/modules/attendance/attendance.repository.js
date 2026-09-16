@@ -333,6 +333,7 @@ const findAttendanceVerificationPage = async ({
   if (!filters.verificationStatus && !filters.geoVerificationStatus && !filters.checkOutVerificationStatus) {
     const scheduleFilters = {
       isActive: { $ne: false },
+      status: { $nin: ["cancelled", "CANCELLED"] },
     };
     if (filters.trainerId) {
       scheduleFilters.trainerId = filters.trainerId;

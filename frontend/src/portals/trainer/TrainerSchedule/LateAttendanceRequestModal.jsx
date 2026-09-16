@@ -16,8 +16,8 @@ import {
   AcademicCapIcon,
 } from "@heroicons/react/24/outline";
 import { api } from "@/services/api";
-
 import { getSecureImageUrl } from "@/utils/imageUtils";
+import { formatCalendarDate } from "@/utils/dateUtils";
 
 function LateAttendanceRequestModal({
   selectedSchedule,
@@ -73,9 +73,10 @@ function LateAttendanceRequestModal({
     };
   }, [onClose]);
 
-  const scheduledDateFormatted = selectedSchedule?.scheduledDate || selectedSchedule?.date
-    ? dayjs(selectedSchedule.scheduledDate || selectedSchedule.date).format("DD MMM YYYY")
-    : "N/A";
+  const scheduledDateFormatted = formatCalendarDate(
+    selectedSchedule?.scheduledDate || selectedSchedule?.date,
+    { dayFirst: true, fallback: "N/A" }
+  );
 
   const sessionLabel = String(selectedSchedule?.session || "FN").toUpperCase();
   const displaySession = sessionLabel.includes("AN") ? "Afternoon (AN)" : "Forenoon (FN)";

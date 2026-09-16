@@ -2650,7 +2650,13 @@ const updateScheduleFeed = async ({
   if (Attendance && updatedSchedule?._id) {
     try {
       const attendanceUpdates = {};
-      if (updatedSchedule.scheduledDate) attendanceUpdates.date = updatedSchedule.scheduledDate;
+      if (updatedSchedule.scheduledDate) {
+        attendanceUpdates.date = updatedSchedule.scheduledDate;
+        const d = new Date(updatedSchedule.scheduledDate);
+        if (!isNaN(d.getTime())) {
+          attendanceUpdates.assignedDate = d.toISOString().split("T")[0];
+        }
+      }
       if (updatedSchedule.trainerId) attendanceUpdates.trainerId = updatedSchedule.trainerId;
       if (updatedSchedule.collegeId) attendanceUpdates.collegeId = updatedSchedule.collegeId;
       if (updatedSchedule.dayNumber) attendanceUpdates.dayNumber = updatedSchedule.dayNumber;

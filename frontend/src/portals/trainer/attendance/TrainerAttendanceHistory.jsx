@@ -33,61 +33,16 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
 import { getSecureImageUrl } from "@/utils/imageUtils";
+import { formatCalendarDate, formatISTTime, toCalendarYMD } from "@/utils/dateUtils";
 import LateAttendanceRequestModal from "../TrainerSchedule/LateAttendanceRequestModal";
 
 /* ─── helpers ───────────────────────────────────────────────── */
 const formatCoord = (val) =>
   typeof val === "number" ? val.toFixed(5) : "—";
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return "—";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return String(dateStr);
-    return d.toLocaleDateString("en-US", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return String(dateStr);
-  }
-};
+const formatDate = (dateStr) => formatCalendarDate(dateStr, { fallback: "—" });
 
-const formatTime = (timeStr, fallbackDate) => {
-  const target = timeStr || fallbackDate;
-  if (!target) return "—";
-
-  if (typeof target === "string") {
-    const trimmed = target.trim();
-    if (/^\d{1,2}:\d{2}(\s?[APap][Mm])?$/.test(trimmed)) {
-      return trimmed;
-    }
-    try {
-      const d = new Date(trimmed);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        });
-      }
-    } catch {
-      // ignore
-    }
-    return trimmed;
-  }
-
-  if (target instanceof Date && !isNaN(target.getTime())) {
-    return target.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  }
-
-  return "—";
-};
+const formatTime = (timeStr, fallbackDate) => formatISTTime(timeStr, fallbackDate);
 
 const formatDuration = (minutes) => {
   if (!minutes || isNaN(minutes) || minutes <= 0) return null;
@@ -133,6 +88,18 @@ const STATUS_CONFIG = {
     dot: "bg-rose-500",
     icon: XCircle,
     label: "Absent",
+  },
+  Scheduled: {
+    badge: "bg-blue-50 text-blue-700 border-blue-200 ring-blue-600/10",
+    dot: "bg-blue-500",
+    icon: Calendar,
+    label: "Scheduled",
+  },
+  Upcoming: {
+    badge: "bg-indigo-50 text-indigo-700 border-indigo-200 ring-indigo-600/10",
+    dot: "bg-indigo-500",
+    icon: Calendar,
+    label: "Upcoming",
   },
   PendingApproval: {
     badge: "bg-amber-50 text-amber-700 border-amber-200 ring-amber-600/10",
@@ -245,25 +212,30 @@ function TrainerAttendanceHistory() {
 
   /* ── Merged Attendance Records (incorporating all assigned schedules) ──── */
   const mergedRecords = useMemo(() => {
-    const toYMD = (dateStr) => {
-      if (!dateStr) return "";
-      try {
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return "";
-        return d.toISOString().split("T")[0];
-      } catch {
-        return "";
-      }
-    };
+    const todayIST = toCalendarYMD(new Date());
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const currentHour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+    const currentMinute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+    const currentMins = currentHour * 60 + currentMinute;
 
     const combined = [...records];
 
     schedules.forEach((sched) => {
       const sId = String(sched._id || sched.id || "");
+      const schedStatus = String(sched.status || "").toLowerCase();
+      if (schedStatus === "cancelled" || sched.isActive === false) return;
+
       const schedDate = sched.scheduledDate || sched.date;
       if (!schedDate) return;
 
-      const schedYMD = toYMD(schedDate);
+      const schedYMD = toCalendarYMD(schedDate);
       if (!schedYMD) return;
 
       const hasMatchingAttendance = records.some((r) => {
@@ -273,13 +245,36 @@ function TrainerAttendanceHistory() {
         if (sId && rSchedId && sId === rSchedId) {
           return true;
         }
-        const rYMD = toYMD(r.date || r.assignedDate || r.checkInTime || r.createdAt);
+        const rYMD = toCalendarYMD(r.date || r.assignedDate || r.checkInTime || r.createdAt);
         const rDay = Number(r.dayNumber || 1);
         const sDay = Number(sched.dayNumber || 1);
         return rYMD === schedYMD && rDay === sDay;
       });
 
       if (!hasMatchingAttendance) {
+        const sessionType = String(sched.session || "").toUpperCase();
+        let isPast = false;
+        if (schedYMD < todayIST) {
+          isPast = true;
+        } else if (schedYMD === todayIST) {
+          if (sessionType === "FN" && currentMins >= 13 * 60 + 30) isPast = true;
+          else if ((sessionType === "AN" || sessionType === "FULL_DAY") && currentMins >= 18 * 60) isPast = true;
+        }
+
+        const isUpcoming = schedYMD > todayIST;
+        const isTodayOngoing = schedYMD === todayIST && !isPast;
+
+        let statusText = "Absent";
+        let remarksText = "Scheduled session without attendance record";
+
+        if (isUpcoming) {
+          statusText = "Scheduled";
+          remarksText = "Upcoming scheduled session";
+        } else if (isTodayOngoing) {
+          statusText = "Scheduled";
+          remarksText = "Session scheduled for today";
+        }
+
         combined.push({
           _id: `sched-item-${sId || schedYMD}-${sched.dayNumber || 1}`,
           scheduleId: sched,
@@ -287,18 +282,25 @@ function TrainerAttendanceHistory() {
           courseId: sched.courseId || (sched.courseTitle ? { name: sched.courseTitle } : null),
           date: schedDate,
           dayNumber: sched.dayNumber || 1,
-          status: "Absent",
-          attendanceStatus: "Absent",
+          status: statusText,
+          attendanceStatus: statusText,
           verificationStatus: "pending",
           isSyntheticSchedule: true,
+          isUpcoming,
+          isTodayOngoing,
           checkInTime: null,
           checkOutTime: null,
-          remarks: "Scheduled session without attendance record",
+          remarks: remarksText,
         });
       }
     });
 
     return combined.sort((a, b) => {
+      const dateA = toCalendarYMD(a.date || a.assignedDate || a.createdAt || 0);
+      const dateB = toCalendarYMD(b.date || b.assignedDate || b.createdAt || 0);
+      if (dateA && dateB && dateA !== dateB) {
+        return dateB.localeCompare(dateA);
+      }
       const dA = new Date(a.date || a.assignedDate || a.createdAt || 0).getTime();
       const dB = new Date(b.date || b.assignedDate || b.createdAt || 0).getTime();
       return dB - dA;
@@ -369,12 +371,12 @@ function TrainerAttendanceHistory() {
 
   /* ── Today's active visit info (if any) ─────────────────────── */
   const todaySession = useMemo(() => {
-    const todayYMD = new Date().toISOString().split("T")[0];
+    const todayYMD = toCalendarYMD(new Date());
     return schedules.find((s) => {
       const sDate = s.scheduledDate || s.date;
       if (!sDate) return false;
-      const sYMD = new Date(sDate).toISOString().split("T")[0];
-      return sYMD === todayYMD;
+      const sYMD = toCalendarYMD(sDate);
+      return sYMD === todayYMD && s.status !== "cancelled" && s.isActive !== false;
     });
   }, [schedules]);
 
@@ -665,6 +667,10 @@ function TrainerAttendanceHistory() {
                   activeStatusKey = "Present";
                 } else if (isMissingProofs) {
                   activeStatusKey = "MissingProofs";
+                } else if (record.isUpcoming) {
+                  activeStatusKey = "Upcoming";
+                } else if (record.isTodayOngoing) {
+                  activeStatusKey = "Scheduled";
                 } else if (isRejected || statusNorm === "absent" || record.isSyntheticSchedule) {
                   activeStatusKey = "Absent";
                 }
@@ -892,6 +898,19 @@ function TrainerAttendanceHistory() {
                               <UploadCloud className="h-3.5 w-3.5" />
                               Upload Missing Proofs
                             </button>
+                          ) : record.isTodayOngoing ? (
+                            <Link
+                              href={`/trainer/activities?scheduleId=${record.scheduleId?._id || record._id}`}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#0f3f5c] hover:bg-[#1a6b9e] text-white shadow-sm transition active:scale-95"
+                            >
+                              <span>Go to Daily Workflow</span>
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </Link>
+                          ) : record.isUpcoming ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+                              <Calendar className="h-3.5 w-3.5 text-blue-600" />
+                              Scheduled Session
+                            </span>
                           ) : (
                             <button
                               type="button"

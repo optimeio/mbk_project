@@ -22,6 +22,7 @@ import {
 import dayjs from "dayjs";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { toCalendarYMD, formatCalendarDate } from "@/utils/dateUtils";
 
 export default function TrainerUpcomingSchedule() {
   const { currentUser } = useAuth();
@@ -72,19 +73,19 @@ export default function TrainerUpcomingSchedule() {
 
   // Filter for upcoming (today & future) schedules
   const upcomingList = useMemo(() => {
-    const todayYMD = dayjs().format("YYYY-MM-DD");
+    const todayYMD = toCalendarYMD(new Date());
 
     const filtered = schedules.filter((s) => {
       const sDate = s.scheduledDate || s.date;
       if (!sDate) return false;
-      const sYMD = dayjs(sDate).format("YYYY-MM-DD");
+      const sYMD = toCalendarYMD(sDate);
 
       // Keep today and future schedules
       if (sYMD < todayYMD) return false;
 
       // Month filter
       if (monthFilter) {
-        const sMonth = dayjs(sDate).format("YYYY-MM");
+        const sMonth = sYMD.slice(0, 7);
         if (sMonth !== monthFilter) return false;
       }
 
@@ -96,7 +97,7 @@ export default function TrainerUpcomingSchedule() {
           s.courseId?.name || s.courseId?.title || s.courseName || s.subject || ""
         ).toLowerCase();
         const venue = String(s.venue || s.collegeLocation?.address || "").toLowerCase();
-        const dateStr = dayjs(sDate).format("DD MMM YYYY").toLowerCase();
+        const dateStr = formatCalendarDate(sDate, { dayFirst: true }).toLowerCase();
 
         return (
           collegeName.includes(q) ||
@@ -110,9 +111,9 @@ export default function TrainerUpcomingSchedule() {
     });
 
     return filtered.sort((a, b) => {
-      const dA = dayjs(a.scheduledDate || a.date).valueOf();
-      const dB = dayjs(b.scheduledDate || b.date).valueOf();
-      return dA - dB;
+      const dateA = toCalendarYMD(a.scheduledDate || a.date);
+      const dateB = toCalendarYMD(b.scheduledDate || b.date);
+      return dateA.localeCompare(dateB);
     });
   }, [schedules, monthFilter, searchTerm]);
 
@@ -215,8 +216,8 @@ export default function TrainerUpcomingSchedule() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {upcomingList.map((sched) => {
               const schedDate = sched.scheduledDate || sched.date;
-              const formattedDate = dayjs(schedDate).format("DD MMM YYYY (ddd)");
-              const isToday = dayjs(schedDate).format("YYYY-MM-DD") === dayjs().format("YYYY-MM-DD");
+              const formattedDate = formatCalendarDate(schedDate, { dayFirst: true, includeWeekday: true });
+              const isToday = toCalendarYMD(schedDate) === toCalendarYMD(new Date());
               const collegeName = sched.collegeId?.name || sched.collegeName || "Assigned College";
               const courseName = sched.courseId?.title || sched.courseId?.name || sched.courseName || sched.subject || "Course";
               const sessionLabel = String(sched.session || "FN").toUpperCase() === "AN" ? "AN" : "FN";
