@@ -536,71 +536,53 @@ function LateAttendanceRequestModal({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {/* Selected files preview list */}
+                    {/* Selected files preview grid matching Student Activities */}
                     {studentDocs.length > 0 && (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {studentDocs.map((file, i) => {
                           const typeInfo = detectFileType(file);
                           return (
                             <div
                               key={i}
-                              className="relative flex items-center gap-2.5 p-2 bg-white border border-slate-200 rounded-xl shadow-xs group hover:border-blue-300 transition"
+                              className="relative rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-xs hover:border-blue-300 transition"
                             >
-                              {/* File Preview Thumbnail / Icon */}
-                              {typeInfo.isImage && studentDocPreviews[i] ? (
-                                <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
+                              <div className="aspect-square bg-slate-100 overflow-hidden flex items-center justify-center">
+                                {typeInfo.isImage && studentDocPreviews[i] ? (
                                   <img
                                     src={studentDocPreviews[i]}
                                     alt={file.name}
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition"
                                   />
-                                </div>
-                              ) : typeInfo.kind === "pdf" ? (
-                                <div className="w-12 h-12 rounded-lg bg-red-50 border border-red-200 flex flex-col items-center justify-center shrink-0 text-red-600">
-                                  <FileText className="w-5 h-5" />
-                                  <span className="text-[8px] font-black uppercase tracking-tight">PDF</span>
-                                </div>
-                              ) : typeInfo.kind === "excel" ? (
-                                <div className="w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center shrink-0 text-emerald-600">
-                                  <FileSpreadsheet className="w-5 h-5" />
-                                  <span className="text-[8px] font-black uppercase tracking-tight">XLS</span>
-                                </div>
-                              ) : (
-                                <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-200 flex flex-col items-center justify-center shrink-0 text-blue-600">
-                                  <FileCode2 className="w-5 h-5" />
-                                  <span className="text-[8px] font-black uppercase tracking-tight">DOC</span>
-                                </div>
-                              )}
-
-                              {/* File Info */}
-                              <div className="flex-1 min-w-0 pr-6">
-                                <p className="text-xs font-bold text-slate-800 truncate" title={file.name}>
+                                ) : typeInfo.kind === "pdf" ? (
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-red-50 text-red-600">
+                                    <FileText className="w-8 h-8 mb-1 text-red-500" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-red-100 text-red-700 px-1.5 py-0.5 rounded">PDF</span>
+                                  </div>
+                                ) : typeInfo.kind === "excel" ? (
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-emerald-50 text-emerald-600">
+                                    <FileSpreadsheet className="w-8 h-8 mb-1 text-emerald-600" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">XLS</span>
+                                  </div>
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-blue-50 text-blue-600">
+                                    <FileCode2 className="w-8 h-8 mb-1 text-blue-600" />
+                                    <span className="text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">DOC</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="p-1.5 bg-white border-t border-slate-100">
+                                <p className="text-[10px] font-bold text-slate-800 truncate" title={file.name}>
                                   {file.name}
                                 </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <span className="text-[10px] text-slate-400 font-medium">
-                                    {formatFileSize(file.size)}
-                                  </span>
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                                    typeInfo.kind === 'pdf'
-                                      ? 'bg-red-50 text-red-700 border border-red-200'
-                                      : typeInfo.kind === 'excel'
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                      : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                  }`}>
-                                    {typeInfo.label}
-                                  </span>
-                                </div>
+                                <p className="text-[9px] text-slate-400">{formatFileSize(file.size)}</p>
                               </div>
-
-                              {/* Remove Button */}
                               <button
                                 type="button"
                                 onClick={() => removeStudentDoc(i)}
-                                className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                                title="Remove this file"
+                                className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer"
+                                title="Remove file"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <XMarkIcon className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           );
