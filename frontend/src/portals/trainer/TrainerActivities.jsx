@@ -29,7 +29,8 @@ import {
   Info,
   ShieldCheck,
   ChevronRight,
-  UploadCloud
+  UploadCloud,
+  FileText
 } from 'lucide-react';
 
 const getApiErrorMessage = (err, fallback = 'Something went wrong.') => {
@@ -458,47 +459,43 @@ export default function TrainerActivities() {
     }
   };
 
-  // Step 2: Student Attendance Handler (supports multiple images or single document)
+  // Step 2: Student Attendance Handler (supports multiple images or documents)
   const handleAttendanceFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Check if any file is a document (non-image)
-    const hasDocument = files.some(f => !f.type.startsWith('image/'));
-
-    if (hasDocument) {
-      // Document mode: only 1 file allowed (PDF/Excel)
-      const docFile = files[0];
-      setAttendanceFiles([docFile]);
-      setAttendanceFilePreviews([null]); // no preview for documents
-      return;
-    }
-
-    // Image mode: up to 5 images total
     if (attendanceFiles.length + files.length > 5) {
-      toast.error('You can upload a maximum of 5 attendance images.');
+      toast.error('You can upload a maximum of 5 attendance files/images.');
       return;
     }
 
-    const tId = toast.loading('Optimizing attendance images…');
+    const tId = toast.loading('Processing attendance files…');
     try {
-      const compressedList = [];
+      const processedFiles = [];
       const previewList = [];
       for (const file of files) {
         if (file.size > 10 * 1024 * 1024) {
           toast.error(`File ${file.name} exceeds 10MB!`);
           continue;
         }
-        const compressed = await compressImage(file);
-        compressedList.push(compressed);
-        previewList.push(URL.createObjectURL(compressed));
+        const isImg = file.type?.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(file.name);
+        if (isImg) {
+          const compressed = await compressImage(file);
+          processedFiles.push(compressed);
+          previewList.push(URL.createObjectURL(compressed));
+        } else {
+          processedFiles.push(file);
+          previewList.push(null);
+        }
       }
-      setAttendanceFiles((prev) => [...prev, ...compressedList]);
+      setAttendanceFiles((prev) => [...prev, ...processedFiles]);
       setAttendanceFilePreviews((prev) => [...prev, ...previewList]);
-      toast.success('Images added!', { id: tId });
+      toast.success('Attendance files added!', { id: tId });
     } catch (err) {
       console.error(err);
-      toast.error('Error processing images', { id: tId });
+      toast.error('Error processing files', { id: tId });
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -982,27 +979,36 @@ export default function TrainerActivities() {
 
                     {/* Uploaded files grid */}
                     {attendanceFiles.length > 0 && (
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
-                        {attendanceFiles.map((file, idx) => (
-                          <div key={`att-${idx}`} className="relative aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden group shadow-sm">
-                            {attendanceFilePreviews[idx] ? (
-                              <img src={attendanceFilePreviews[idx]} alt={`Attendance ${idx + 1}`} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex flex-col items-center justify-center p-2">
-                                <FileSpreadsheet className="h-6 w-6 text-amber-600 mb-1" />
-                                <p className="text-[10px] font-bold text-slate-700 text-center truncate w-full">{file.name}</p>
-                                <p className="text-[9px] text-slate-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeAttendanceFile(idx)}
-                              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-3">
+                        {attendanceFiles.map((file, idx) => {
+                          const isPdf = /\.pdf$/i.test(file.name) || file.type?.includes('pdf');
+                          return (
+                            <div key={`att-${idx}`} className="relative aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden group shadow-sm flex flex-col justify-between p-1.5">
+                              {attendanceFilePreviews[idx] ? (
+                                <img src={attendanceFilePreviews[idx]} alt={`Attendance ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                              ) : isPdf ? (
+                                <div className="w-full h-full flex flex-col items-center justify-center p-1 bg-red-50/50 rounded-lg">
+                                  <FileText className="h-7 w-7 text-red-500 mb-1" />
+                                  <p className="text-[10px] font-bold text-slate-700 text-center truncate w-full">{file.name}</p>
+                                  <p className="text-[9px] text-slate-400 font-medium">{(file.size / 1024).toFixed(0)} KB • PDF</p>
+                                </div>
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center p-1 bg-emerald-50/50 rounded-lg">
+                                  <FileSpreadsheet className="h-7 w-7 text-emerald-600 mb-1" />
+                                  <p className="text-[10px] font-bold text-slate-700 text-center truncate w-full">{file.name}</p>
+                                  <p className="text-[9px] text-slate-400 font-medium">{(file.size / 1024).toFixed(0)} KB • XLS</p>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeAttendanceFile(idx)}
+                                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700 cursor-pointer"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 

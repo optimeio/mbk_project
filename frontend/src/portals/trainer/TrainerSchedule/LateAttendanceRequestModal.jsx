@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import dayjs from "dayjs";
 import {
   XMarkIcon,
-  DocumentArrowUpIcon,
   CameraIcon,
   PhotoIcon,
   CheckCircleIcon,
@@ -15,9 +14,47 @@ import {
   BuildingLibraryIcon,
   AcademicCapIcon,
 } from "@heroicons/react/24/outline";
+import {
+  FileText,
+  FileSpreadsheet,
+  UploadCloud,
+  Plus,
+  Trash2,
+  FileCode2,
+} from "lucide-react";
 import { api } from "@/services/api";
 import { getSecureImageUrl } from "@/utils/imageUtils";
 import { formatCalendarDate } from "@/utils/dateUtils";
+
+// Format bytes into readable format
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+};
+
+// Robust file type detector
+const detectFileType = (file) => {
+  if (!file) return { kind: "unknown", label: "File", isImage: false };
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+
+  if (type.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|heic|svg)$/i.test(name)) {
+    return { kind: "image", label: "Image", isImage: true };
+  }
+  if (type.includes("pdf") || /\.pdf$/i.test(name)) {
+    return { kind: "pdf", label: "PDF Document", isImage: false };
+  }
+  if (type.includes("sheet") || type.includes("excel") || type.includes("csv") || /\.(xlsx|xls|csv)$/i.test(name)) {
+    return { kind: "excel", label: "Excel Sheet", isImage: false };
+  }
+  if (type.includes("word") || type.includes("document") || /\.(docx?|rtf|txt)$/i.test(name)) {
+    return { kind: "doc", label: "Document", isImage: false };
+  }
+  return { kind: "doc", label: "Document", isImage: false };
+};
 
 function LateAttendanceRequestModal({
   selectedSchedule,
@@ -93,35 +130,43 @@ function LateAttendanceRequestModal({
   const courseName = selectedSchedule?.courseId?.title || selectedSchedule?.courseId?.name || selectedSchedule?.courseName || selectedSchedule?.subject || "Course";
   const dayNumber = selectedSchedule?.dayNumber ?? "N/A";
 
+  // Check-In handlers
   const handleCheckInChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        if (showToast) showToast("warning", "Check-in image exceeds 10MB limit.");
+        return;
+      }
       setCheckInImage(file);
       setCheckInPreview(URL.createObjectURL(file));
+      e.target.value = "";
     }
   };
 
+  const removeCheckInImage = () => {
+    setCheckInImage(null);
+    setCheckInPreview(null);
+  };
+
+  // Student Attendance handlers
   const handleStudentDocChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Check if any file is a document (non-image)
-    const hasDocument = files.some(f => !f.type.startsWith('image/'));
-    if (hasDocument) {
-      // Document mode: only 1 file allowed
-      setStudentDocs([files[0]]);
-      setStudentDocPreviews([null]);
+    if (studentDocs.length + files.length > 5) {
+      if (showToast) showToast("warning", "Maximum 5 files allowed for student attendance.");
       return;
     }
 
-    // Image mode: up to 5
-    if (studentDocs.length + files.length > 5) {
-      if (showToast) showToast('warning', 'Maximum 5 attendance images allowed.');
-      return;
-    }
-    const newPreviews = files.map(f => URL.createObjectURL(f));
+    const newPreviews = files.map((file) => {
+      const info = detectFileType(file);
+      return info.isImage ? URL.createObjectURL(file) : null;
+    });
+
     setStudentDocs((prev) => [...prev, ...files]);
     setStudentDocPreviews((prev) => [...prev, ...newPreviews]);
+    e.target.value = "";
   };
 
   const removeStudentDoc = (index) => {
@@ -129,16 +174,20 @@ function LateAttendanceRequestModal({
     setStudentDocPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Activity Photos handlers
   const handleActivityPhotosChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+
     if (activityPhotos.length + files.length > 5) {
-      if (showToast) showToast('warning', 'Maximum 5 activity photos allowed.');
+      if (showToast) showToast("warning", "Maximum 5 activity photos allowed.");
       return;
     }
-    setActivityPhotos((prev) => [...prev, ...files]);
+
     const newPreviews = files.map((file) => URL.createObjectURL(file));
+    setActivityPhotos((prev) => [...prev, ...files]);
     setActivityPreviews((prev) => [...prev, ...newPreviews]);
+    e.target.value = "";
   };
 
   const removeActivityPhoto = (index) => {
@@ -146,12 +195,23 @@ function LateAttendanceRequestModal({
     setActivityPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Check-Out handlers
   const handleCheckOutChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        if (showToast) showToast("warning", "Check-out image exceeds 10MB limit.");
+        return;
+      }
       setCheckOutImage(file);
       setCheckOutPreview(URL.createObjectURL(file));
+      e.target.value = "";
     }
+  };
+
+  const removeCheckOutImage = () => {
+    setCheckOutImage(null);
+    setCheckOutPreview(null);
   };
 
   const handleSubmit = async (e) => {
@@ -170,8 +230,8 @@ function LateAttendanceRequestModal({
     }
 
     if (!hasStudentDoc) {
-      if (showToast) showToast("warning", "Mandatory: Please upload the missing Student Attendance Sheet (PDF/Excel).");
-      else alert("Mandatory: Please upload the missing Student Attendance Sheet (PDF/Excel).");
+      if (showToast) showToast("warning", "Mandatory: Please upload the missing Student Attendance Sheet (Image/PDF/Excel).");
+      else alert("Mandatory: Please upload the missing Student Attendance Sheet (Image/PDF/Excel).");
       return;
     }
 
@@ -203,24 +263,18 @@ function LateAttendanceRequestModal({
       }
 
       if (studentDocs.length > 0) {
-        const isAllImages = studentDocs.every(f => f.type?.startsWith('image/'));
-        if (isAllImages) {
-          // Multiple images → use studentAttendanceImages field
-          studentDocs.forEach((file) => {
+        studentDocs.forEach((file) => {
+          const typeInfo = detectFileType(file);
+          if (typeInfo.isImage) {
             formData.append("studentAttendanceImages", file);
-          });
-        } else {
-          // Single document
-          const doc = studentDocs[0];
-          const docName = (doc.name || "").toLowerCase();
-          if (docName.endsWith(".pdf")) {
-            formData.append("attendancePdf", doc);
-          } else if (docName.endsWith(".xls") || docName.endsWith(".xlsx") || docName.endsWith(".csv")) {
-            formData.append("attendanceExcel", doc);
+          } else if (typeInfo.kind === "pdf") {
+            formData.append("attendancePdf", file);
+          } else if (typeInfo.kind === "excel") {
+            formData.append("attendanceExcel", file);
           } else {
-            formData.append("attendanceDocument", doc);
+            formData.append("attendanceDocument", file);
           }
-        }
+        });
       }
 
       if (activityPhotos.length > 0) {
@@ -265,7 +319,7 @@ function LateAttendanceRequestModal({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] my-auto overflow-hidden cursor-default"
+        className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-100 flex flex-col max-h-[92vh] my-auto overflow-hidden cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -300,7 +354,7 @@ function LateAttendanceRequestModal({
           {/* Scheduled Session Meta Card */}
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-sm">
+              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-xs">
                 <span className="text-gray-500 font-medium flex items-center gap-1">
                   <CalendarDaysIcon className="h-3.5 w-3.5 text-indigo-600" />
                   Scheduled Date
@@ -308,7 +362,7 @@ function LateAttendanceRequestModal({
                 <p className="font-bold text-gray-800 mt-1">{scheduledDateFormatted}</p>
               </div>
 
-              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-sm">
+              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-xs">
                 <span className="text-gray-500 font-medium flex items-center gap-1">
                   <AcademicCapIcon className="h-3.5 w-3.5 text-purple-600" />
                   Day Number
@@ -316,7 +370,7 @@ function LateAttendanceRequestModal({
                 <p className="font-bold text-purple-700 mt-1">Day {dayNumber}</p>
               </div>
 
-              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-sm">
+              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-xs">
                 <span className="text-gray-500 font-medium flex items-center gap-1">
                   <ClockIcon className="h-3.5 w-3.5 text-blue-600" />
                   Scheduled Session
@@ -324,7 +378,7 @@ function LateAttendanceRequestModal({
                 <p className="font-bold text-blue-700 mt-1">{displaySession}</p>
               </div>
 
-              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-sm">
+              <div className="bg-white p-2.5 rounded-lg border border-indigo-100/60 shadow-xs">
                 <span className="text-gray-500 font-medium flex items-center gap-1">
                   <ClockIcon className="h-3.5 w-3.5 text-amber-600" />
                   Request Raised At
@@ -372,8 +426,9 @@ function LateAttendanceRequestModal({
 
             {/* 4 Proof Upload Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
               {/* Proof 1: Check-In Photo */}
-              <div className={`border rounded-xl p-3.5 transition space-y-2 ${isCheckInAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
+              <div className={`border rounded-xl p-3.5 transition space-y-2.5 ${isCheckInAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <CameraIcon className="h-4 w-4 text-indigo-600" />
@@ -385,7 +440,7 @@ function LateAttendanceRequestModal({
                     </span>
                   ) : checkInImage ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> File Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> 1 Photo Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -403,27 +458,54 @@ function LateAttendanceRequestModal({
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleCheckInChange}
-                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                    />
-                    {checkInPreview && (
-                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
-                        <img src={checkInPreview} alt="Check-In New" className="w-full h-full object-cover" />
+                  <div>
+                    {checkInImage ? (
+                      <div className="relative flex items-center gap-2.5 p-2 bg-white border border-indigo-200 rounded-xl shadow-xs">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
+                          <img src={checkInPreview} alt="Check-In Preview" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0 pr-6">
+                          <p className="text-xs font-bold text-slate-800 truncate" title={checkInImage.name}>
+                            {checkInImage.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-slate-400 font-medium">{formatFileSize(checkInImage.size)}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              Check-In
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeCheckInImage}
+                          className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          title="Remove check-in photo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-xl p-3.5 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-indigo-50/30 transition group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCheckInChange}
+                          className="hidden"
+                        />
+                        <CameraIcon className="h-6 w-6 text-indigo-500 mb-1 group-hover:scale-110 transition" />
+                        <p className="text-xs font-bold text-slate-800">Select Check-In Photo</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG up to 10MB</p>
+                      </label>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
 
-              {/* Proof 2: Students Attendance Sheet (multi-image up to 5 or 1 doc) */}
-              <div className={`border rounded-xl p-3.5 transition space-y-2 ${isStudentDocAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
+              {/* Proof 2: Students Attendance Sheet (multi-image up to 5 or PDF/Excel docs) */}
+              <div className={`border rounded-xl p-3.5 transition space-y-2.5 ${isStudentDocAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                    <DocumentArrowUpIcon className="h-4 w-4 text-blue-600" />
+                    <FileSpreadsheet className="h-4 w-4 text-blue-600" />
                     2. Student Attendance {!isStudentDocAlreadyUploaded && <span className="text-red-500">*</span>}
                   </span>
                   {isStudentDocAlreadyUploaded ? (
@@ -432,7 +514,7 @@ function LateAttendanceRequestModal({
                     </span>
                   ) : studentDocs.length > 0 ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {studentDocs.length} File(s) Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {studentDocs.length}/5 File(s) Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -445,62 +527,123 @@ function LateAttendanceRequestModal({
                       href={getSecureImageUrl(existingStudentDocUrl)}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-indigo-600 underline font-semibold hover:text-indigo-800"
+                      className="inline-flex items-center gap-1.5 text-xs text-indigo-600 underline font-semibold hover:text-indigo-800 bg-indigo-50/50 px-3 py-2 rounded-lg border border-indigo-100"
                     >
-                      <span>View Uploaded Attendance Document / Sheet</span>
+                      <FileSpreadsheet className="h-4 w-4" />
+                      <span>View Uploaded Attendance Roster</span>
                     </a>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Preserved in system & Drive</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Preserved in system & Drive</p>
                   </div>
                 ) : (
-                  <>
-                    {/* Uploaded files grid */}
+                  <div className="space-y-2">
+                    {/* Selected files preview list */}
                     {studentDocs.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {studentDocs.map((file, i) => (
-                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-300 group">
-                            {studentDocPreviews[i] ? (
-                              <img src={studentDocPreviews[i]} alt={`Attendance ${i + 1}`} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex flex-col items-center justify-center bg-blue-50 p-1">
-                                <DocumentArrowUpIcon className="h-4 w-4 text-blue-600" />
-                                <p className="text-[8px] text-slate-600 truncate w-full text-center">{file.name}</p>
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeStudentDoc(i)}
-                              className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {studentDocs.map((file, i) => {
+                          const typeInfo = detectFileType(file);
+                          return (
+                            <div
+                              key={i}
+                              className="relative flex items-center gap-2.5 p-2 bg-white border border-slate-200 rounded-xl shadow-xs group hover:border-blue-300 transition"
                             >
-                              <XMarkIcon className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
+                              {/* File Preview Thumbnail / Icon */}
+                              {typeInfo.isImage && studentDocPreviews[i] ? (
+                                <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
+                                  <img
+                                    src={studentDocPreviews[i]}
+                                    alt={file.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : typeInfo.kind === "pdf" ? (
+                                <div className="w-12 h-12 rounded-lg bg-red-50 border border-red-200 flex flex-col items-center justify-center shrink-0 text-red-600">
+                                  <FileText className="w-5 h-5" />
+                                  <span className="text-[8px] font-black uppercase tracking-tight">PDF</span>
+                                </div>
+                              ) : typeInfo.kind === "excel" ? (
+                                <div className="w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center shrink-0 text-emerald-600">
+                                  <FileSpreadsheet className="w-5 h-5" />
+                                  <span className="text-[8px] font-black uppercase tracking-tight">XLS</span>
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-200 flex flex-col items-center justify-center shrink-0 text-blue-600">
+                                  <FileCode2 className="w-5 h-5" />
+                                  <span className="text-[8px] font-black uppercase tracking-tight">DOC</span>
+                                </div>
+                              )}
+
+                              {/* File Info */}
+                              <div className="flex-1 min-w-0 pr-6">
+                                <p className="text-xs font-bold text-slate-800 truncate" title={file.name}>
+                                  {file.name}
+                                </p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[10px] text-slate-400 font-medium">
+                                    {formatFileSize(file.size)}
+                                  </span>
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                                    typeInfo.kind === 'pdf'
+                                      ? 'bg-red-50 text-red-700 border border-red-200'
+                                      : typeInfo.kind === 'excel'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                  }`}>
+                                    {typeInfo.label}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Remove Button */}
+                              <button
+                                type="button"
+                                onClick={() => removeStudentDoc(i)}
+                                className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                title="Remove this file"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Upload input — hide when doc uploaded or max images reached */}
-                    {(studentDocs.length === 0 || (studentDocs.every(f => f.type?.startsWith('image/')) && studentDocs.length < 5)) && (
-                      <div>
+                    {/* Upload Dropzone / Add More Button */}
+                    {studentDocs.length < 5 ? (
+                      <label className={`border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-blue-50/30 transition group ${studentDocs.length > 0 ? 'py-2' : 'py-3.5'}`}>
                         <input
                           type="file"
                           accept=".pdf,.xls,.xlsx,.csv,image/*"
                           multiple
                           onChange={handleStudentDocChange}
-                          className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                          className="hidden"
                         />
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          {studentDocs.length > 0
-                            ? `${5 - studentDocs.length} more images allowed`
-                            : 'Up to 5 images or 1 PDF/Excel document'}
-                        </p>
-                      </div>
+                        <div className="flex items-center gap-2">
+                          {studentDocs.length > 0 ? (
+                            <>
+                              <Plus className="h-4 w-4 text-blue-600" />
+                              <span className="text-xs font-bold text-blue-700">Add More Files ({5 - studentDocs.length} remaining)</span>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                              <UploadCloud className="h-6 w-6 text-blue-500 mb-1 group-hover:scale-110 transition" />
+                              <p className="text-xs font-bold text-slate-800">Select Attendance Files</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Images (up to 5) or PDF / Excel sheets</p>
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    ) : (
+                      <p className="text-[11px] text-emerald-600 font-semibold text-center py-1 bg-emerald-50 rounded-lg">
+                        ✓ Maximum 5 files reached
+                      </p>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
 
               {/* Proof 3: Students Classroom Activities (up to 5 photos) */}
-              <div className={`border rounded-xl p-3.5 transition space-y-2 sm:col-span-2 ${isActivitiesAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
+              <div className={`border rounded-xl p-3.5 transition space-y-2.5 sm:col-span-2 ${isActivitiesAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <PhotoIcon className="h-4 w-4 text-purple-600" />
@@ -523,7 +666,7 @@ function LateAttendanceRequestModal({
                   <div className="space-y-1 pt-1">
                     <div className="flex flex-wrap gap-2">
                       {existingActivityPhotos.map((photoUrl, i) => (
-                        <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300 shadow-2xs">
+                        <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300 shadow-xs">
                           <img src={getSecureImageUrl(photoUrl)} alt={`Existing Activity ${i + 1}`} className="w-full h-full object-cover" />
                         </div>
                       ))}
@@ -531,41 +674,77 @@ function LateAttendanceRequestModal({
                     <p className="text-[11px] text-slate-400">Preserved in system & Drive</p>
                   </div>
                 ) : (
-                  <>
-                    {activityPhotos.length < 5 && (
-                      <div>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleActivityPhotosChange}
-                          className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
-                        />
-                        <p className="text-[10px] text-slate-400 mt-1">{5 - activityPhotos.length} more photos allowed (max 5)</p>
-                      </div>
-                    )}
-                    {activityPreviews.length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-2">
-                        {activityPreviews.map((src, i) => (
-                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-300 group">
-                            <img src={src} alt={`Activity ${i + 1}`} className="w-full h-full object-cover" />
+                  <div className="space-y-2">
+                    {/* Selected activity photos preview grid */}
+                    {activityPhotos.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {activityPhotos.map((file, i) => (
+                          <div
+                            key={i}
+                            className="relative rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-xs hover:border-purple-300 transition"
+                          >
+                            <div className="aspect-square bg-slate-100 overflow-hidden">
+                              <img
+                                src={activityPreviews[i]}
+                                alt={file.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition"
+                              />
+                            </div>
+                            <div className="p-1.5 bg-white border-t border-slate-100">
+                              <p className="text-[10px] font-bold text-slate-800 truncate" title={file.name}>
+                                {file.name}
+                              </p>
+                              <p className="text-[9px] text-slate-400">{formatFileSize(file.size)}</p>
+                            </div>
                             <button
                               type="button"
                               onClick={() => removeActivityPhoto(i)}
-                              className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                              className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer"
+                              title="Remove photo"
                             >
-                              <XMarkIcon className="h-3 w-3" />
+                              <XMarkIcon className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ))}
                       </div>
                     )}
-                  </>
+
+                    {/* Upload Dropzone / Add More Photos Button */}
+                    {activityPhotos.length < 5 ? (
+                      <label className={`border-2 border-dashed border-purple-200 hover:border-purple-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-purple-50/30 transition group ${activityPhotos.length > 0 ? 'py-2' : 'py-4'}`}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleActivityPhotosChange}
+                          className="hidden"
+                        />
+                        <div className="flex items-center gap-2">
+                          {activityPhotos.length > 0 ? (
+                            <>
+                              <Plus className="h-4 w-4 text-purple-600" />
+                              <span className="text-xs font-bold text-purple-700">Add More Photos ({5 - activityPhotos.length} remaining)</span>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                              <PhotoIcon className="h-6 w-6 text-purple-500 mb-1 group-hover:scale-110 transition" />
+                              <p className="text-xs font-bold text-slate-800">Select Classroom Activity Photos</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Up to 5 images (PNG, JPG) showing students engaged in class</p>
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    ) : (
+                      <p className="text-[11px] text-emerald-600 font-semibold text-center py-1 bg-emerald-50 rounded-lg">
+                        ✓ Maximum 5 activity photos reached
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
               {/* Proof 4: Check-Out Photo */}
-              <div className={`border rounded-xl p-3.5 transition space-y-2 sm:col-span-2 ${isCheckOutAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
+              <div className={`border rounded-xl p-3.5 transition space-y-2.5 sm:col-span-2 ${isCheckOutAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
                     <CameraIcon className="h-4 w-4 text-emerald-600" />
@@ -577,7 +756,7 @@ function LateAttendanceRequestModal({
                     </span>
                   ) : checkOutImage ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> File Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> 1 Photo Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -595,19 +774,46 @@ function LateAttendanceRequestModal({
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleCheckOutChange}
-                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
-                    />
-                    {checkOutPreview && (
-                      <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-300 mt-2">
-                        <img src={checkOutPreview} alt="Check-Out New" className="w-full h-full object-cover" />
+                  <div>
+                    {checkOutImage ? (
+                      <div className="relative flex items-center gap-2.5 p-2 bg-white border border-emerald-200 rounded-xl shadow-xs">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
+                          <img src={checkOutPreview} alt="Check-Out Preview" className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0 pr-6">
+                          <p className="text-xs font-bold text-slate-800 truncate" title={checkOutImage.name}>
+                            {checkOutImage.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] text-slate-400 font-medium">{formatFileSize(checkOutImage.size)}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Check-Out
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeCheckOutImage}
+                          className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          title="Remove check-out photo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-emerald-200 hover:border-emerald-400 rounded-xl p-3.5 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-emerald-50/30 transition group">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCheckOutChange}
+                          className="hidden"
+                        />
+                        <CameraIcon className="h-6 w-6 text-emerald-500 mb-1 group-hover:scale-110 transition" />
+                        <p className="text-xs font-bold text-slate-800">Select Check-Out Photo</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG up to 10MB</p>
+                      </label>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -620,7 +826,7 @@ function LateAttendanceRequestModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition"
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
           >
             Cancel
           </button>
@@ -628,7 +834,7 @@ function LateAttendanceRequestModal({
             type="submit"
             form="late-attendance-form"
             disabled={isSubmitting}
-            className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-2 cursor-pointer"
           >
             {isSubmitting ? (
               <>
