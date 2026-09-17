@@ -29,7 +29,8 @@ function LateAttendanceRequestModal({
   const [reason, setReason] = useState("");
   const [checkInImage, setCheckInImage] = useState(null);
   const [checkInPreview, setCheckInPreview] = useState(null);
-  const [studentDoc, setStudentDoc] = useState(null);
+  const [studentDocs, setStudentDocs] = useState([]);
+  const [studentDocPreviews, setStudentDocPreviews] = useState([]);
   const [activityPhotos, setActivityPhotos] = useState([]);
   const [activityPreviews, setActivityPreviews] = useState([]);
   const [checkOutImage, setCheckOutImage] = useState(null);
@@ -40,7 +41,7 @@ function LateAttendanceRequestModal({
   const att = selectedSchedule?.attendance || selectedSchedule?.attendanceRecord || selectedSchedule || {};
 
   const existingCheckInUrl = selectedSchedule?.imageUrl || selectedSchedule?.checkInPhoto || selectedSchedule?.checkInImage || att?.imageUrl || att?.checkInPhoto || att?.checkInImage;
-  const existingStudentDocUrl = selectedSchedule?.attendancePdfUrl || selectedSchedule?.attendanceExcelUrl || selectedSchedule?.studentsPhotoUrl || selectedSchedule?.attendancePhotoUrl || selectedSchedule?.attendanceDocumentUrl || att?.attendancePdfUrl || att?.attendanceExcelUrl || att?.studentsPhotoUrl || att?.attendancePhotoUrl || att?.attendanceDocumentUrl;
+  const existingStudentDocUrl = selectedSchedule?.studentAttendanceImageUrls?.[0] || att?.studentAttendanceImageUrls?.[0] || selectedSchedule?.attendancePdfUrl || selectedSchedule?.attendanceExcelUrl || selectedSchedule?.studentsPhotoUrl || selectedSchedule?.attendancePhotoUrl || selectedSchedule?.attendanceDocumentUrl || att?.attendancePdfUrl || att?.attendanceExcelUrl || att?.studentsPhotoUrl || att?.attendancePhotoUrl || att?.attendanceDocumentUrl;
   const existingActivityPhotos = Array.isArray(selectedSchedule?.activityPhotos) && selectedSchedule.activityPhotos.length > 0
     ? selectedSchedule.activityPhotos
     : Array.isArray(att?.activityPhotos) && att.activityPhotos.length > 0
@@ -54,7 +55,7 @@ function LateAttendanceRequestModal({
   const isCheckOutAlreadyUploaded = Boolean(existingCheckOutUrl);
 
   const hasCheckIn = Boolean(checkInImage || isCheckInAlreadyUploaded);
-  const hasStudentDoc = Boolean(studentDoc || isStudentDocAlreadyUploaded);
+  const hasStudentDoc = Boolean(studentDocs.length > 0 || isStudentDocAlreadyUploaded);
   const hasActivities = Boolean(activityPhotos.length > 0 || isActivitiesAlreadyUploaded);
   const hasCheckOut = Boolean(checkOutImage || isCheckOutAlreadyUploaded);
 
@@ -101,19 +102,43 @@ function LateAttendanceRequestModal({
   };
 
   const handleStudentDocChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setStudentDoc(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Check if any file is a document (non-image)
+    const hasDocument = files.some(f => !f.type.startsWith('image/'));
+    if (hasDocument) {
+      // Document mode: only 1 file allowed
+      setStudentDocs([files[0]]);
+      setStudentDocPreviews([null]);
+      return;
     }
+
+    // Image mode: up to 5
+    if (studentDocs.length + files.length > 5) {
+      if (showToast) showToast('warning', 'Maximum 5 attendance images allowed.');
+      return;
+    }
+    const newPreviews = files.map(f => URL.createObjectURL(f));
+    setStudentDocs((prev) => [...prev, ...files]);
+    setStudentDocPreviews((prev) => [...prev, ...newPreviews]);
+  };
+
+  const removeStudentDoc = (index) => {
+    setStudentDocs((prev) => prev.filter((_, i) => i !== index));
+    setStudentDocPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleActivityPhotosChange = (e) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      setActivityPhotos((prev) => [...prev, ...files]);
-      const newPreviews = files.map((file) => URL.createObjectURL(file));
-      setActivityPreviews((prev) => [...prev, ...newPreviews]);
+    if (files.length === 0) return;
+    if (activityPhotos.length + files.length > 5) {
+      if (showToast) showToast('warning', 'Maximum 5 activity photos allowed.');
+      return;
     }
+    setActivityPhotos((prev) => [...prev, ...files]);
+    const newPreviews = files.map((file) => URL.createObjectURL(file));
+    setActivityPreviews((prev) => [...prev, ...newPreviews]);
   };
 
   const removeActivityPhoto = (index) => {
@@ -177,14 +202,24 @@ function LateAttendanceRequestModal({
         formData.append("checkInImage", checkInImage);
       }
 
-      if (studentDoc) {
-        const docName = (studentDoc.name || "").toLowerCase();
-        if (docName.endsWith(".pdf")) {
-          formData.append("attendancePdf", studentDoc);
-        } else if (docName.endsWith(".xls") || docName.endsWith(".xlsx") || docName.endsWith(".csv")) {
-          formData.append("attendanceExcel", studentDoc);
+      if (studentDocs.length > 0) {
+        const isAllImages = studentDocs.every(f => f.type?.startsWith('image/'));
+        if (isAllImages) {
+          // Multiple images → use studentAttendanceImages field
+          studentDocs.forEach((file) => {
+            formData.append("studentAttendanceImages", file);
+          });
         } else {
-          formData.append("attendanceDocument", studentDoc);
+          // Single document
+          const doc = studentDocs[0];
+          const docName = (doc.name || "").toLowerCase();
+          if (docName.endsWith(".pdf")) {
+            formData.append("attendancePdf", doc);
+          } else if (docName.endsWith(".xls") || docName.endsWith(".xlsx") || docName.endsWith(".csv")) {
+            formData.append("attendanceExcel", doc);
+          } else {
+            formData.append("attendanceDocument", doc);
+          }
         }
       }
 
@@ -384,7 +419,7 @@ function LateAttendanceRequestModal({
                 )}
               </div>
 
-              {/* Proof 2: Students Attendance Sheet */}
+              {/* Proof 2: Students Attendance Sheet (multi-image up to 5 or 1 doc) */}
               <div className={`border rounded-xl p-3.5 transition space-y-2 ${isStudentDocAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
@@ -395,9 +430,9 @@ function LateAttendanceRequestModal({
                     <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded border border-emerald-300 font-semibold flex items-center gap-1">
                       <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600" /> Uploaded & Locked
                     </span>
-                  ) : studentDoc ? (
+                  ) : studentDocs.length > 0 ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> File Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {studentDocs.length} File(s) Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -418,22 +453,53 @@ function LateAttendanceRequestModal({
                   </div>
                 ) : (
                   <>
-                    <input
-                      type="file"
-                      accept=".pdf,.xls,.xlsx,.csv,image/*"
-                      onChange={handleStudentDocChange}
-                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-                    />
-                    {studentDoc && (
-                      <p className="text-[11px] text-gray-600 truncate bg-white px-2 py-1 rounded border border-gray-200">
-                        {studentDoc.name}
-                      </p>
+                    {/* Uploaded files grid */}
+                    {studentDocs.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {studentDocs.map((file, i) => (
+                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-300 group">
+                            {studentDocPreviews[i] ? (
+                              <img src={studentDocPreviews[i]} alt={`Attendance ${i + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-blue-50 p-1">
+                                <DocumentArrowUpIcon className="h-4 w-4 text-blue-600" />
+                                <p className="text-[8px] text-slate-600 truncate w-full text-center">{file.name}</p>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeStudentDoc(i)}
+                              className="absolute top-0.5 right-0.5 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                            >
+                              <XMarkIcon className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Upload input — hide when doc uploaded or max images reached */}
+                    {(studentDocs.length === 0 || (studentDocs.every(f => f.type?.startsWith('image/')) && studentDocs.length < 5)) && (
+                      <div>
+                        <input
+                          type="file"
+                          accept=".pdf,.xls,.xlsx,.csv,image/*"
+                          multiple
+                          onChange={handleStudentDocChange}
+                          className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {studentDocs.length > 0
+                            ? `${5 - studentDocs.length} more images allowed`
+                            : 'Up to 5 images or 1 PDF/Excel document'}
+                        </p>
+                      </div>
                     )}
                   </>
                 )}
               </div>
 
-              {/* Proof 3: Students Classroom Activities */}
+              {/* Proof 3: Students Classroom Activities (up to 5 photos) */}
               <div className={`border rounded-xl p-3.5 transition space-y-2 sm:col-span-2 ${isActivitiesAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
@@ -446,7 +512,7 @@ function LateAttendanceRequestModal({
                     </span>
                   ) : activityPhotos.length > 0 ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length} Photo(s) Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length}/5 Photo(s) Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -466,13 +532,18 @@ function LateAttendanceRequestModal({
                   </div>
                 ) : (
                   <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleActivityPhotosChange}
-                      className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
-                    />
+                    {activityPhotos.length < 5 && (
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleActivityPhotosChange}
+                          className="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">{5 - activityPhotos.length} more photos allowed (max 5)</p>
+                      </div>
+                    )}
                     {activityPreviews.length > 0 && (
                       <div className="flex flex-wrap gap-2 pt-2">
                         {activityPreviews.map((src, i) => (

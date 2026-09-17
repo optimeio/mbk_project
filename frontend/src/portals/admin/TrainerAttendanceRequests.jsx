@@ -248,7 +248,8 @@ export default function TrainerAttendanceRequests() {
         const checkInImg = record.imageUrl || record.checkInPhoto || record.checkIn?.photo;
         const hasCheckIn = Boolean(checkInImg);
         const validStudentsPhoto = record.studentsPhotoUrl && record.studentsPhotoUrl !== checkInImg ? record.studentsPhotoUrl : null;
-        const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || validStudentsPhoto);
+        const studentImagesCount = Array.isArray(record.studentAttendanceImageUrls) ? record.studentAttendanceImageUrls.length : 0;
+        const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || validStudentsPhoto || studentImagesCount > 0);
         const activityCount = Array.isArray(record.activityPhotos) ? record.activityPhotos.length : 0;
         const hasCheckOut = Boolean(record.checkOutGeoImageUrl || record.checkOut?.photos?.length);
 
@@ -259,7 +260,7 @@ export default function TrainerAttendanceRequests() {
                 Check-In {hasCheckIn ? "✓" : "✗"}
               </Tag>
               <Tag color={hasStudentDoc ? "blue" : "default"} style={{ margin: 0, fontSize: 10 }}>
-                Roster {hasStudentDoc ? "✓" : "✗"}
+                Roster {studentImagesCount > 1 ? `(${studentImagesCount})` : hasStudentDoc ? "✓" : "✗"}
               </Tag>
             </Space>
             <Space size={4}>
@@ -544,7 +545,7 @@ export default function TrainerAttendanceRequests() {
                     <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
                       <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#1d4ed8", display: "flex", alignItems: "center", gap: 4 }}>
                         <FileSpreadsheet size={13} />
-                        <span>2. Student Attendance</span>
+                        <span>2. Student Attendance {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 1 ? `(${selectedRecord.studentAttendanceImageUrls.length})` : ''}</span>
                       </div>
                       {selectedRecord.attendancePdfUrl ? (
                         <Button
@@ -567,6 +568,19 @@ export default function TrainerAttendanceRequests() {
                         >
                           Download Excel Roster
                         </Button>
+                      ) : Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 1 ? (
+                        <Image.PreviewGroup>
+                          <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+                            {selectedRecord.studentAttendanceImageUrls.map((img, i) => (
+                              <Image
+                                key={i}
+                                src={getSecureImageUrl(img)}
+                                alt={`Attendance Sheet ${i + 1}`}
+                                style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
+                              />
+                            ))}
+                          </div>
+                        </Image.PreviewGroup>
                       ) : cleanAttendanceSheetUrl ? (
                         <Image
                           src={getSecureImageUrl(cleanAttendanceSheetUrl)}

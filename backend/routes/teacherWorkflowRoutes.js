@@ -616,10 +616,13 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
   }
 });
 
-// 4. POST /api/student-attendance/upload (Unified Excel, PDF, or Photo Uploader)
+// 4. POST /api/student-attendance/upload (Unified Excel, PDF, or Photo Uploader — supports multiple images)
 router.post("/student-attendance/upload", authenticate, uploadAttendance, async (req, res) => {
   try {
     const { attendanceId, latitude, longitude } = req.body;
+
+    // Detect multiple student attendance images (up to 5)
+    const multiImages = req.files?.['studentAttendanceImages'] || [];
 
     const uploadedFile = (req.files && (
       req.files['attendanceDocument']?.[0] ||
@@ -631,7 +634,7 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
       req.files['document']?.[0]
     )) || req.file;
 
-    if (!uploadedFile) {
+    if (!uploadedFile && multiImages.length === 0) {
       return res.status(400).json({ success: false, message: "Attendance document (Excel, PDF, or Photo) is required" });
     }
 
@@ -648,6 +651,49 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
       autoCreate: true,
     });
 
+    // --- Handle multiple student attendance images (up to 5) ---
+    if (multiImages.length > 0) {
+      const imageUrls = [];
+      for (const imgFile of multiImages) {
+        const relPath = path.relative(path.join(__dirname, '..'), imgFile.path).replace(/\\/g, '/');
+        const imgUrl = relPath.startsWith('/') ? relPath : `/${relPath}`;
+        imageUrls.push(imgUrl);
+      }
+      attendanceRecord.studentAttendanceImageUrls = imageUrls;
+      // Set first image in legacy fields for backward compat
+      if (imageUrls.length > 0) {
+        attendanceRecord.attendancePhotoUrl = imageUrls[0];
+        attendanceRecord.studentsPhotoUrl = imageUrls[0];
+        attendanceRecord.attendanceDocumentUrl = imageUrls[0];
+      }
+      await attendanceRecord.save();
+
+      // Asynchronously upload each image to Google Drive
+      if (attendanceRecord.collegeId) {
+        for (const imgFile of multiImages) {
+          uploadTrainerFileToDrive({
+            trainer,
+            collegeId: attendanceRecord.collegeId,
+            scheduleId: attendanceRecord.scheduleId,
+            attendanceId: attendanceRecord._id,
+            dayNumber: attendanceRecord.dayNumber || 1,
+            session: attendanceRecord.session || targetSession,
+            file: imgFile,
+            isExcel: false,
+            folderType: 'attendance'
+          }).catch(err => console.error("[DRIVE-UPLOAD-ASYNC] Attendance image upload failed:", err));
+        }
+      }
+
+      return res.json({
+        success: true,
+        fileUrls: imageUrls,
+        attendanceId: attendanceRecord._id,
+        message: `${imageUrls.length} attendance image(s) uploaded successfully!`
+      });
+    }
+
+    // --- Handle single file upload (Excel, PDF, or single Photo) ---
     const ext = path.extname(uploadedFile.originalname || '').toLowerCase();
     const relativePath = path.relative(path.join(__dirname, '..'), uploadedFile.path).replace(/\\/g, '/');
     const fileUrl = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
@@ -730,9 +776,12 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
   }
 });
 
-// 4b. POST /api/student-attendance/photo
+// 4b. POST /api/student-attendance/photo (supports multiple images)
 router.post("/student-attendance/photo", authenticate, uploadAttendance, async (req, res) => {
   try {
+    // Detect multiple student attendance images (up to 5)
+    const multiImages = req.files?.['studentAttendanceImages'] || [];
+
     const photoFile = (req.files && (
       req.files['attendancePhoto']?.[0] ||
       req.files['attendance_photo']?.[0] ||
@@ -741,7 +790,7 @@ router.post("/student-attendance/photo", authenticate, uploadAttendance, async (
       req.files['image']?.[0]
     )) || req.file;
 
-    if (!photoFile) {
+    if (!photoFile && multiImages.length === 0) {
       return res.status(400).json({ success: false, message: "Attendance photo is required" });
     }
 
@@ -759,6 +808,41 @@ router.post("/student-attendance/photo", authenticate, uploadAttendance, async (
       autoCreate: true,
     });
 
+    // --- Handle multiple student attendance images ---
+    if (multiImages.length > 0) {
+      const imageUrls = multiImages.map(f => `/uploads/attendance/images/${f.filename}`);
+      attendanceRecord.studentAttendanceImageUrls = imageUrls;
+      if (imageUrls.length > 0) {
+        attendanceRecord.attendancePhotoUrl = imageUrls[0];
+        attendanceRecord.studentsPhotoUrl = imageUrls[0];
+      }
+      await attendanceRecord.save();
+
+      // Async Drive upload for each image
+      if (attendanceRecord.collegeId) {
+        for (const imgFile of multiImages) {
+          uploadTrainerFileToDrive({
+            trainer,
+            collegeId: attendanceRecord.collegeId,
+            scheduleId: attendanceRecord.scheduleId,
+            attendanceId: attendanceRecord._id,
+            dayNumber: attendanceRecord.dayNumber || 1,
+            session: attendanceRecord.session || targetSession,
+            file: imgFile,
+            isExcel: false,
+            folderType: 'attendance'
+          }).catch(err => console.error("[DRIVE-UPLOAD-ASYNC] Attendance photo upload failed:", err));
+        }
+      }
+
+      return res.json({
+        success: true,
+        fileUrls: imageUrls,
+        message: `${imageUrls.length} attendance photo(s) uploaded successfully.`
+      });
+    }
+
+    // --- Handle single photo upload ---
     const photoUrl = `/uploads/attendance/images/${photoFile.filename}`;
     attendanceRecord.attendancePhotoUrl = photoUrl;
     await attendanceRecord.save();

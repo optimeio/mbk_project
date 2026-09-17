@@ -158,9 +158,9 @@ export default function TrainerActivities() {
   const [checkInFile, setCheckInFile] = useState(null);
   const [checkInPreview, setCheckInPreview] = useState(null);
 
-  // Step 2: Student Attendance
-  const [attendanceFile, setAttendanceFile] = useState(null);
-  const [attendanceFilePreview, setAttendanceFilePreview] = useState(null);
+  // Step 2: Student Attendance (supports up to 5 images or 1 document)
+  const [attendanceFiles, setAttendanceFiles] = useState([]);
+  const [attendanceFilePreviews, setAttendanceFilePreviews] = useState([]);
 
   // Step 3: Student Activities
   const [activityTitle, setActivityTitle] = useState('');
@@ -458,21 +458,80 @@ export default function TrainerActivities() {
     }
   };
 
-  // Step 2: Student Attendance Handler
+  // Step 2: Student Attendance Handler (supports multiple images or single document)
+  const handleAttendanceFileChange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Check if any file is a document (non-image)
+    const hasDocument = files.some(f => !f.type.startsWith('image/'));
+
+    if (hasDocument) {
+      // Document mode: only 1 file allowed (PDF/Excel)
+      const docFile = files[0];
+      setAttendanceFiles([docFile]);
+      setAttendanceFilePreviews([null]); // no preview for documents
+      return;
+    }
+
+    // Image mode: up to 5 images total
+    if (attendanceFiles.length + files.length > 5) {
+      toast.error('You can upload a maximum of 5 attendance images.');
+      return;
+    }
+
+    const tId = toast.loading('Optimizing attendance images…');
+    try {
+      const compressedList = [];
+      const previewList = [];
+      for (const file of files) {
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`File ${file.name} exceeds 10MB!`);
+          continue;
+        }
+        const compressed = await compressImage(file);
+        compressedList.push(compressed);
+        previewList.push(URL.createObjectURL(compressed));
+      }
+      setAttendanceFiles((prev) => [...prev, ...compressedList]);
+      setAttendanceFilePreviews((prev) => [...prev, ...previewList]);
+      toast.success('Images added!', { id: tId });
+    } catch (err) {
+      console.error(err);
+      toast.error('Error processing images', { id: tId });
+    }
+  };
+
+  const removeAttendanceFile = (idx) => {
+    setAttendanceFiles((prev) => prev.filter((_, i) => i !== idx));
+    setAttendanceFilePreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleAttendanceSubmit = async (e) => {
     e.preventDefault();
-    if (!attendanceFile) {
-      toast.error('Please upload the student attendance sheet.');
+    if (attendanceFiles.length === 0) {
+      toast.error('Please upload the student attendance sheet or images.');
       return;
     }
     setLoading(true);
     const formData = new FormData();
-    formData.append('attendanceExcel', attendanceFile);
     formData.append('attendanceId', attendanceId);
     const lat = coords?.lat || assignment?.latitude || 0;
     const lng = coords?.lng || assignment?.longitude || 0;
     formData.append('latitude', lat);
     formData.append('longitude', lng);
+
+    // Determine if images or document
+    const isAllImages = attendanceFiles.every(f => f.type?.startsWith('image/'));
+    if (isAllImages && attendanceFiles.length > 0) {
+      // Multiple images → use studentAttendanceImages field
+      attendanceFiles.forEach((img) => {
+        formData.append('studentAttendanceImages', img);
+      });
+    } else {
+      // Single document (PDF/Excel) → use attendanceExcel field
+      formData.append('attendanceExcel', attendanceFiles[0]);
+    }
 
     try {
       const res = await api.post('/student-attendance/upload', formData);
@@ -902,7 +961,7 @@ export default function TrainerActivities() {
                     </div>
                     <div>
                       <h2 className="text-base font-black text-slate-900 dark:text-white">Step 2 — Student Attendance</h2>
-                      <p className="text-xs text-slate-500">Upload the official signed student attendance sheet.</p>
+                      <p className="text-xs text-slate-500">Upload photos of attendance sheet or a PDF/Excel document.</p>
                     </div>
                   </div>
                   <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
@@ -912,72 +971,63 @@ export default function TrainerActivities() {
 
                 <div className="p-6 space-y-5">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-                      Attendance Sheet Document / Photo <span className="text-rose-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        Attendance Sheet Photos / Document <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        {attendanceFiles.length}/{attendanceFiles.length > 0 && !attendanceFiles[0]?.type?.startsWith('image/') ? '1 doc' : '5 images'} uploaded
+                      </span>
+                    </div>
 
-                    {attendanceFilePreview ? (
-                      <div className="relative rounded-2xl border border-slate-200 bg-slate-50 dark:bg-slate-800/40 p-3 text-center">
-                        <div className="relative max-w-sm mx-auto rounded-xl overflow-hidden shadow-md">
-                          <img
-                            src={attendanceFilePreview}
-                            alt="Attendance Sheet Preview"
-                            className="w-full max-h-72 object-cover rounded-xl"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => { setAttendanceFile(null); setAttendanceFilePreview(null); }}
-                            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-lg transition"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <p className="text-xs text-slate-600 font-bold mt-2">
-                          {attendanceFile.name} ({(attendanceFile.size / 1024 / 1024).toFixed(2)} MB)
-                        </p>
-                      </div>
-                    ) : attendanceFile ? (
-                      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 dark:bg-amber-950/30 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <FileSpreadsheet className="h-6 w-6 text-amber-600" />
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">{attendanceFile.name}</p>
-                            <p className="text-xs text-slate-500">{(attendanceFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    {/* Uploaded files grid */}
+                    {attendanceFiles.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
+                        {attendanceFiles.map((file, idx) => (
+                          <div key={`att-${idx}`} className="relative aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden group shadow-sm">
+                            {attendanceFilePreviews[idx] ? (
+                              <img src={attendanceFilePreviews[idx]} alt={`Attendance ${idx + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center p-2">
+                                <FileSpreadsheet className="h-6 w-6 text-amber-600 mb-1" />
+                                <p className="text-[10px] font-bold text-slate-700 text-center truncate w-full">{file.name}</p>
+                                <p className="text-[9px] text-slate-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeAttendanceFile(idx)}
+                              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => { setAttendanceFile(null); setAttendanceFilePreview(null); }}
-                          className="text-xs font-bold text-rose-600 hover:text-rose-700"
-                        >
-                          Change File
-                        </button>
+                        ))}
                       </div>
-                    ) : (
-                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
+                    )}
+
+                    {/* Upload input area — hide when max reached */}
+                    {(attendanceFiles.length === 0 || (attendanceFiles.every(f => f.type?.startsWith('image/')) && attendanceFiles.length < 5)) && (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
                         <input
                           type="file"
+                          multiple
                           accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,image/*"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (!f) return;
-                            setAttendanceFile(f);
-                            setAttendanceFilePreview(f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
-                          }}
+                          onChange={handleAttendanceFileChange}
                           className="hidden"
                         />
-                        <div className="h-12 w-12 rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition shadow-sm">
-                          <FileSpreadsheet className="h-6 w-6" />
-                        </div>
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                          Upload Signed Student Attendance Sheet
+                        <FileSpreadsheet className="h-6 w-6 text-amber-600 mb-1.5 group-hover:scale-110 transition" />
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          {attendanceFiles.length > 0 ? 'Add more attendance images' : 'Upload Signed Student Attendance Sheet'}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1 max-w-xs">
-                          Supports Photo of Physical Sheet, PDF, Excel (.xlsx, .csv).
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {attendanceFiles.length > 0
+                            ? `${5 - attendanceFiles.length} more images allowed (max 10MB each)`
+                            : 'Up to 5 images or 1 PDF/Excel document (max 10MB each)'}
                         </p>
-                        <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shadow-sm group-hover:bg-amber-700">
+                        <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shadow-sm group-hover:bg-amber-700">
                           <UploadCloud className="h-3.5 w-3.5" />
-                          Select Attendance File / Photo
+                          Select Files
                         </span>
                       </label>
                     )}
@@ -986,11 +1036,11 @@ export default function TrainerActivities() {
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                     <button
                       type="submit"
-                      disabled={loading || !attendanceFile}
+                      disabled={loading || attendanceFiles.length === 0}
                       className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      Submit Attendance Sheet
+                      Submit Attendance
                     </button>
                   </div>
                 </div>

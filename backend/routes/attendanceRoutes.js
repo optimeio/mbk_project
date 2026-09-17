@@ -5210,6 +5210,9 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             req.files?.attendanceFile?.[0] ||
             req.files?.studentsPhoto?.[0];
 
+        // 2b. Multiple Student Attendance Images (up to 5)
+        const studentAttendanceImages = req.files?.studentAttendanceImages || [];
+
         // 3. Student Activities (Photos)
         const activityFiles = req.files?.activityPhotos || [];
 
@@ -5234,11 +5237,13 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
 
         const hasStudentDoc = Boolean(
             studentAttendanceFile ||
+            (studentAttendanceImages && studentAttendanceImages.length > 0) ||
             attendance.attendancePdfUrl ||
             attendance.attendanceExcelUrl ||
             attendance.studentsPhotoUrl ||
             attendance.attendancePhotoUrl ||
             attendance.attendanceDocumentUrl ||
+            (Array.isArray(attendance.studentAttendanceImageUrls) && attendance.studentAttendanceImageUrls.length > 0) ||
             schedule.attendancePdfUrl
         );
 
@@ -5317,6 +5322,18 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                 attendance.studentsPhotoUrl = relPath;
                 attendance.attendancePhotoUrl = relPath;
                 attendance.attendanceDocumentUrl = relPath;
+            }
+        }
+
+        // 2b. Store Multiple Student Attendance Images (up to 5)
+        if (studentAttendanceImages && studentAttendanceImages.length > 0) {
+            const imageUrls = studentAttendanceImages.map(f => `/uploads/attendance/images/${path.basename(f.path)}`);
+            attendance.studentAttendanceImageUrls = imageUrls;
+            // Set first image in legacy fields for backward compat
+            if (!studentAttendanceFile && imageUrls.length > 0) {
+                attendance.attendancePhotoUrl = imageUrls[0];
+                attendance.studentsPhotoUrl = imageUrls[0];
+                attendance.attendanceDocumentUrl = imageUrls[0];
             }
         }
 

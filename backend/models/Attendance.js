@@ -363,6 +363,10 @@ const attendanceSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    studentAttendanceImageUrls: {
+        type: [String],
+        default: [],
+    },
     completedAt: {
         type: Date,
         default: null,

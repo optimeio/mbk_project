@@ -1683,6 +1683,7 @@ const TrainerOverallAttendance = () => {
               record.attendancePhoto ||
               record.attendancePhotoUrl ||
               record.studentsPhotoUrl ||
+              (record.studentAttendanceImageUrls && record.studentAttendanceImageUrls.length > 0) ||
               (record.activityPhotos && record.activityPhotos.length > 0)
             );
 

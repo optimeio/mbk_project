@@ -214,6 +214,7 @@ const uploadFields = multer({
     { name: 'attendance_photo', maxCount: 1 },
     { name: 'attendanceFile', maxCount: 1 },
     { name: 'studentsPhoto', maxCount: 1 },
+    { name: 'studentAttendanceImages', maxCount: 5 },
     { name: 'signature', maxCount: 1 },
     { name: 'photo', maxCount: 10 },        // Added plural/singular variations for robustness
     { name: 'photos', maxCount: 10 },

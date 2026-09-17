@@ -650,7 +650,7 @@ function TrainerAttendanceHistory() {
                 const statusNorm = String(record.status || record.attendanceStatus || "").toLowerCase();
 
                 const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkIn?.time || record.checkInTime);
-                const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl || record.attendancePhotoUrl || record.attendanceDocumentUrl);
+                const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl || record.attendancePhotoUrl || record.attendanceDocumentUrl || (Array.isArray(record.studentAttendanceImageUrls) && record.studentAttendanceImageUrls.length > 0));
                 const hasActivities = Boolean(Array.isArray(record.activityPhotos) && record.activityPhotos.length > 0);
                 const hasCheckOut = Boolean(record.checkOutGeoImageUrl || (Array.isArray(record.checkOut?.photos) && record.checkOut.photos.length > 0) || record.checkOutTime || record.checkOut?.time);
 
