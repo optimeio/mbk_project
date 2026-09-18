@@ -69,6 +69,23 @@ export const isScheduleActionableForTrainerWorkflow = (schedule = {}) => {
   return true;
 };
 
+export const getCurrentISTTotalMinutes = (date = new Date()) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(date);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+    const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+    return hour * 60 + minute;
+  } catch {
+    return date.getHours() * 60 + date.getMinutes();
+  }
+};
+
 const getStartOfDay = (value) => {
   if (!value) return null;
   const parsed = value instanceof Date ? new Date(value) : new Date(value);
@@ -288,32 +305,16 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
   const sessionLabel = isFNSession ? "FN Session" : "AN Session";
   const sessionType = schedule?.session ? String(schedule.session).toUpperCase().trim() : (isFNSession ? "FN" : "AN");
 
-  const endTimeVal = schedule?.endTime || (schedule?.time ? String(schedule.time).split("-")[1]?.trim() : (isFNSession || sessionType === "FN" ? "01:00 PM" : "05:30 PM"));
-  const sessionEndObj = parseScheduleEndTime(scheduleDateRaw, endTimeVal);
-
-  // 1-hour check-in cutoff window (e.g. 9:00 AM -> cutoff at 10:00 AM)
-  const checkInCutoffObj = sessionStartObj
-    ? new Date(sessionStartObj.getTime() + 60 * 60 * 1000)
-    : null;
-
-  const isPastCutoffTime = isToday && checkInCutoffObj ? now > checkInCutoffObj : false;
-
-  // FN session hard-closes at 13:30 IST (1:30 PM)
-  // AN session hard-closes at 18:00 IST (6:00 PM)
+  // FN session hard-closes strictly at 13:30 IST (1:30 PM)
+  // AN session hard-closes strictly at 18:00 IST (6:00 PM)
+  // Check-in stays OPEN throughout the forenoon until 1:30 PM (no arbitrary 1-hour early cutoff)
   let isSessionClosedByTime = false;
   if (isToday) {
+    const currentMinsIST = getCurrentISTTotalMinutes(now);
     if (isFNSession || sessionType === "FN") {
-      // FN hard-close: 1:30 PM (13:30)
-      const fnCloseHour = new Date(now);
-      fnCloseHour.setHours(13, 30, 0, 0);
-      isSessionClosedByTime = now >= fnCloseHour;
-    } else if (sessionType === "AN" || !isFNSession) {
-      // AN hard-close: 6:00 PM (18:00)
-      const anCloseHour = new Date(now);
-      anCloseHour.setHours(18, 0, 0, 0);
-      isSessionClosedByTime = now >= anCloseHour;
-    } else if (sessionEndObj) {
-      isSessionClosedByTime = now >= sessionEndObj;
+      isSessionClosedByTime = currentMinsIST >= 13 * 60 + 30; // 1:30 PM IST
+    } else {
+      isSessionClosedByTime = currentMinsIST >= 18 * 60; // 6:00 PM IST
     }
   }
 
@@ -376,16 +377,11 @@ export const buildScheduleUiState = (schedule = {}, referenceDate = new Date()) 
     normalizedScheduleStatus === "rescheduled" ||
     normalizedScheduleStatus === "assigned"
   ) {
-    if (isSessionClosedByTime && !isCompleted) {
-      primaryAction = {
-        kind: "expired-info",
-        label: `Absent - ${sessionLabel} Closed (Time Passed)`,
-      };
-    } else if (isToday) {
-      if (isPastCutoffTime) {
+    if (isToday) {
+      if (isSessionClosedByTime) {
         primaryAction = {
           kind: "late-checkin",
-          label: `Request Approval to Check-In (${sessionLabel})`,
+          label: `Request Attendance (${sessionLabel} Closed)`,
           isLate: true,
         };
       } else {

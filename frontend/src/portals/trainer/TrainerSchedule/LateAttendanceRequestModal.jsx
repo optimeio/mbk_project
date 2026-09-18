@@ -154,8 +154,8 @@ function LateAttendanceRequestModal({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (studentDocs.length + files.length > 5) {
-      if (showToast) showToast("warning", "Maximum 5 files allowed for student attendance.");
+    if (studentDocs.length + files.length > 4) {
+      if (showToast) showToast("warning", "Maximum 4 files allowed for student attendance.");
       return;
     }
 
@@ -249,11 +249,30 @@ function LateAttendanceRequestModal({
 
     try {
       setIsSubmitting(true);
-      const scheduleId = selectedSchedule?.id || selectedSchedule?._id || selectedSchedule?.scheduleId?._id || selectedSchedule?.scheduleId;
+      // Resolve both Schedule ID and Attendance ID robustly
+      let actualScheduleId = null;
+      let actualAttendanceId = null;
+
+      if (selectedSchedule?.scheduleId) {
+        actualScheduleId = typeof selectedSchedule.scheduleId === 'object'
+          ? (selectedSchedule.scheduleId?._id || selectedSchedule.scheduleId?.id)
+          : selectedSchedule.scheduleId;
+        actualAttendanceId = selectedSchedule._id || selectedSchedule.id;
+      } else if (selectedSchedule?.rawSchedule?._id) {
+        actualScheduleId = selectedSchedule.rawSchedule._id;
+        actualAttendanceId = selectedSchedule.attendance?._id || selectedSchedule._id;
+      } else {
+        actualScheduleId = selectedSchedule?.id || selectedSchedule?._id;
+        actualAttendanceId = selectedSchedule?.attendance?._id || selectedSchedule?.attendanceId;
+      }
+
       const formData = new FormData();
 
-      if (scheduleId) {
-        formData.append("scheduleId", scheduleId);
+      if (actualScheduleId) {
+        formData.append("scheduleId", actualScheduleId);
+      }
+      if (actualAttendanceId) {
+        formData.append("attendanceId", actualAttendanceId);
       }
       formData.append("reason", reason.trim());
       formData.append("session", sessionLabel.includes("AN") ? "AN" : "FN");
@@ -501,7 +520,7 @@ function LateAttendanceRequestModal({
                 )}
               </div>
 
-              {/* Proof 2: Students Attendance Sheet (multi-image up to 5 or PDF/Excel docs) */}
+              {/* Proof 2: Students Attendance Sheet (multi-image up to 4 or PDF/Excel docs) */}
               <div className={`border rounded-xl p-3.5 transition space-y-2.5 ${isStudentDocAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
@@ -514,7 +533,7 @@ function LateAttendanceRequestModal({
                     </span>
                   ) : studentDocs.length > 0 ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {studentDocs.length}/5 File(s) Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {studentDocs.length}/4 File(s) Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -591,7 +610,7 @@ function LateAttendanceRequestModal({
                     )}
 
                     {/* Upload Dropzone / Add More Button */}
-                    {studentDocs.length < 5 ? (
+                    {studentDocs.length < 4 ? (
                       <label className={`border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-blue-50/30 transition group ${studentDocs.length > 0 ? 'py-2' : 'py-3.5'}`}>
                         <input
                           type="file"
@@ -604,20 +623,20 @@ function LateAttendanceRequestModal({
                           {studentDocs.length > 0 ? (
                             <>
                               <Plus className="h-4 w-4 text-blue-600" />
-                              <span className="text-xs font-bold text-blue-700">Add More Files ({5 - studentDocs.length} remaining)</span>
+                              <span className="text-xs font-bold text-blue-700">Add More Files ({4 - studentDocs.length} remaining)</span>
                             </>
                           ) : (
                             <div className="flex flex-col items-center">
                               <UploadCloud className="h-6 w-6 text-blue-500 mb-1 group-hover:scale-110 transition" />
                               <p className="text-xs font-bold text-slate-800">Select Attendance Files</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">Images (up to 5) or PDF / Excel sheets</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Images (up to 4) or PDF / Excel sheets</p>
                             </div>
                           )}
                         </div>
                       </label>
                     ) : (
                       <p className="text-[11px] text-emerald-600 font-semibold text-center py-1 bg-emerald-50 rounded-lg">
-                        ✓ Maximum 5 files reached
+                        ✓ Maximum 4 files reached
                       </p>
                     )}
                   </div>

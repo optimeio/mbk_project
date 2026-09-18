@@ -1751,6 +1751,10 @@ const collectAttendanceFilesForDriveSync = (attendance) => {
         pushFile('studentsPhoto', attendance.studentsPhotoUrl);
     }
 
+    if (Array.isArray(attendance.studentAttendanceImageUrls) && attendance.studentAttendanceImageUrls.length > 0) {
+        pushMany('studentAttendanceImages', attendance.studentAttendanceImageUrls);
+    }
+
     if (attendance.attendanceExcelUrl || attendance.studentAttendanceExcelUrl || attendance.attendanceSheetUrl) {
         const excelRef = String(attendance.attendanceExcelUrl || attendance.studentAttendanceExcelUrl || attendance.attendanceSheetUrl).trim();
         const excelPath = normalizeStoredLocalPath(excelRef)
@@ -2352,6 +2356,11 @@ const checkInHandler = async (req, res) => {
         if (req.files?.signature && req.files.signature[0]) {
             signatureUrl = `/uploads/attendance/signatures/${req.files.signature[0].filename}`;
         }
+        const studentAttendanceFiles = req.files?.studentAttendanceImages || [];
+        let studentAttendanceImageUrls = [];
+        if (studentAttendanceFiles.length > 0) {
+            studentAttendanceImageUrls = studentAttendanceFiles.map(f => `/uploads/attendance/images/${f.filename}`);
+        }
 
         // Parse student list if provided
         let students = [];
@@ -2426,6 +2435,14 @@ const checkInHandler = async (req, res) => {
             }
             if (attendancePdfUrl) attendance.attendancePdfUrl = attendancePdfUrl;
             if (attendanceExcelUrl) attendance.attendanceExcelUrl = attendanceExcelUrl;
+            if (studentAttendanceImageUrls.length > 0) {
+                attendance.studentAttendanceImageUrls = studentAttendanceImageUrls;
+                if (!attendancePdfUrl && !attendanceExcelUrl) {
+                    attendance.studentsPhotoUrl = studentAttendanceImageUrls[0];
+                    attendance.attendancePhotoUrl = studentAttendanceImageUrls[0];
+                    attendance.attendanceDocumentUrl = studentAttendanceImageUrls[0];
+                }
+            }
             if (signatureUrl) attendance.signatureUrl = signatureUrl;
             if (latitude) attendance.latitude = latitude;
             if (longitude) attendance.longitude = longitude;
@@ -2513,6 +2530,10 @@ const checkInHandler = async (req, res) => {
                 imageUrl: checkInImageUrl || null, // legacy compatibility
                 attendancePdfUrl,
                 attendanceExcelUrl,
+                studentAttendanceImageUrls: studentAttendanceImageUrls.length > 0 ? studentAttendanceImageUrls : [],
+                studentsPhotoUrl: (!attendancePdfUrl && !attendanceExcelUrl && studentAttendanceImageUrls.length > 0) ? studentAttendanceImageUrls[0] : null,
+                attendancePhotoUrl: (!attendancePdfUrl && !attendanceExcelUrl && studentAttendanceImageUrls.length > 0) ? studentAttendanceImageUrls[0] : null,
+                attendanceDocumentUrl: (!attendancePdfUrl && !attendanceExcelUrl && studentAttendanceImageUrls.length > 0) ? studentAttendanceImageUrls[0] : null,
                 latitude: latitude || (checkInLocation?.lat || null),
                 longitude: longitude || (checkInLocation?.lng || null),
                 uploadedBy: 'trainer',
@@ -5139,28 +5160,75 @@ router.post('/student-records', authenticate, uploadAttendance, async (req, res)
 // POST /attendance/late-request - Trainer submits late attendance request with all 4 proofs
 router.post('/late-request', authenticate, uploadAttendance, async (req, res) => {
     try {
-        const { scheduleId, session, reason, lateRequestReason } = req.body;
+        const { scheduleId, attendanceId, session, reason, lateRequestReason } = req.body;
         const requestReason = String(reason || lateRequestReason || '').trim();
 
-        if (!scheduleId) {
-            return res.status(400).json({ success: false, message: 'Schedule ID is required' });
+        if (!scheduleId && !attendanceId) {
+            return res.status(400).json({ success: false, message: 'Schedule ID or Attendance ID is required' });
         }
 
         if (!requestReason) {
             return res.status(400).json({ success: false, message: 'Reason for late attendance request is required' });
         }
 
-        const schedule = await Schedule.findById(scheduleId)
-            .populate('collegeId')
-            .populate('courseId')
-            .populate('trainerId');
+        let schedule = null;
+        let attendance = null;
 
-        if (!schedule) {
-            return res.status(404).json({ success: false, message: 'Schedule not found' });
+        // 1. Try finding schedule by scheduleId
+        if (scheduleId && mongoose.Types.ObjectId.isValid(String(scheduleId))) {
+            schedule = await Schedule.findById(scheduleId)
+                .populate('collegeId')
+                .populate('courseId')
+                .populate('trainerId');
+        }
+
+        // 2. If schedule was not found by scheduleId, check if scheduleId (or attendanceId) is an Attendance document ID
+        const targetAttId = attendanceId || scheduleId;
+        if (targetAttId && mongoose.Types.ObjectId.isValid(String(targetAttId))) {
+            const attDoc = await Attendance.findById(targetAttId)
+                .populate('collegeId')
+                .populate('courseId')
+                .populate('trainerId')
+                .populate('scheduleId');
+
+            if (attDoc) {
+                attendance = attDoc;
+                if (!schedule && attendance.scheduleId) {
+                    if (typeof attendance.scheduleId === 'object' && attendance.scheduleId?._id) {
+                        schedule = attendance.scheduleId;
+                    } else if (mongoose.Types.ObjectId.isValid(String(attendance.scheduleId))) {
+                        schedule = await Schedule.findById(attendance.scheduleId)
+                            .populate('collegeId')
+                            .populate('courseId')
+                            .populate('trainerId');
+                    }
+                }
+            }
+        }
+
+        // 3. If schedule still not found, try finding schedule by trainer + college + dayNumber
+        if (!schedule && attendance) {
+            const tId = attendance.trainerId?._id || attendance.trainerId;
+            const cId = attendance.collegeId?._id || attendance.collegeId;
+            if (tId && cId) {
+                schedule = await Schedule.findOne({
+                    trainerId: tId,
+                    collegeId: cId,
+                    dayNumber: attendance.dayNumber || 1,
+                })
+                .populate('collegeId')
+                .populate('courseId')
+                .populate('trainerId');
+            }
+        }
+
+        // 4. If neither schedule nor attendance could be resolved, return 404
+        if (!schedule && !attendance) {
+            return res.status(404).json({ success: false, message: 'Schedule or attendance record not found' });
         }
 
         // Verify trainer identity if role is trainer
-        let trainerId = schedule.trainerId?._id || schedule.trainerId;
+        let trainerId = schedule?.trainerId?._id || schedule?.trainerId || attendance?.trainerId?._id || attendance?.trainerId;
         if (req.user?.role === 'trainer') {
             const trainerDoc = await Trainer.findOne({ userId: req.user.id });
             if (trainerDoc) {
@@ -5168,27 +5236,33 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             }
         }
 
-        // Find existing attendance or create new
-        let attendance = await Attendance.findOne({ scheduleId }).sort({ createdAt: -1 });
+        // 5. Find existing attendance or create new
+        if (!attendance && schedule) {
+            attendance = await Attendance.findOne({ scheduleId: schedule._id }).sort({ createdAt: -1 });
+        }
+
         if (!attendance) {
             attendance = new Attendance({
-                scheduleId,
+                scheduleId: schedule?._id || null,
                 trainerId,
-                collegeId: schedule.collegeId?._id || schedule.collegeId,
-                courseId: schedule.courseId?._id || schedule.courseId,
-                batchId: schedule.batchId || null,
-                dayNumber: schedule.dayNumber,
-                assignedDate: normalizeAssignedDateInput(schedule.scheduledDate),
-                date: schedule.scheduledDate || new Date(),
+                collegeId: schedule?.collegeId?._id || schedule?.collegeId,
+                courseId: schedule?.courseId?._id || schedule?.courseId,
+                batchId: schedule?.batchId || null,
+                dayNumber: schedule?.dayNumber || 1,
+                assignedDate: normalizeAssignedDateInput(schedule?.scheduledDate),
+                date: schedule?.scheduledDate || new Date(),
             });
         } else {
-            if (!attendance.courseId && schedule.courseId) {
+            if (!attendance.scheduleId && schedule?._id) {
+                attendance.scheduleId = schedule._id;
+            }
+            if (!attendance.courseId && schedule?.courseId) {
                 attendance.courseId = schedule.courseId?._id || schedule.courseId;
             }
-            if (!attendance.collegeId && schedule.collegeId) {
+            if (!attendance.collegeId && schedule?.collegeId) {
                 attendance.collegeId = schedule.collegeId?._id || schedule.collegeId;
             }
-            if (!attendance.dayNumber && schedule.dayNumber) {
+            if (!attendance.dayNumber && schedule?.dayNumber) {
                 attendance.dayNumber = schedule.dayNumber;
             }
         }
@@ -5223,7 +5297,6 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             req.files?.check_out_image?.[0] ||
             req.files?.clock_out_image?.[0] ||
             req.files?.checkOutGeoImage?.[0];
-
         const hasCheckIn = Boolean(
             checkInFile ||
             attendance.imageUrl ||
@@ -5231,8 +5304,8 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             attendance.checkInImage ||
             attendance.checkInTime ||
             attendance.checkIn?.time ||
-            schedule.checkInImage ||
-            schedule.checkInTime
+            schedule?.checkInImage ||
+            schedule?.checkInTime
         );
 
         const hasStudentDoc = Boolean(
@@ -5244,13 +5317,13 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             attendance.attendancePhotoUrl ||
             attendance.attendanceDocumentUrl ||
             (Array.isArray(attendance.studentAttendanceImageUrls) && attendance.studentAttendanceImageUrls.length > 0) ||
-            schedule.attendancePdfUrl
+            schedule?.attendancePdfUrl
         );
 
         const hasActivities = Boolean(
             (activityFiles && activityFiles.length > 0) ||
             (Array.isArray(attendance.activityPhotos) && attendance.activityPhotos.length > 0) ||
-            (Array.isArray(schedule.activityPhotos) && schedule.activityPhotos.length > 0)
+            (Array.isArray(schedule?.activityPhotos) && schedule.activityPhotos.length > 0)
         );
 
         const hasCheckOut = Boolean(
@@ -5259,7 +5332,7 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
             (attendance.checkOut && Array.isArray(attendance.checkOut.photos) && attendance.checkOut.photos.length > 0) ||
             attendance.checkOutTime ||
             attendance.checkOut?.time ||
-            schedule.checkOut?.time
+            schedule?.checkOut?.time
         );
 
         const missingProofs = [];
@@ -5277,7 +5350,7 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         }
 
         // Normalize session
-        const requestSession = String(session || schedule.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN';
+        const requestSession = String(session || schedule?.session || 'FN').toUpperCase().includes('AN') ? 'AN' : 'FN';
         attendance.session = requestSession;
         attendance.isLateRequest = true;
         attendance.lateRequestReason = requestReason;
@@ -5299,9 +5372,9 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                 attendance.checkIn = {
                     time: new Date(),
                     location: {
-                        address: schedule.collegeLocation?.address || null,
-                        lat: schedule.collegeLocation?.lat || null,
-                        lng: schedule.collegeLocation?.lng || null,
+                        address: schedule?.collegeLocation?.address || null,
+                        lat: schedule?.collegeLocation?.lat || null,
+                        lng: schedule?.collegeLocation?.lng || null,
                     }
                 };
             }
@@ -5354,9 +5427,9 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                 time: new Date(),
                 finalStatus: 'PENDING',
                 location: {
-                    address: schedule.collegeLocation?.address || null,
-                    lat: schedule.collegeLocation?.lat || null,
-                    lng: schedule.collegeLocation?.lng || null,
+                    address: schedule?.collegeLocation?.address || null,
+                    lat: schedule?.collegeLocation?.lat || null,
+                    lng: schedule?.collegeLocation?.lng || null,
                 },
                 photos: [{
                     url: relPath,
@@ -5369,11 +5442,13 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         await attendance.save();
 
         // Update schedule flags
-        schedule.status = 'inprogress';
-        schedule.attendanceUploaded = true;
-        schedule.geoTagUploaded = true;
-        schedule.dayStatus = 'pending';
-        await schedule.save();
+        if (schedule) {
+            schedule.status = 'inprogress';
+            schedule.attendanceUploaded = true;
+            schedule.geoTagUploaded = true;
+            schedule.dayStatus = 'pending';
+            await schedule.save();
+        }
 
         if (trainerId) {
             invalidateTrainerScheduleCaches([trainerId]).catch(() => {});
@@ -5389,11 +5464,11 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
         // ── Background Async Google Drive Upload (Non-blocking) ──
         (async () => {
             try {
-                const targetTrainer = schedule.trainerId;
-                const targetCollegeId = schedule.collegeId?._id || schedule.collegeId;
-                const targetScheduleId = schedule._id;
+                const targetTrainer = schedule?.trainerId || attendance?.trainerId;
+                const targetCollegeId = schedule?.collegeId?._id || schedule?.collegeId || attendance?.collegeId?._id || attendance?.collegeId;
+                const targetScheduleId = schedule?._id || attendance?.scheduleId;
                 const targetAttendanceId = attendance._id;
-                const targetDayNumber = schedule.dayNumber || 1;
+                const targetDayNumber = schedule?.dayNumber || attendance?.dayNumber || 1;
 
                 if (checkInFile) {
                     uploadTrainerSessionFileToDrive({
@@ -5430,11 +5505,14 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                         folderType: 'attendance',
                         file: studentAttendanceFile,
                     }).then(result => {
-                        const dUrl = result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null);
+                        const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
+                        const isPdf = docExt === '.pdf';
+                        const dUrl = isPdf
+                            ? (result?.webViewLink || (result?.id ? `https://drive.google.com/file/d/${result.id}/view` : result?.previewUrl || result?.fileUrl))
+                            : (result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null));
                         if (dUrl) {
-                            const docExt = path.extname(studentAttendanceFile.originalname || '').toLowerCase();
                             const updateFields = {};
-                            if (docExt === '.pdf') updateFields.attendancePdfUrl = dUrl;
+                            if (isPdf) updateFields.attendancePdfUrl = dUrl;
                             else if (['.xls', '.xlsx', '.csv'].includes(docExt)) updateFields.attendanceExcelUrl = dUrl;
                             else {
                                 updateFields.studentsPhotoUrl = dUrl;
@@ -5444,6 +5522,34 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                             Attendance.findByIdAndUpdate(targetAttendanceId, { $set: updateFields }).catch(() => {});
                         }
                     }).catch(err => console.warn('[ASYNC-DRIVE] Late attendance doc upload failed:', err.message));
+                }
+
+                if (studentAttendanceImages && studentAttendanceImages.length > 0) {
+                    for (const imgFile of studentAttendanceImages) {
+                        const localRel = `/uploads/attendance/images/${path.basename(imgFile.path)}`;
+                        uploadTrainerSessionFileToDrive({
+                            trainer: targetTrainer,
+                            collegeId: targetCollegeId,
+                            scheduleId: targetScheduleId,
+                            attendanceId: targetAttendanceId,
+                            dayNumber: targetDayNumber,
+                            session: requestSession,
+                            folderType: 'attendance',
+                            file: imgFile,
+                        }).then(result => {
+                            const dUrl = result?.previewUrl || result?.fileUrl || (result?.id ? `https://lh3.googleusercontent.com/d/${result.id}=w1200` : null);
+                            if (dUrl) {
+                                Attendance.findById(targetAttendanceId).then(att => {
+                                    if (att) {
+                                        const urls = (att.studentAttendanceImageUrls || []).map(u => u === localRel ? dUrl : u);
+                                        if (!urls.includes(dUrl)) urls.push(dUrl);
+                                        att.studentAttendanceImageUrls = Array.from(new Set(urls.filter(Boolean)));
+                                        return att.save();
+                                    }
+                                }).catch(() => {});
+                            }
+                        }).catch(err => console.warn('[ASYNC-DRIVE] Late student attendance image upload failed:', err.message));
+                    }
                 }
 
                 if (activityFiles && activityFiles.length > 0) {
@@ -5498,6 +5604,12 @@ router.post('/late-request', authenticate, uploadAttendance, async (req, res) =>
                         }
                     }).catch(err => console.warn('[ASYNC-DRIVE] Late checkout upload failed:', err.message));
                 }
+
+                // Also queue Drive Sync to populate canonical driveAssets
+                queueStoredAttendanceDriveSync({
+                    attendanceId: targetAttendanceId,
+                    contextLabel: 'late-request'
+                });
             } catch (bgErr) {
                 console.warn('[LATE-REQUEST-BG] Background drive task error:', bgErr.message);
             }

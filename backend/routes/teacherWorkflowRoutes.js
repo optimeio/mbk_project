@@ -60,15 +60,14 @@ const findTrainerSafely = async (reqUser, populateUser = false) => {
   return trainer;
 };
 
-function getCurrentISTTotalMinutes() {
-  const now = new Date();
+function getCurrentISTTotalMinutes(date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-IN', {
     timeZone: 'Asia/Kolkata',
     hour: 'numeric',
     minute: 'numeric',
     hour12: false,
   });
-  const parts = formatter.formatToParts(now);
+  const parts = formatter.formatToParts(date);
   const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
   const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
   return hour * 60 + minute;
@@ -459,7 +458,7 @@ router.post("/attendance/clock-in", authenticate, uploadAttendance, async (req, 
 
     const checkInTime = timestamp ? new Date(timestamp) : new Date();
     const checkInDateObj = new Date(checkInTime);
-    const checkInMins = checkInDateObj.getHours() * 60 + checkInDateObj.getMinutes();
+    const checkInMins = getCurrentISTTotalMinutes(checkInDateObj);
 
     // Resolve schedule: either from explicit scheduleId or by time window (FN before 1:30 PM, AN after 1:30 PM)
     const { Schedule } = require("../models");

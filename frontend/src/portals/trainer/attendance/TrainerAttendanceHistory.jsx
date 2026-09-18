@@ -916,7 +916,14 @@ function TrainerAttendanceHistory() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setRequestModalSchedule(record.scheduleId || record)}
+                              onClick={() => setRequestModalSchedule({
+                                ...(typeof record.scheduleId === 'object' ? record.scheduleId : {}),
+                                ...record,
+                                attendanceId: record._id,
+                                scheduleId: typeof record.scheduleId === 'object' ? record.scheduleId?._id : (record.scheduleId || null),
+                                attendance: record,
+                                attendanceRecord: record
+                              })}
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#0f3f5c] hover:bg-[#1a6b9e] text-white shadow-sm transition active:scale-95 cursor-pointer"
                             >
                               <Clock className="h-3.5 w-3.5" />

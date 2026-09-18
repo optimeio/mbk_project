@@ -227,17 +227,24 @@ const buildDayUploadStatus = (schedule, attendance) => {
     const sessionType = schedule?.session || 'FULL_DAY';
     let isPast = false;
     if (schedule?.scheduledDate) {
-        const scheduledDate = new Date(schedule.scheduledDate);
-        scheduledDate.setHours(0, 0, 0, 0);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (scheduledDate < today) {
+        const scheduledDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(schedule.scheduledDate));
+        const todayDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+        if (scheduledDateStr < todayDateStr) {
             isPast = true;
-        } else if (scheduledDate.getTime() === today.getTime()) {
-            const currentMins = new Date().getHours() * 60 + new Date().getMinutes();
-            if (sessionType === 'FN' && currentMins >= 13 * 60) isPast = true;
-            if (sessionType === 'AN' && currentMins >= 17 * 60) isPast = true;
-            if (sessionType === 'FULL_DAY' && currentMins >= 17 * 60) isPast = true;
+        } else if (scheduledDateStr === todayDateStr) {
+            const formatter = new Intl.DateTimeFormat('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: false,
+            });
+            const parts = formatter.formatToParts(new Date());
+            const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+            const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+            const currentMins = hour * 60 + minute;
+            if (sessionType === 'FN' && currentMins >= 13 * 60 + 30) isPast = true;
+            if (sessionType === 'AN' && currentMins >= 18 * 60) isPast = true;
+            if (sessionType === 'FULL_DAY' && currentMins >= 18 * 60) isPast = true;
         }
     }
 

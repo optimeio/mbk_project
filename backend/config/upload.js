@@ -114,6 +114,7 @@ const multiStorage = multer.diskStorage({
             file.fieldname === 'attendancePhoto' ||
             file.fieldname === 'attendance_photo' ||
             file.fieldname === 'attendanceFile' ||
+            file.fieldname === 'studentAttendanceImages' ||
             file.fieldname === 'checkOutGeoImage' ||
             file.fieldname === 'photo' ||
             file.fieldname === 'check_in_image' ||
@@ -140,7 +141,7 @@ const fileMatchesAllowedType = (file, allowedExtensions, allowedMimeTypes) => {
     return allowedExtensions.has(extname) || allowedMimeTypes.has(mimetype);
 };
 
-const UNIFIED_ATTENDANCE_FIELDS = new Set(['attendanceDocument', 'attendanceFile', 'file', 'document']);
+const UNIFIED_ATTENDANCE_FIELDS = new Set(['attendanceDocument', 'attendanceFile', 'file', 'document', 'studentAttendanceImages']);
 const ALL_ATTENDANCE_EXTENSIONS = new Set([...PDF_EXTENSIONS, ...EXCEL_EXTENSIONS, ...IMAGE_EXTENSIONS]);
 const ALL_ATTENDANCE_MIME_TYPES = new Set([...PDF_MIME_TYPES, ...EXCEL_MIME_TYPES, ...IMAGE_MIME_TYPES]);
 
@@ -214,7 +215,7 @@ const uploadFields = multer({
     { name: 'attendance_photo', maxCount: 1 },
     { name: 'attendanceFile', maxCount: 1 },
     { name: 'studentsPhoto', maxCount: 1 },
-    { name: 'studentAttendanceImages', maxCount: 5 },
+    { name: 'studentAttendanceImages', maxCount: 10 },
     { name: 'signature', maxCount: 1 },
     { name: 'photo', maxCount: 10 },        // Added plural/singular variations for robustness
     { name: 'photos', maxCount: 10 },

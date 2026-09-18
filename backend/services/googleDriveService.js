@@ -1325,6 +1325,15 @@ const validateDriveConfiguration = async () => {
   }
 };
 
+const streamDriveFile = async (fileId) => {
+  const drive = await getDriveClient();
+  const response = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream' }
+  );
+  return response.data;
+};
+
 module.exports = {
   DEFAULT_TRAINER_DOCUMENTS_FOLDER_ID,
   getDefaultTrainerDocumentsFolderId,
@@ -1347,4 +1356,6 @@ module.exports = {
   uploadToDriveWithRetry,
   deleteFromDrive,
   validateDriveConfiguration,
+  getDriveClient,
+  streamDriveFile,
 };

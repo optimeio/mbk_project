@@ -7,7 +7,43 @@ import {
   CheckCircleIcon,
   MapPinIcon,
   XCircleIcon,
+  PhotoIcon,
+  XMarkIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
+import {
+  FileText,
+  FileSpreadsheet,
+  UploadCloud,
+  Plus,
+  Trash2,
+  FileCode2,
+} from "lucide-react";
+
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+};
+
+const detectFileType = (file) => {
+  if (!file) return { kind: "unknown", label: "File", isImage: false };
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+
+  if (type.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp|heic|svg)$/i.test(name)) {
+    return { kind: "image", label: "Image", isImage: true };
+  }
+  if (type.includes("pdf") || /\.pdf$/i.test(name)) {
+    return { kind: "pdf", label: "PDF Document", isImage: false };
+  }
+  if (type.includes("sheet") || type.includes("excel") || type.includes("csv") || /\.(xlsx|xls|csv)$/i.test(name)) {
+    return { kind: "excel", label: "Excel Sheet", isImage: false };
+  }
+  return { kind: "doc", label: "Document", isImage: false };
+};
 
 const optimizeImage = (file) =>
   new Promise((resolve) => {
@@ -165,16 +201,56 @@ const CheckInModal = ({
         type: "application/pdf",
       });
 
-      setAttendanceData((previous) => ({
-        ...previous,
-        attendancePdf: pdfFile,
-      }));
+      setAttendanceData((previous) => {
+        const existing = Array.isArray(previous.studentAttendanceFiles) ? previous.studentAttendanceFiles : [];
+        const nextFiles = existing.length < 4 ? [...existing, pdfFile] : existing;
+        return {
+          ...previous,
+          attendancePdf: pdfFile,
+          studentAttendanceFiles: nextFiles,
+        };
+      });
       setScannedImages([]);
     } catch (error) {
       console.error("Error generating PDF:", error);
     } finally {
       setIsGeneratingPdf(false);
     }
+  };
+
+  const [previewModalUrl, setPreviewModalUrl] = useState(null);
+
+  const studentFiles = Array.isArray(attendanceData.studentAttendanceFiles)
+    ? attendanceData.studentAttendanceFiles
+    : [];
+
+  const handleStudentFilesChange = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    if (studentFiles.length + files.length > 4) {
+      alert("Maximum 4 files allowed for student attendance proofs.");
+      return;
+    }
+
+    const updated = [...studentFiles, ...files];
+    setAttendanceData((previous) => ({
+      ...previous,
+      studentAttendanceFiles: updated,
+      attendancePdf: updated.find(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) || previous.attendancePdf,
+      attendanceExcel: updated.find(f => ['.xlsx', '.xls', '.csv'].some(ext => f.name.toLowerCase().endsWith(ext))) || previous.attendanceExcel,
+    }));
+    event.target.value = "";
+  };
+
+  const removeStudentFile = (index) => {
+    const updated = studentFiles.filter((_, i) => i !== index);
+    setAttendanceData((previous) => ({
+      ...previous,
+      studentAttendanceFiles: updated,
+      attendancePdf: updated.find(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) || null,
+      attendanceExcel: updated.find(f => ['.xlsx', '.xls', '.csv'].some(ext => f.name.toLowerCase().endsWith(ext))) || null,
+    }));
   };
 
   const isLateRequest = Boolean(
@@ -188,7 +264,9 @@ const CheckInModal = ({
       <div className="dashboard-modal-panel h-full w-full overflow-y-auto bg-white p-4 sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:rounded-xl sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
-            {isLateRequest ? "Request Attendance (Past Date)" : "Check In"}
+            {isLateRequest
+              ? (selectedSchedule?.ui?.isPastDate ? "Request Attendance (Past Date)" : "Request Attendance (Session Closed)")
+              : "Check In"}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <XCircleIcon className="h-6 w-6" />
@@ -350,127 +428,165 @@ const CheckInModal = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Student Attendance (PDF)</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative">
-                <button className="w-full flex items-center justify-center gap-2 px-3 py-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all group">
-                  <div className="text-center">
-                    <ArrowRightOnRectangleIcon className="h-6 w-6 mx-auto text-gray-400 group-hover:text-indigo-600 transform -rotate-90" />
-                    <span className="block text-xs font-medium text-gray-600 mt-1">Upload PDF</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(event) =>
-                      setAttendanceData((previous) => ({
-                        ...previous,
-                        attendancePdf: event.target.files?.[0] || null,
-                      }))}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </button>
-              </div>
-
-              <div className="w-full flex flex-col gap-2">
-                <div className="relative">
-                  <button className="w-full flex items-center justify-center gap-2 px-3 py-4 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50/50 hover:border-indigo-500 hover:bg-indigo-50 transition-all group">
-                    <div className="text-center">
-                      <PhotoIcon className="h-6 w-6 mx-auto text-indigo-400 group-hover:text-indigo-600" />
-                      <span className="block text-xs font-medium text-indigo-600 mt-1">
-                        {scannedImages.length ? `Add Page (${scannedImages.length} uploaded)` : "Upload Attendance Page Photo"}
-                      </span>
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/jpg,image/webp,.jpg,.jpeg,.png,.webp"
-                      onChange={handlePdfScan}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                  </button>
-                </div>
-
-                {scannedImages.length ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={generatePdfFromImages}
-                      disabled={isGeneratingPdf}
-                      className={`w-full py-2 rounded-lg text-xs font-bold shadow-sm transition-all ${
-                        isGeneratingPdf
-                          ? "bg-gray-400 text-white cursor-not-allowed"
-                          : "bg-indigo-600 text-white hover:bg-indigo-700"
-                      }`}
-                    >
-                      {isGeneratingPdf ? (
-                        <span className="flex items-center justify-center">
-                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full mr-2" />
-                          Creating PDF...
-                        </span>
-                      ) : "Finish Scan & Create PDF"}
-                    </button>
-
-                    {!isGeneratingPdf ? (
-                      <button
-                        type="button"
-                        onClick={() => setScannedImages([])}
-                        className="w-full py-1 text-[10px] text-gray-500 hover:text-red-500 font-medium transition-colors"
-                      >
-                        Clear All Pages
-                      </button>
-                    ) : null}
-                  </>
-                ) : null}
+          {/* Student Attendance Proofs: Up to 4 files (Images, PDFs, Excel) with preview */}
+          <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-indigo-600" />
+                Student Attendance (Up to 4 Files)
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href="/reference-images/student-attendance-reference.jpg"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  View Sample
+                </a>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  studentFiles.length > 0
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {studentFiles.length}/4 Selected
+                </span>
               </div>
             </div>
 
-            {attendanceData.attendancePdf ? (
-              <div className="mt-3 flex items-center justify-between p-2 bg-green-50 border border-green-100 rounded-lg">
-                <div className="flex items-center">
-                  <CheckCircleIcon className="h-4 w-4 text-green-500 mr-2" />
-                  <span className="text-xs text-green-700 font-medium truncate max-w-[150px]">
-                    {attendanceData.attendancePdf.name}
-                  </span>
-                </div>
-                <button
-                  onClick={() =>
-                    setAttendanceData((previous) => ({ ...previous, attendancePdf: null }))}
-                  className="text-xs text-red-500 hover:text-red-700 font-bold"
-                >
-                  X
-                </button>
+            {/* Selected files preview grid (Images, PDFs, Excels) */}
+            {studentFiles.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                {studentFiles.map((file, i) => {
+                  const typeInfo = detectFileType(file);
+                  const fileObjectUrl = typeInfo.isImage ? URL.createObjectURL(file) : null;
+                  return (
+                    <div
+                      key={i}
+                      className="relative rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-xs hover:border-indigo-300 transition"
+                    >
+                      <div className="aspect-square bg-slate-100 overflow-hidden flex items-center justify-center relative">
+                        {typeInfo.isImage && fileObjectUrl ? (
+                          <>
+                            <img
+                              src={fileObjectUrl}
+                              alt={file.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPreviewModalUrl(fileObjectUrl)}
+                              className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition cursor-pointer"
+                              title="Click to preview fullscreen"
+                            >
+                              <EyeIcon className="h-5 w-5 drop-shadow" />
+                            </button>
+                          </>
+                        ) : typeInfo.kind === "pdf" ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-red-50 text-red-600">
+                            <FileText className="w-6 h-6 mb-1 text-red-500" />
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-red-100 text-red-700 px-1.5 py-0.5 rounded">PDF</span>
+                          </div>
+                        ) : typeInfo.kind === "excel" ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-emerald-50 text-emerald-600">
+                            <FileSpreadsheet className="w-6 h-6 mb-1 text-emerald-600" />
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">XLS</span>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-blue-50 text-blue-600">
+                            <FileCode2 className="w-6 h-6 mb-1 text-blue-600" />
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">DOC</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-1.5 bg-white border-t border-slate-100">
+                        <p className="text-[10px] font-bold text-slate-800 truncate" title={file.name}>
+                          {file.name}
+                        </p>
+                        <p className="text-[9px] text-slate-400">{formatFileSize(file.size)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeStudentFile(i)}
+                        className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer"
+                        title="Remove file"
+                      >
+                        <XMarkIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            ) : null}
+            )}
 
-            <div className="grid gap-3 sm:grid-cols-3 mt-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Attendance Sheet</label>
-                  <a
-                    href="/reference-images/student-attendance-reference.jpg"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
-                  >
-                    View Sample
-                  </a>
-                </div>
-                <div className="relative rounded-xl border border-dashed border-gray-300 px-3 py-4 text-center bg-white hover:border-indigo-500 transition-all">
+            {/* Upload buttons: Multi-file picker & Scan option */}
+            {studentFiles.length < 4 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-xl p-2.5 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-indigo-50/40 transition group">
                   <input
                     type="file"
-                    accept=".xls,.xlsx,.csv,.pdf,.png,.jpg,.jpeg,.webp"
-                    onChange={(event) =>
-                      setAttendanceData((previous) => ({
-                        ...previous,
-                        attendanceExcel: event.target.files?.[0] || null,
-                      }))}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    accept="image/*,.pdf,.xls,.xlsx,.csv"
+                    multiple
+                    onChange={handleStudentFilesChange}
+                    className="hidden"
                   />
-                  <div className="text-xs text-gray-600 truncate px-1">
-                    {attendanceData.attendanceExcel ? attendanceData.attendanceExcel.name : 'Upload File (Excel/PDF/Image)'}
+                  <div className="flex items-center gap-1.5">
+                    {studentFiles.length > 0 ? (
+                      <>
+                        <Plus className="h-4 w-4 text-indigo-600" />
+                        <span className="text-xs font-bold text-indigo-700">Add ({4 - studentFiles.length} left)</span>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center py-1">
+                        <UploadCloud className="h-5 w-5 text-indigo-500 mb-1 group-hover:scale-110 transition" />
+                        <span className="text-xs font-bold text-slate-800">Upload Attendance</span>
+                        <span className="text-[10px] text-slate-400">Up to 4 images/files</span>
+                      </div>
+                    )}
                   </div>
+                </label>
+
+                <div className="flex flex-col gap-1">
+                  <label className="border-2 border-dashed border-gray-300 hover:border-indigo-400 rounded-xl p-2 flex items-center justify-center gap-1.5 text-center cursor-pointer bg-white hover:bg-indigo-50/40 transition group">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePdfScan}
+                      className="hidden"
+                    />
+                    <PhotoIcon className="h-4 w-4 text-indigo-500" />
+                    <span className="text-xs font-semibold text-indigo-700">
+                      {scannedImages.length ? `Scan (${scannedImages.length} taken)` : "Camera Scan PDF"}
+                    </span>
+                  </label>
+
+                  {scannedImages.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={generatePdfFromImages}
+                        disabled={isGeneratingPdf}
+                        className="flex-1 py-1 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-xs disabled:bg-gray-400 cursor-pointer"
+                      >
+                        {isGeneratingPdf ? "Building..." : `Finish (${scannedImages.length}p)`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setScannedImages([])}
+                        className="py-1 px-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-500 rounded-lg text-xs font-medium transition cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
+            ) : (
+              <p className="text-[11px] text-emerald-700 font-semibold text-center py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
+                ✓ Maximum 4 attendance files selected
+              </p>
+            )}
+          </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Trainer Signature</label>
                 <div className="relative rounded-xl border border-dashed border-gray-300 px-3 py-4 text-center bg-white hover:border-indigo-500 transition-all">
@@ -547,6 +663,24 @@ const CheckInModal = ({
             {isLateRequest ? "Submit Attendance Request" : "Check In"}
           </button>
         </div>
+        {/* Lightbox Image Preview Modal */}
+        {previewModalUrl && (
+          <div
+            className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setPreviewModalUrl(null)}
+          >
+            <div className="relative max-w-3xl max-h-[85vh] bg-white rounded-2xl overflow-hidden p-2 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setPreviewModalUrl(null)}
+                className="absolute top-3 right-3 p-1.5 bg-black/60 hover:bg-black text-white rounded-full transition z-10 cursor-pointer"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+              <img src={previewModalUrl} alt="Preview" className="max-w-full max-h-[80vh] object-contain rounded-xl" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

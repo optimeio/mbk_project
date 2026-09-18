@@ -616,6 +616,7 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
         studentsAbsent: '',
         attendancePdf: null,
         attendanceExcel: null,
+        studentAttendanceFiles: [],
         signature: null,
         checkInImage: null,
         photo: null
@@ -1382,6 +1383,7 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
             studentsAbsent: '',
             attendancePdf: null,
             attendanceExcel: null,
+            studentAttendanceFiles: [],
             signature: null,
             checkInImage: null,
             latitude: null,
@@ -1516,8 +1518,8 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
             return;
         }
 
-        if (!attendanceData.attendancePdf && !attendanceData.attendanceExcel && !attendanceData.signature && !attendanceData.checkInImage) {
-            showToast('warning', 'Attach attendance evidence (PDF, Excel, signature, or check-in image) before check-in so the Attendance folder is not left empty.');
+        if (!attendanceData.attendancePdf && !attendanceData.attendanceExcel && !attendanceData.signature && !attendanceData.checkInImage && (!Array.isArray(attendanceData.studentAttendanceFiles) || attendanceData.studentAttendanceFiles.length === 0)) {
+            showToast('warning', 'Attach attendance evidence (Student Attendance files/images, PDF, Excel, signature, or check-in image) before check-in so the Attendance folder is not left empty.');
             return;
         }
 
@@ -1583,6 +1585,20 @@ const TrainerSchedule = ({ initialSelectedMonth }) => {
             }
             if (attendanceData.checkInImage) {
                 formData.append('check_in_image', attendanceData.checkInImage);
+            }
+            if (Array.isArray(attendanceData.studentAttendanceFiles) && attendanceData.studentAttendanceFiles.length > 0) {
+                attendanceData.studentAttendanceFiles.forEach((file) => {
+                    const ext = (file.name || '').split('.').pop().toLowerCase();
+                    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext) || file.type?.startsWith('image/')) {
+                        formData.append('studentAttendanceImages', file);
+                    } else if (['xls', 'xlsx', 'csv'].includes(ext)) {
+                        formData.append('attendanceExcel', file);
+                    } else if (ext === 'pdf' || file.type === 'application/pdf') {
+                        formData.append('attendancePdf', file);
+                    } else {
+                        formData.append('studentAttendanceImages', file);
+                    }
+                });
             }
 
             const response = await api.post('/attendance/check-in', formData);
