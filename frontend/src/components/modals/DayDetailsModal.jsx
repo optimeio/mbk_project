@@ -869,9 +869,9 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                         {day.attendancePdfUrl && (
                                                             <div className="rounded-xl border border-gray-200 overflow-hidden">
                                                                 <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                                                                    <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance Document</h4>
+                                                                    <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance PDF Document</h4>
                                                                 </div>
-                                                                <div className="p-4 flex items-center justify-between">
+                                                                <div className="p-4 flex items-center justify-between flex-wrap gap-3">
                                                                     <div className="flex items-center space-x-3">
                                                                         <div className="shrink-0">
                                                                             <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
@@ -879,33 +879,59 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                                             </div>
                                                                         </div>
                                                                         <div>
-                                                                            <p className="text-sm font-medium text-gray-900">Attendance.pdf</p>
-                                                                            <p className="text-xs text-gray-500">PDF Document</p>
+                                                                            <p className="text-sm font-medium text-gray-900">Attendance Roster (PDF)</p>
+                                                                            <p className="text-xs text-gray-500">Official Signed Document</p>
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex space-x-2">
-                                                                        <button
-                                                                            onClick={() => window.open(`${FILE_BASE_URL}/api/attendance/${day.attendanceId || day._id || day.id}/export-excel?token=${localStorage.getItem('accessToken')}`, '_blank')}
-                                                                            className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
-                                                                        >
-                                                                           Export Excel
-                                                                        </button>
                                                                         <a
-                                                                            href={`${FILE_BASE_URL}/api/${day.attendancePdfUrl.replace(/\\/g, '/').replace(/^\/+/, '')}?token=${localStorage.getItem('accessToken')}`}
+                                                                            href={toViewUrl(day.attendancePdfUrl)}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                                                                         >
-                                                                            View
+                                                                            View PDF
                                                                         </a>
                                                                         <a
-                                                                            href={`${FILE_BASE_URL}/api/${day.attendancePdfUrl.replace(/\\/g, '/').replace(/^\/+/, '')}?token=${localStorage.getItem('accessToken')}`}
+                                                                            href={toViewUrl(day.attendancePdfUrl, { download: true })}
                                                                             download
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
                                                                             className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
                                                                         >
-                                                                            Download PDF
+                                                                            Download
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {day.attendanceExcelUrl && (
+                                                            <div className="rounded-xl border border-gray-200 overflow-hidden">
+                                                                <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                                                    <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance Excel Sheet</h4>
+                                                                </div>
+                                                                <div className="p-4 flex items-center justify-between flex-wrap gap-3">
+                                                                    <div className="flex items-center space-x-3">
+                                                                        <div className="shrink-0">
+                                                                            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                                                                                <DocumentTextIcon className="h-6 w-6 text-green-600" />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm font-medium text-gray-900">Attendance Roster (Excel)</p>
+                                                                            <p className="text-xs text-gray-500">Student Attendance Spreadsheet</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex space-x-2">
+                                                                        <a
+                                                                            href={toViewUrl(day.attendanceExcelUrl, { download: true })}
+                                                                            download
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
+                                                                        >
+                                                                            Download Excel
                                                                         </a>
                                                                     </div>
                                                                 </div>
@@ -985,10 +1011,25 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
                                                                     type: "image"
                                                                 });
                                                             }
+
+                                                            // Multiple student attendance images
+                                                            if (Array.isArray(day.studentAttendanceImageUrls) && day.studentAttendanceImageUrls.length > 0) {
+                                                                day.studentAttendanceImageUrls.forEach((url, idx) => {
+                                                                    if (url && !evidenceItems.some(item => item.url === url)) {
+                                                                        evidenceItems.push({
+                                                                            url,
+                                                                            label: `Attendance Sheet Photo ${idx + 1}`,
+                                                                            type: "image"
+                                                                        });
+                                                                    }
+                                                                });
+                                                            }
+
                                                             const attendanceDocUrl = day.attendanceImage || day.attendancePhotoUrl || day.attendancePhoto || day.attendanceDocumentUrl;
-                                                            if (attendanceDocUrl && attendanceDocUrl !== checkInUrl) {
+                                                            if (attendanceDocUrl && attendanceDocUrl !== checkInUrl && !evidenceItems.some(item => item.url === attendanceDocUrl)) {
                                                                 const isPdf = String(attendanceDocUrl).toLowerCase().endsWith('.pdf');
-                                                                if (!isPdf) {
+                                                                const isExcel = String(attendanceDocUrl).toLowerCase().endsWith('.xlsx') || String(attendanceDocUrl).toLowerCase().endsWith('.xls') || String(attendanceDocUrl).toLowerCase().endsWith('.csv');
+                                                                if (!isPdf && !isExcel) {
                                                                     evidenceItems.push({
                                                                         url: attendanceDocUrl,
                                                                         label: "Attendance Sheet Photo",

@@ -650,124 +650,113 @@ router.post("/student-attendance/upload", authenticate, uploadAttendance, async 
       autoCreate: true,
     });
 
-    // --- Handle multiple student attendance images (up to 5) ---
+    // --- Handle files (multiple images, PDF, and/or Excel) ---
+    const allUploadedFiles = [];
+    const imageUrls = [];
+
+    // Process multiple student attendance images (up to 10)
     if (multiImages.length > 0) {
-      const imageUrls = [];
       for (const imgFile of multiImages) {
         const relPath = path.relative(path.join(__dirname, '..'), imgFile.path).replace(/\\/g, '/');
         const imgUrl = relPath.startsWith('/') ? relPath : `/${relPath}`;
         imageUrls.push(imgUrl);
+        allUploadedFiles.push({ file: imgFile, isExcel: false, url: imgUrl, type: 'photo' });
       }
       attendanceRecord.studentAttendanceImageUrls = imageUrls;
-      // Set first image in legacy fields for backward compat
-      if (imageUrls.length > 0) {
-        attendanceRecord.attendancePhotoUrl = imageUrls[0];
-        attendanceRecord.studentsPhotoUrl = imageUrls[0];
-        attendanceRecord.attendanceDocumentUrl = imageUrls[0];
-      }
-      await attendanceRecord.save();
-
-      // Asynchronously upload each image to Google Drive
-      if (attendanceRecord.collegeId) {
-        for (const imgFile of multiImages) {
-          uploadTrainerFileToDrive({
-            trainer,
-            collegeId: attendanceRecord.collegeId,
-            scheduleId: attendanceRecord.scheduleId,
-            attendanceId: attendanceRecord._id,
-            dayNumber: attendanceRecord.dayNumber || 1,
-            session: attendanceRecord.session || targetSession,
-            file: imgFile,
-            isExcel: false,
-            folderType: 'attendance'
-          }).catch(err => console.error("[DRIVE-UPLOAD-ASYNC] Attendance image upload failed:", err));
-        }
-      }
-
-      return res.json({
-        success: true,
-        fileUrls: imageUrls,
-        attendanceId: attendanceRecord._id,
-        message: `${imageUrls.length} attendance image(s) uploaded successfully!`
-      });
+      attendanceRecord.attendancePhotoUrl = imageUrls[0];
+      attendanceRecord.studentsPhotoUrl = imageUrls[0];
+      attendanceRecord.attendanceDocumentUrl = imageUrls[0];
     }
 
-    // --- Handle single file upload (Excel, PDF, or single Photo) ---
-    const ext = path.extname(uploadedFile.originalname || '').toLowerCase();
-    const relativePath = path.relative(path.join(__dirname, '..'), uploadedFile.path).replace(/\\/g, '/');
-    const fileUrl = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+    // Process single or additional document file (Excel, PDF, or Photo)
+    if (uploadedFile) {
+      const ext = path.extname(uploadedFile.originalname || '').toLowerCase();
+      const relativePath = path.relative(path.join(__dirname, '..'), uploadedFile.path).replace(/\\/g, '/');
+      const fileUrl = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
 
-    const isExcel = ext === '.xlsx' || ext === '.xls' || ext === '.csv';
-    const isPdf = ext === '.pdf' || ext === '.doc' || ext === '.docx';
+      const isExcel = ext === '.xlsx' || ext === '.xls' || ext === '.csv';
+      const isPdf = ext === '.pdf' || ext === '.doc' || ext === '.docx';
 
-    if (isExcel) {
-      try {
-        const workbook = xlsx.readFile(uploadedFile.path);
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = xlsx.utils.sheet_to_json(sheet);
-        if (rows.length > 0) {
-          const college = await College.findById(attendanceRecord.collegeId);
-          const studentsList = [];
-          for (const row of rows) {
-            const rollNo = String(row.RollNo || row.rollNo || row["Roll Number"] || "").trim();
-            const registerNo = String(row.RegisterNo || row.registerNo || row["Registration Number"] || "").trim();
-            const name = String(row.Name || row.name || row["Student Name"] || "").trim();
-            const rawStatus = String(row.Status || row.status || row["Attendance"] || "Absent").trim().toLowerCase();
-            const status = rawStatus === "present" || rawStatus === "p" ? "Present" : "Absent";
-            if (!name && !rollNo) continue;
-            studentsList.push({ rollNo, registerNo, name, status });
+      if (isExcel) {
+        try {
+          const workbook = xlsx.readFile(uploadedFile.path);
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = xlsx.utils.sheet_to_json(sheet);
+          if (rows.length > 0) {
+            const studentsList = [];
+            for (const row of rows) {
+              const rollNo = String(row.RollNo || row.rollNo || row["Roll Number"] || "").trim();
+              const registerNo = String(row.RegisterNo || row.registerNo || row["Registration Number"] || "").trim();
+              const name = String(row.Name || row.name || row["Student Name"] || "").trim();
+              const rawStatus = String(row.Status || row.status || row["Attendance"] || "Absent").trim().toLowerCase();
+              const status = rawStatus === "present" || rawStatus === "p" ? "Present" : "Absent";
+              if (!name && !rollNo) continue;
+              studentsList.push({ rollNo, registerNo, name, status });
+            }
+            attendanceRecord.students = studentsList;
+            attendanceRecord.studentsPresent = studentsList.filter(s => s.status === "Present").length;
+            attendanceRecord.studentsAbsent = studentsList.filter(s => s.status === "Absent").length;
           }
-          attendanceRecord.students = studentsList;
-          attendanceRecord.studentsPresent = studentsList.filter(s => s.status === "Present").length;
-          attendanceRecord.studentsAbsent = studentsList.filter(s => s.status === "Absent").length;
+        } catch (err) {
+          console.warn("[EXCEL-PARSER] Warning parsing Excel rows:", err.message);
         }
-      } catch (err) {
-        console.warn("[EXCEL-PARSER] Warning parsing Excel rows:", err.message);
+        attendanceRecord.attendanceExcelUrl = fileUrl;
+        allUploadedFiles.push({ file: uploadedFile, isExcel: true, url: fileUrl, type: 'excel' });
+      } else if (isPdf) {
+        attendanceRecord.attendancePdfUrl = fileUrl;
+        attendanceRecord.attendanceExcelUrl = fileUrl;
+        allUploadedFiles.push({ file: uploadedFile, isExcel: false, url: fileUrl, type: 'pdf' });
+      } else {
+        if (!imageUrls.includes(fileUrl)) {
+          imageUrls.push(fileUrl);
+          attendanceRecord.studentAttendanceImageUrls = imageUrls;
+        }
+        attendanceRecord.attendancePhotoUrl = fileUrl;
+        attendanceRecord.studentsPhotoUrl = fileUrl;
+        allUploadedFiles.push({ file: uploadedFile, isExcel: false, url: fileUrl, type: 'photo' });
       }
-      attendanceRecord.attendanceExcelUrl = fileUrl;
-    } else if (isPdf) {
-      attendanceRecord.attendancePdfUrl = fileUrl;
-      attendanceRecord.attendanceExcelUrl = fileUrl; // Fallback for list display
-    } else {
-      attendanceRecord.attendancePhotoUrl = fileUrl;
-      attendanceRecord.studentsPhotoUrl = fileUrl;
+      attendanceRecord.attendanceDocumentUrl = fileUrl;
     }
 
-    attendanceRecord.attendanceDocumentUrl = fileUrl;
     await attendanceRecord.save();
 
-    // Asynchronously upload attendance document to Google Drive
-    if (attendanceRecord.collegeId) {
-      uploadTrainerFileToDrive({
-        trainer,
-        collegeId: attendanceRecord.collegeId,
-        scheduleId: attendanceRecord.scheduleId,
-        attendanceId: attendanceRecord._id,
-        dayNumber: attendanceRecord.dayNumber || 1,
-        session: attendanceRecord.session || targetSession,
-        file: uploadedFile,
-        isExcel: isExcel,
-        folderType: 'attendance'
-      }).then(driveFile => {
-        const fileId = driveFile?.fileId || driveFile?.driveFileId || driveFile?.id;
-        if (fileId) {
-          Attendance.findByIdAndUpdate(attendanceRecord._id, {
-            $set: {
-              "driveAssets.attendanceDriveFileId": fileId,
-              "driveAssets.excelDriveFileId": fileId,
+    // Asynchronously upload all files to Google Drive
+    if (attendanceRecord.collegeId && allUploadedFiles.length > 0) {
+      for (const item of allUploadedFiles) {
+        uploadTrainerFileToDrive({
+          trainer,
+          collegeId: attendanceRecord.collegeId,
+          scheduleId: attendanceRecord.scheduleId,
+          attendanceId: attendanceRecord._id,
+          dayNumber: attendanceRecord.dayNumber || 1,
+          session: attendanceRecord.session || targetSession,
+          file: item.file,
+          isExcel: item.isExcel,
+          folderType: 'attendance'
+        }).then(driveFile => {
+          const fileId = driveFile?.fileId || driveFile?.driveFileId || driveFile?.id;
+          if (fileId) {
+            const updatePayload = {
               "attendanceDocumentDriveFileId": fileId,
+              "driveAssets.attendanceDriveFileId": fileId
+            };
+            if (item.isExcel) {
+              updatePayload["driveAssets.excelDriveFileId"] = fileId;
             }
-          }).catch(dbErr => console.error("Failed to update driveFileId in DB:", dbErr));
-        }
-      }).catch(err => console.error("[DRIVE-UPLOAD-ASYNC] Attendance document upload failed:", err));
+            Attendance.findByIdAndUpdate(attendanceRecord._id, { $set: updatePayload }).catch(() => {});
+          }
+        }).catch(err => console.error("[DRIVE-UPLOAD-ASYNC] Attendance upload failed:", err));
+      }
     }
 
     return res.json({
       success: true,
-      fileUrl,
+      fileUrls: imageUrls.length > 0 ? imageUrls : [attendanceRecord.attendanceDocumentUrl],
+      attendanceExcelUrl: attendanceRecord.attendanceExcelUrl,
+      attendancePdfUrl: attendanceRecord.attendancePdfUrl,
       attendanceId: attendanceRecord._id,
-      message: `Attendance document (${isExcel ? 'Excel' : isPdf ? 'PDF' : 'Photo'}) uploaded successfully!`
+      message: `Student attendance records (${allUploadedFiles.length} file(s)) uploaded successfully!`
     });
   } catch (error) {
     console.error("POST student-attendance/upload error:", error);

@@ -145,6 +145,10 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
     const excelFile = req.files && req.files['attendanceExcel'] ? req.files['attendanceExcel'][0] : null;
     const photoFile = req.files && req.files['studentsPhoto'] ? req.files['studentsPhoto'][0] : null;
     const pdfFile = req.files && req.files['attendancePdf'] ? req.files['attendancePdf'][0] : null;
+    const studentAttendanceImages = req.files && req.files['studentAttendanceImages'] ? req.files['studentAttendanceImages'] : [];
+    const genericAttendanceDoc = req.files && (req.files['attendanceDocument'] || req.files['attendancePhoto'] || req.files['attendance_photo'] || req.files['attendanceFile'])
+      ? (req.files['attendanceDocument'] || req.files['attendancePhoto'] || req.files['attendance_photo'] || req.files['attendanceFile'])[0]
+      : null;
     const checkInFile = req.files && (req.files['check_in_image'] || req.files['clock_in_image'])
       ? (req.files['check_in_image'] || req.files['clock_in_image'])[0]
       : null;
@@ -157,15 +161,40 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
     let attendancePdfUrl = null;
     let checkInImageUrl = null;
     let checkOutImageUrl = null;
+    const studentAttendanceImageUrls = [];
 
     if (excelFile) {
       attendanceExcelUrl = `/uploads/attendance/excels/${excelFile.filename}`;
     }
     if (photoFile) {
       studentsPhotoUrl = `/uploads/attendance/photos/${photoFile.filename}`;
+      studentAttendanceImageUrls.push(studentsPhotoUrl);
     }
     if (pdfFile) {
       attendancePdfUrl = `/uploads/attendance/pdfs/${pdfFile.filename}`;
+    }
+    if (genericAttendanceDoc) {
+      const ext = path.extname(genericAttendanceDoc.originalname || '').toLowerCase();
+      if (ext === '.pdf') {
+        if (!attendancePdfUrl) attendancePdfUrl = `/uploads/attendance/pdfs/${genericAttendanceDoc.filename}`;
+      } else if (['.xlsx', '.xls', '.csv'].includes(ext)) {
+        if (!attendanceExcelUrl) attendanceExcelUrl = `/uploads/attendance/excels/${genericAttendanceDoc.filename}`;
+      } else {
+        const docUrl = `/uploads/attendance/images/${genericAttendanceDoc.filename}`;
+        if (!studentsPhotoUrl) studentsPhotoUrl = docUrl;
+        studentAttendanceImageUrls.push(docUrl);
+      }
+    }
+    if (Array.isArray(studentAttendanceImages) && studentAttendanceImages.length > 0) {
+      studentAttendanceImages.forEach((img) => {
+        const u = `/uploads/attendance/images/${img.filename}`;
+        if (!studentAttendanceImageUrls.includes(u)) {
+          studentAttendanceImageUrls.push(u);
+        }
+      });
+      if (!studentsPhotoUrl && studentAttendanceImageUrls.length > 0) {
+        studentsPhotoUrl = studentAttendanceImageUrls[0];
+      }
     }
     if (checkInFile) {
       checkInImageUrl = `/uploads/attendance/images/${checkInFile.filename}`;
@@ -186,6 +215,7 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
       studentsPhotoUrl,
       attendancePdfUrl,
       scannedAttendancePdfUrl: attendancePdfUrl,
+      studentAttendanceImageUrls,
       uploadedAt: new Date(),
       latitude,
       longitude,
@@ -382,8 +412,38 @@ router.post('/attendance/submit', authenticate, uploadMiddle, async (req, res) =
             session: sessionType,
             file: photoFile,
             isExcel: false,
-            folderType: 'studentActivities'
+            folderType: 'attendance'
           }).catch(err => console.error("Drive upload failed for photo:", err));
+        }
+
+        if (genericAttendanceDoc) {
+          uploadTrainerFileToDrive({
+            trainer: trainerDoc,
+            collegeId: resolvedCollegeId,
+            scheduleId: schedule?._id,
+            attendanceId: attendanceRecord._id,
+            dayNumber,
+            session: sessionType,
+            file: genericAttendanceDoc,
+            isExcel: ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'].includes(genericAttendanceDoc.mimetype),
+            folderType: 'attendance'
+          }).catch(err => console.error("Drive upload failed for generic attendance doc:", err));
+        }
+
+        if (Array.isArray(studentAttendanceImages) && studentAttendanceImages.length > 0) {
+          studentAttendanceImages.forEach((imgFile) => {
+            uploadTrainerFileToDrive({
+              trainer: trainerDoc,
+              collegeId: resolvedCollegeId,
+              scheduleId: schedule?._id,
+              attendanceId: attendanceRecord._id,
+              dayNumber,
+              session: sessionType,
+              file: imgFile,
+              isExcel: false,
+              folderType: 'attendance'
+            }).catch(err => console.error("Drive upload failed for student attendance image:", err));
+          });
         }
 
         if (checkInFile) {

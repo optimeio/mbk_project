@@ -925,7 +925,13 @@ router.get('/', authenticate, isSPOCAdmin, async (req, res) => {
 
         if (courseId) {
             if (mongoose.Types.ObjectId.isValid(courseId)) {
-                filter.courseId = courseId;
+                const { Course } = require('../models');
+                const courseDoc = await Course.findById(courseId).select('colleges').lean();
+                const courseCollegeIds = Array.isArray(courseDoc?.colleges) ? courseDoc.colleges : [];
+                filter.$or = [
+                    { courseId: courseId },
+                    { _id: { $in: courseCollegeIds } }
+                ];
             } else {
                 return res.json([]);
             }
@@ -1037,10 +1043,41 @@ router.post('/', authenticate, isSPOCAdmin, async (req, res) => {
 
         const duplicateCollege = await College.findOne(duplicateQuery);
         if (duplicateCollege) {
+            let courseDoc = null;
+            if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+                duplicateCollege.courseId = courseId;
+                if (!duplicateCollege.companyId && company?._id) {
+                    duplicateCollege.companyId = company._id;
+                }
+                if (city && !duplicateCollege.city) {
+                    duplicateCollege.city = city.trim();
+                }
+                if (spocName && !duplicateCollege.spocName) {
+                    duplicateCollege.spocName = spocName;
+                    duplicateCollege.principalName = spocName;
+                }
+                if (spocPhone && !duplicateCollege.spocPhone) {
+                    duplicateCollege.spocPhone = spocPhone;
+                    duplicateCollege.phone = spocPhone;
+                }
+                await duplicateCollege.save();
+
+                courseDoc = await Course.findById(courseId);
+                if (courseDoc) {
+                    if (!Array.isArray(courseDoc.colleges)) {
+                        courseDoc.colleges = [];
+                    }
+                    if (!courseDoc.colleges.some((id) => String(id) === String(duplicateCollege._id))) {
+                        courseDoc.colleges.push(duplicateCollege._id);
+                        await courseDoc.save();
+                    }
+                }
+            }
+            await ensureDepartmentsAndSchedules(duplicateCollege);
             return res.status(200).json({
                 ...duplicateCollege.toObject(),
                 duplicate: true,
-                message: 'College already exists. Existing record returned.',
+                message: 'College linked to course successfully.',
             });
         }
 

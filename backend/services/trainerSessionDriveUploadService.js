@@ -218,7 +218,7 @@ const uploadTrainerSessionFileToDrive = async ({
         folderType === 'checkIn'
           ? 'checkInPhoto'
           : folderType === 'attendance'
-          ? (isExcel ? 'attendanceExcel' : 'attendanceDocument')
+          ? (isExcel ? 'attendanceExcel' : (originalName.endsWith('.pdf') ? 'attendancePdf' : 'attendanceDocument'))
           : folderType === 'studentActivities'
           ? 'studentActivity'
           : 'checkOutPhoto';
@@ -228,25 +228,61 @@ const uploadTrainerSessionFileToDrive = async ({
           ? (isExcel ? 'excel' : (originalName.endsWith('.pdf') ? 'pdf' : 'attendance'))
           : folderType === 'studentActivities'
           ? 'activity'
-          : 'geotag';
+          : folderType === 'checkIn' || folderType === 'checkOut'
+          ? 'geotag'
+          : 'other';
 
-      await ScheduleDocument.create({
-        scheduleId: scheduleId ? new mongoose.Types.ObjectId(scheduleId) : undefined,
-        attendanceId: attendanceId ? new mongoose.Types.ObjectId(attendanceId) : undefined,
-        trainerId: trainer?._id ? new mongoose.Types.ObjectId(trainer._id) : undefined,
-        collegeId: collegeId ? new mongoose.Types.ObjectId(collegeId) : undefined,
-        fileName: originalName,
-        fileUrl: previewUrl,
-        fileType,
-        fileField,
-        dayNumber: safeDayNumber,
-        session: normalizedSession,
-        driveFileId,
-        driveViewLink,
-        driveDownloadLink,
-        driveFolderId: targetFolderId,
-        uploadedAt: new Date(),
-      });
+      const localFileName = file.filename || path.basename(file.path || '') || null;
+      const originalFileName = file.originalname || originalName;
+
+      await ScheduleDocument.findOneAndUpdate(
+        { driveFileId },
+        {
+          scheduleId: scheduleId ? new mongoose.Types.ObjectId(scheduleId) : undefined,
+          attendanceId: attendanceId ? new mongoose.Types.ObjectId(attendanceId) : undefined,
+          trainerId: trainer?._id ? new mongoose.Types.ObjectId(trainer._id) : undefined,
+          collegeId: collegeId ? new mongoose.Types.ObjectId(collegeId) : undefined,
+          fileName: originalName,
+          localFileName,
+          originalFileName,
+          fileUrl: previewUrl,
+          fileType,
+          fileField,
+          dayNumber: safeDayNumber,
+          session: normalizedSession,
+          driveFileId,
+          driveViewLink,
+          driveDownloadLink,
+          driveFolderId: targetFolderId,
+          uploadedAt: new Date(),
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      // Also directly update Attendance record if attendanceId is present
+      if (attendanceId) {
+        const updateFields = {
+          driveFolderId: targetFolderId,
+          'driveAssets.driveFolderId': targetFolderId,
+        };
+        if (folderType === 'checkIn') {
+          updateFields['checkIn.driveFileId'] = driveFileId;
+          updateFields['driveAssets.checkInDriveFileId'] = driveFileId;
+        } else if (folderType === 'checkOut') {
+          updateFields['checkOut.driveFileId'] = driveFileId;
+          updateFields['driveAssets.checkOutDriveFileId'] = driveFileId;
+        } else if (folderType === 'attendance') {
+          updateFields['attendanceDocumentDriveFileId'] = driveFileId;
+          if (isExcel) {
+            updateFields['driveAssets.excelDriveFileId'] = driveFileId;
+          } else if (originalName.endsWith('.pdf')) {
+            updateFields['driveAssets.attendanceDriveFileId'] = driveFileId;
+          }
+        }
+        await Attendance.findByIdAndUpdate(attendanceId, { $set: updateFields }).catch((attErr) => {
+          console.warn('[SESSION-DRIVE] Warning updating Attendance record:', attErr.message);
+        });
+      }
     } catch (docErr) {
       console.warn('[SESSION-DRIVE] Warning saving ScheduleDocument:', docErr.message);
     }

@@ -395,12 +395,14 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
       const isAttendanceDocFile = /attendance|excel|sheet|roster/i.test(filename) || cleanPath.includes('/excels/') || cleanPath.includes('/documents/') || cleanPath.includes('/pdfs/') || /\.pdf$/i.test(filename) || /\.xlsx?$/i.test(filename);
       const isSignatureFile = /signature/i.test(filename) || cleanPath.includes('/signatures/');
 
-      // 1. Check ScheduleDocument specifically matching file classification
+      // 1. Check ScheduleDocument specifically matching file classification or localFileName
       try {
         const ScheduleDocument = (await import('./models/ScheduleDocument.js')).default;
         const schedDocQuery = {
           $or: [
             { fileName: regex },
+            { localFileName: regex },
+            { originalFileName: regex },
             { fileUrl: regex },
             { driveFileId: filename.split('.')[0] }
           ]
@@ -410,12 +412,24 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
         } else if (isCheckOutFile) {
           schedDocQuery.fileField = { $in: ['checkOutPhoto', 'check_out_image'] };
         } else if (isAttendanceDocFile) {
-          schedDocQuery.fileType = 'attendance';
+          schedDocQuery.fileType = { $in: ['attendance', 'pdf', 'excel', 'document'] };
         } else if (isActivityFile) {
-          schedDocQuery.fileType = 'activity';
+          schedDocQuery.fileType = { $in: ['activity', 'photo'] };
         }
 
-        const schedDoc = await ScheduleDocument.findOne(schedDocQuery).select('driveFileId fileUrl').lean();
+        let schedDoc = await ScheduleDocument.findOne(schedDocQuery).select('driveFileId fileUrl').lean();
+        if (!schedDoc) {
+          // Broad fallback across ScheduleDocument
+          schedDoc = await ScheduleDocument.findOne({
+            $or: [
+              { fileName: regex },
+              { localFileName: regex },
+              { originalFileName: regex },
+              { fileUrl: regex }
+            ]
+          }).select('driveFileId fileUrl').lean();
+        }
+
         const schedDriveId = extractDriveFileId(schedDoc?.driveFileId) || extractDriveFileId(schedDoc?.fileUrl);
         if (isValidDriveId(schedDriveId)) {
           return respondWithDriveAsset(res, schedDriveId, filename, cleanPath);
@@ -472,6 +486,7 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
           { checkInPhoto: regex },
           { checkOutGeoImageUrl: regex },
           { activityPhotos: regex },
+          { studentAttendanceImageUrls: regex },
           { 'driveAssets.files.fileName': regex },
           { 'driveAssets.files.localPath': regex }
         ] };
@@ -482,8 +497,17 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
         if (record) {
           let driveId = null;
 
-          // First check canonical driveAssets
-          if (Array.isArray(record?.driveAssets?.files)) {
+          // 1) First check structured drive assets on Attendance
+          if (isCheckInFile) {
+            driveId = extractDriveFileId(record?.checkIn?.driveFileId) || extractDriveFileId(record?.driveAssets?.checkInDriveFileId);
+          } else if (isCheckOutFile) {
+            driveId = extractDriveFileId(record?.checkOut?.driveFileId) || extractDriveFileId(record?.driveAssets?.checkOutDriveFileId);
+          } else if (isAttendanceDocFile) {
+            driveId = extractDriveFileId(record?.attendanceDocumentDriveFileId) || extractDriveFileId(record?.driveAssets?.attendanceDriveFileId) || extractDriveFileId(record?.driveAssets?.excelDriveFileId);
+          }
+
+          // 2) Check canonical driveAssets array if present
+          if (!driveId && Array.isArray(record?.driveAssets?.files)) {
             const matchedAsset = record.driveAssets.files.find(f =>
               (f.fileName && regex.test(f.fileName)) ||
               (f.localPath && regex.test(f.localPath)) ||
@@ -495,22 +519,38 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
             }
           }
 
-          // Fall back to URL strings
+          // 3) Fall back to querying ScheduleDocument by attendanceId or scheduleId
+          if (!driveId && (record._id || record.scheduleId)) {
+            try {
+              const ScheduleDocument = (await import('./models/ScheduleDocument.js')).default;
+              const docFilter = {
+                $or: [
+                  ...(record._id ? [{ attendanceId: record._id }] : []),
+                  ...(record.scheduleId ? [{ scheduleId: record.scheduleId }] : [])
+                ]
+              };
+              if (isCheckInFile) {
+                docFilter.fileField = { $in: ['checkInPhoto', 'check_in_image', 'clock_in_image'] };
+              } else if (isCheckOutFile) {
+                docFilter.fileField = { $in: ['checkOutPhoto', 'check_out_image'] };
+              } else if (isAttendanceDocFile) {
+                docFilter.fileType = { $in: ['attendance', 'pdf', 'excel', 'document'] };
+              } else if (isActivityFile) {
+                docFilter.fileType = { $in: ['activity', 'photo'] };
+              }
+              const sDoc = await ScheduleDocument.findOne(docFilter).select('driveFileId fileUrl').lean();
+              driveId = extractDriveFileId(sDoc?.driveFileId) || extractDriveFileId(sDoc?.fileUrl);
+            } catch (_e) {}
+          }
+
+          // 4) Fall back to embedded URL strings on Attendance
           if (!driveId) {
             if (isCheckInFile) {
-              driveId = extractDriveFileId(record?.checkIn?.driveFileId) || extractDriveFileId(record?.checkInPhoto) || extractDriveFileId(record?.checkInGeoImageUrl) || extractDriveFileId(record?.checkInImage) || extractDriveFileId(record?.imageUrl);
+              driveId = extractDriveFileId(record?.checkInPhoto) || extractDriveFileId(record?.checkInGeoImageUrl) || extractDriveFileId(record?.checkInImage) || extractDriveFileId(record?.imageUrl);
             } else if (isCheckOutFile) {
-              driveId = extractDriveFileId(record?.checkOut?.driveFileId) || extractDriveFileId(record?.checkOutGeoImageUrl) || extractDriveFileId(record?.checkOutGeoImageUrls?.[0]);
+              driveId = extractDriveFileId(record?.checkOutGeoImageUrl) || extractDriveFileId(record?.checkOutGeoImageUrls?.[0]);
             } else if (isAttendanceDocFile) {
               driveId = extractDriveFileId(record?.attendancePdfUrl) || extractDriveFileId(record?.attendanceExcelUrl) || extractDriveFileId(record?.studentsPhotoUrl) || extractDriveFileId(record?.attendancePhotoUrl) || extractDriveFileId(record?.attendanceDocumentUrl);
-              if (!driveId && record.scheduleId) {
-                const ScheduleDocument = (await import('./models/ScheduleDocument.js')).default;
-                const doc = await ScheduleDocument.findOne({
-                  $or: [{ attendanceId: record._id }, { scheduleId: record.scheduleId }],
-                  fileType: 'attendance'
-                }).lean();
-                driveId = extractDriveFileId(doc?.driveFileId) || extractDriveFileId(doc?.fileUrl);
-              }
             } else if (isActivityFile) {
               if (Array.isArray(record?.activityPhotos)) {
                 for (const ap of record.activityPhotos) {

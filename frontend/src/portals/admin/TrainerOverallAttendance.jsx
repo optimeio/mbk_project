@@ -282,6 +282,18 @@ const getAttendanceFileEntries = (record = {}) => {
     });
   }
 
+  // Check for multiple student attendance images array
+  if (Array.isArray(record?.studentAttendanceImageUrls) && record.studentAttendanceImageUrls.length > 0) {
+    record.studentAttendanceImageUrls.filter(Boolean).forEach((imgUrl, idx) => {
+      files.push({
+        type: 'image',
+        name: `Student Attendance Photo ${idx + 1}`,
+        url: getSecureImageUrl(imgUrl),
+        originalUrl: imgUrl,
+      });
+    });
+  }
+
   // Check for image-based attendance sheets, certificates, or uploaded roster photos
   const attendanceImageUrl =
     record?.attendanceDocumentUrl ||

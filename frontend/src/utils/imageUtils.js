@@ -68,16 +68,39 @@ const extractGoogleDriveFileId = (value = '') => {
     return null;
 };
 
+export const isDocumentFile = (value = '') => {
+    if (typeof value !== 'string') return false;
+    const lower = value.toLowerCase();
+    return (
+        lower.endsWith('.pdf') ||
+        lower.endsWith('.xlsx') ||
+        lower.endsWith('.xls') ||
+        lower.endsWith('.csv') ||
+        lower.endsWith('.doc') ||
+        lower.endsWith('.docx') ||
+        lower.includes('attendancepdf') ||
+        lower.includes('attendanceexcel') ||
+        lower.includes('application/pdf') ||
+        lower.includes('spreadsheet')
+    );
+};
+
 const toGoogleDrivePreviewUrl = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) return value;
-    // Prefer the newer lh3.googleusercontent.com endpoint which is less likely to be blocked by tracking prevention
+    if (isDocumentFile(value)) {
+        return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+    // Prefer the newer lh3.googleusercontent.com endpoint for images
     return `https://lh3.googleusercontent.com/d/${fileId}`;
 };
 
 const toGoogleDriveImagePreviewUrl = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) return value;
+    if (isDocumentFile(value)) {
+        return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
     return `https://lh3.googleusercontent.com/d/${fileId}=w1200`;
 };
 
@@ -87,10 +110,23 @@ const toGoogleDriveEmbedUrl = (value) => {
     return `https://drive.google.com/file/d/${fileId}/preview`;
 };
 
+export const toGoogleDriveDownloadUrl = (value) => {
+    const fileId = extractGoogleDriveFileId(value);
+    if (!fileId) return value;
+    return `https://drive.google.com/uc?id=${fileId}&export=download`;
+};
+
 const getGoogleDriveImagePreviewCandidates = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) {
         return value ? [value] : [];
+    }
+
+    if (isDocumentFile(value)) {
+        return [
+            `https://drive.google.com/file/d/${fileId}/preview`,
+            `https://drive.google.com/file/d/${fileId}/view`,
+        ];
     }
 
     return Array.from(
@@ -291,6 +327,9 @@ export const getSecureImageUrl = (path, uploadType = 'attendance') => {
 
     // If it's a valid Google Drive file ID directly
     if (isValidGoogleDriveId(path)) {
+        if (uploadType === 'pdf' || uploadType === 'excel' || isDocumentFile(path)) {
+            return `https://drive.google.com/file/d/${path}/preview`;
+        }
         return `https://lh3.googleusercontent.com/d/${path}=w1200`;
     }
 
@@ -300,6 +339,13 @@ export const getSecureImageUrl = (path, uploadType = 'attendance') => {
         return path;
     }
     if (path.startsWith('http')) {
+        if (isDocumentFile(path) || uploadType === 'pdf' || uploadType === 'excel') {
+            const driveId = extractGoogleDriveFileId(path);
+            if (driveId) {
+                return `https://drive.google.com/file/d/${driveId}/preview`;
+            }
+            return path;
+        }
         return toGoogleDriveImagePreviewUrl(path);
     }
 

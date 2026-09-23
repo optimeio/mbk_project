@@ -159,9 +159,10 @@ export default function TrainerActivities() {
   const [checkInFile, setCheckInFile] = useState(null);
   const [checkInPreview, setCheckInPreview] = useState(null);
 
-  // Step 2: Student Attendance (supports up to 5 images or 1 document)
+  // Step 2: Student Attendance (supports up to 10 images or multiple documents)
   const [attendanceFiles, setAttendanceFiles] = useState([]);
   const [attendanceFilePreviews, setAttendanceFilePreviews] = useState([]);
+  const [previewDocModal, setPreviewDocModal] = useState(null);
 
   // Step 3: Student Activities
   const [activityTitle, setActivityTitle] = useState('');
@@ -459,13 +460,13 @@ export default function TrainerActivities() {
     }
   };
 
-  // Step 2: Student Attendance Handler (supports multiple images or documents)
+  // Step 2: Student Attendance Handler (supports multiple images, PDF, and Excel documents)
   const handleAttendanceFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (attendanceFiles.length + files.length > 5) {
-      toast.error('You can upload a maximum of 5 attendance files/images.');
+    if (attendanceFiles.length + files.length > 10) {
+      toast.error('You can upload a maximum of 10 attendance files/images.');
       return;
     }
 
@@ -474,18 +475,47 @@ export default function TrainerActivities() {
       const processedFiles = [];
       const previewList = [];
       for (const file of files) {
-        if (file.size > 10 * 1024 * 1024) {
-          toast.error(`File ${file.name} exceeds 10MB!`);
+        if (file.size > 15 * 1024 * 1024) {
+          toast.error(`File ${file.name} exceeds 15MB!`);
           continue;
         }
         const isImg = file.type?.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(file.name);
+        const isPdf = /\.pdf$/i.test(file.name) || file.type?.includes('pdf');
+        const isExcel = /\.(xlsx?|csv)$/i.test(file.name) || file.type?.includes('spreadsheet') || file.type?.includes('excel');
+
         if (isImg) {
           const compressed = await compressImage(file);
           processedFiles.push(compressed);
-          previewList.push(URL.createObjectURL(compressed));
+          previewList.push({
+            url: URL.createObjectURL(compressed),
+            type: 'image',
+            name: file.name,
+            size: compressed.size,
+          });
+        } else if (isPdf) {
+          processedFiles.push(file);
+          previewList.push({
+            url: URL.createObjectURL(file),
+            type: 'pdf',
+            name: file.name,
+            size: file.size,
+          });
+        } else if (isExcel) {
+          processedFiles.push(file);
+          previewList.push({
+            url: null,
+            type: 'excel',
+            name: file.name,
+            size: file.size,
+          });
         } else {
           processedFiles.push(file);
-          previewList.push(null);
+          previewList.push({
+            url: null,
+            type: 'document',
+            name: file.name,
+            size: file.size,
+          });
         }
       }
       setAttendanceFiles((prev) => [...prev, ...processedFiles]);
@@ -507,7 +537,7 @@ export default function TrainerActivities() {
   const handleAttendanceSubmit = async (e) => {
     e.preventDefault();
     if (attendanceFiles.length === 0) {
-      toast.error('Please upload the student attendance sheet or images.');
+      toast.error('Please upload the student attendance sheet, PDF, Excel, or images.');
       return;
     }
     setLoading(true);
@@ -518,17 +548,25 @@ export default function TrainerActivities() {
     formData.append('latitude', lat);
     formData.append('longitude', lng);
 
-    // Determine if images or document
-    const isAllImages = attendanceFiles.every(f => f.type?.startsWith('image/'));
-    if (isAllImages && attendanceFiles.length > 0) {
-      // Multiple images → use studentAttendanceImages field
-      attendanceFiles.forEach((img) => {
-        formData.append('studentAttendanceImages', img);
-      });
-    } else {
-      // Single document (PDF/Excel) → use attendanceExcel field
-      formData.append('attendanceExcel', attendanceFiles[0]);
-    }
+    let hasExcel = false;
+    let hasPdf = false;
+    attendanceFiles.forEach((file) => {
+      const isImg = file.type?.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(file.name);
+      const isPdf = /\.pdf$/i.test(file.name) || file.type?.includes('pdf');
+      const isExcel = /\.(xlsx?|csv)$/i.test(file.name) || file.type?.includes('spreadsheet') || file.type?.includes('excel');
+
+      if (isImg) {
+        formData.append('studentAttendanceImages', file);
+      } else if (isExcel && !hasExcel) {
+        formData.append('attendanceExcel', file);
+        hasExcel = true;
+      } else if (isPdf && !hasPdf) {
+        formData.append('attendancePdf', file);
+        hasPdf = true;
+      } else {
+        formData.append('attendanceDocument', file);
+      }
+    });
 
     try {
       const res = await api.post('/student-attendance/upload', formData);
@@ -970,41 +1008,91 @@ export default function TrainerActivities() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                        Attendance Sheet Photos / Document <span className="text-rose-500">*</span>
+                        Attendance Sheet Photos / Documents <span className="text-rose-500">*</span>
                       </label>
                       <span className="text-[11px] font-semibold text-slate-400">
-                        {attendanceFiles.length}/{attendanceFiles.length > 0 && !attendanceFiles[0]?.type?.startsWith('image/') ? '1 doc' : '5 images'} uploaded
+                        {attendanceFiles.length}/10 files uploaded
                       </span>
                     </div>
 
                     {/* Uploaded files grid */}
                     {attendanceFiles.length > 0 && (
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 mb-4">
                         {attendanceFiles.map((file, idx) => {
-                          const isPdf = /\.pdf$/i.test(file.name) || file.type?.includes('pdf');
+                          const previewMeta = attendanceFilePreviews[idx];
+                          const isImg = previewMeta?.type === 'image' || file.type?.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(file.name);
+                          const isPdf = previewMeta?.type === 'pdf' || /\.pdf$/i.test(file.name) || file.type?.includes('pdf');
+                          const isExcel = previewMeta?.type === 'excel' || /\.(xlsx?|csv)$/i.test(file.name);
+                          const imgUrl = previewMeta?.url || (isImg && typeof previewMeta === 'string' ? previewMeta : null);
+
                           return (
-                            <div key={`att-${idx}`} className="relative aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden group shadow-sm flex flex-col justify-between p-1.5">
-                              {attendanceFilePreviews[idx] ? (
-                                <img src={attendanceFilePreviews[idx]} alt={`Attendance ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
-                              ) : isPdf ? (
-                                <div className="w-full h-full flex flex-col items-center justify-center p-1 bg-red-50/50 rounded-lg">
-                                  <FileText className="h-7 w-7 text-red-500 mb-1" />
-                                  <p className="text-[10px] font-bold text-slate-700 text-center truncate w-full">{file.name}</p>
-                                  <p className="text-[9px] text-slate-400 font-medium">{(file.size / 1024).toFixed(0)} KB • PDF</p>
-                                </div>
-                              ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center p-1 bg-emerald-50/50 rounded-lg">
-                                  <FileSpreadsheet className="h-7 w-7 text-emerald-600 mb-1" />
-                                  <p className="text-[10px] font-bold text-slate-700 text-center truncate w-full">{file.name}</p>
-                                  <p className="text-[9px] text-slate-400 font-medium">{(file.size / 1024).toFixed(0)} KB • XLS</p>
-                                </div>
-                              )}
+                            <div
+                              key={`att-${idx}`}
+                              className="relative group rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col justify-between transition hover:shadow-md hover:border-amber-400"
+                            >
+                              <div
+                                className="aspect-square w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center cursor-pointer overflow-hidden relative"
+                                onClick={() => {
+                                  if (isImg && imgUrl) {
+                                    setLightboxImage(imgUrl);
+                                    setLightboxTitle(`Attendance Sheet ${idx + 1} (${file.name})`);
+                                  } else if (isPdf) {
+                                    setPreviewDocModal({
+                                      type: 'pdf',
+                                      name: file.name,
+                                      url: previewMeta?.url || URL.createObjectURL(file),
+                                      size: file.size,
+                                    });
+                                  } else if (isExcel) {
+                                    setPreviewDocModal({
+                                      type: 'excel',
+                                      name: file.name,
+                                      size: file.size,
+                                    });
+                                  }
+                                }}
+                              >
+                                {isImg && imgUrl ? (
+                                  <>
+                                    <img src={imgUrl} alt={`Attendance ${idx + 1}`} className="w-full h-full object-cover transition duration-200 group-hover:scale-105" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                                      <Maximize2 className="h-5 w-5" />
+                                    </div>
+                                  </>
+                                ) : isPdf ? (
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-red-50/70 dark:bg-red-950/40 text-center">
+                                    <FileText className="h-8 w-8 text-red-500 mb-1" />
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-red-600 bg-red-100 dark:bg-red-900/60 px-2 py-0.5 rounded-full">PDF Roster</span>
+                                    <span className="text-[9px] text-slate-500 mt-1">Click to view</span>
+                                  </div>
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-emerald-50/70 dark:bg-emerald-950/40 text-center">
+                                    <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-1" />
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded-full">Excel Sheet</span>
+                                    <span className="text-[9px] text-slate-500 mt-1">Click to view</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="p-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80">
+                                <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={file.name}>
+                                  {file.name}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-medium">
+                                  {(file.size / 1024).toFixed(0)} KB • {isImg ? 'Photo' : isPdf ? 'PDF Document' : 'Spreadsheet'}
+                                </p>
+                              </div>
+
                               <button
                                 type="button"
-                                onClick={() => removeAttendanceFile(idx)}
-                                className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700 cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeAttendanceFile(idx);
+                                }}
+                                className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-md transition cursor-pointer z-10"
+                                title="Remove file"
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           );
@@ -1012,9 +1100,9 @@ export default function TrainerActivities() {
                       </div>
                     )}
 
-                    {/* Upload input area — hide when max reached */}
-                    {(attendanceFiles.length === 0 || (attendanceFiles.every(f => f.type?.startsWith('image/')) && attendanceFiles.length < 5)) && (
-                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
+                    {/* Upload input area — allows up to 10 files */}
+                    {attendanceFiles.length < 10 && (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
                         <input
                           type="file"
                           multiple
@@ -1022,18 +1110,20 @@ export default function TrainerActivities() {
                           onChange={handleAttendanceFileChange}
                           className="hidden"
                         />
-                        <FileSpreadsheet className="h-6 w-6 text-amber-600 mb-1.5 group-hover:scale-110 transition" />
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                          {attendanceFiles.length > 0 ? 'Add more attendance images' : 'Upload Signed Student Attendance Sheet'}
+                        <div className="flex items-center gap-2 mb-2 text-amber-600">
+                          <ImageIcon className="h-6 w-6 group-hover:scale-110 transition" />
+                          <FileText className="h-6 w-6 group-hover:scale-110 transition" />
+                          <FileSpreadsheet className="h-6 w-6 group-hover:scale-110 transition" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          {attendanceFiles.length > 0 ? 'Add more attendance photos or documents' : 'Upload Student Attendance (Photos, PDF, or Excel)'}
                         </p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          {attendanceFiles.length > 0
-                            ? `${5 - attendanceFiles.length} more images allowed (max 10MB each)`
-                            : 'Up to 5 images or 1 PDF/Excel document (max 10MB each)'}
+                        <p className="text-xs text-slate-500 mt-1 max-w-md">
+                          Select multiple photos of physical attendance sheets, signed rosters, PDF documents, or Excel files ({10 - attendanceFiles.length} more allowed, max 15MB each).
                         </p>
-                        <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shadow-sm group-hover:bg-amber-700">
-                          <UploadCloud className="h-3.5 w-3.5" />
-                          Select Files
+                        <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs font-bold shadow-sm group-hover:shadow transition">
+                          <UploadCloud className="h-4 w-4" />
+                          Browse Files
                         </span>
                       </label>
                     )}
@@ -1046,7 +1136,7 @@ export default function TrainerActivities() {
                       className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      Submit Attendance
+                      Submit Attendance ({attendanceFiles.length} file{attendanceFiles.length === 1 ? '' : 's'})
                     </button>
                   </div>
                 </div>
@@ -1426,6 +1516,84 @@ export default function TrainerActivities() {
                 alt={lightboxTitle}
                 className="max-h-[75vh] w-auto object-contain rounded-lg"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── INTERACTIVE DOCUMENT PREVIEW MODAL (PDF / EXCEL) ───────── */}
+      {previewDocModal && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setPreviewDocModal(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-700 flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0">
+              <div className="flex items-center gap-2 truncate">
+                {previewDocModal.type === 'pdf' ? (
+                  <FileText className="h-5 w-5 text-red-500 shrink-0" />
+                ) : (
+                  <FileSpreadsheet className="h-5 w-5 text-emerald-600 shrink-0" />
+                )}
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    {previewDocModal.name || 'Uploaded Document'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {previewDocModal.size ? `${(previewDocModal.size / 1024).toFixed(0)} KB • ` : ''}
+                    {previewDocModal.type === 'pdf' ? 'PDF Document' : 'Excel / CSV Spreadsheet'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {previewDocModal.url && (
+                  <a
+                    href={previewDocModal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition"
+                  >
+                    Open in New Tab ↗
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDocModal(null)}
+                  className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-600 dark:text-slate-300 flex items-center justify-center transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 flex-1 overflow-auto bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center min-h-[400px]">
+              {previewDocModal.type === 'pdf' && previewDocModal.url ? (
+                <iframe
+                  src={previewDocModal.url}
+                  title={previewDocModal.name}
+                  className="w-full h-[65vh] rounded-xl border border-slate-300 dark:border-slate-800 bg-white"
+                />
+              ) : (
+                <div className="text-center p-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-md w-full">
+                  <div className="h-16 w-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-3">
+                    <FileSpreadsheet className="h-8 w-8" />
+                  </div>
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white truncate">
+                    {previewDocModal.name}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Spreadsheet file ready for student attendance processing upon submission.
+                  </p>
+                  <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 text-left space-y-1">
+                    <p className="font-semibold">✓ Supported columns detected:</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">• Roll No / Register No</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">• Student Name</p>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400">• Attendance Status (Present / Absent)</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -21,7 +21,7 @@ const scheduleDocumentSchema = new mongoose.Schema({
     },
     fileType: {
         type: String,
-        enum: ['attendance', 'geotag', 'other'],
+        enum: ['attendance', 'geotag', 'activity', 'pdf', 'excel', 'signature', 'document', 'photo', 'video', 'other'],
         default: 'other',
         index: true,
     },
@@ -30,6 +30,15 @@ const scheduleDocumentSchema = new mongoose.Schema({
         default: null,
     },
     fileName: {
+        type: String,
+        default: null,
+    },
+    localFileName: {
+        type: String,
+        default: null,
+        index: true,
+    },
+    originalFileName: {
         type: String,
         default: null,
     },
