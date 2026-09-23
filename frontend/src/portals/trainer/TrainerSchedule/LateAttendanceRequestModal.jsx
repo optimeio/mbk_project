@@ -21,6 +21,7 @@ import {
   Plus,
   Trash2,
   FileCode2,
+  Maximize2,
 } from "lucide-react";
 import { api } from "@/services/api";
 import { getSecureImageUrl } from "@/utils/imageUtils";
@@ -74,6 +75,8 @@ function LateAttendanceRequestModal({
   const [checkOutPreview, setCheckOutPreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState("");
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [lightboxTitle, setLightboxTitle] = useState("");
 
   const att = selectedSchedule?.attendance || selectedSchedule?.attendanceRecord || selectedSchedule || {};
 
@@ -179,8 +182,8 @@ function LateAttendanceRequestModal({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (activityPhotos.length + files.length > 5) {
-      if (showToast) showToast("warning", "Maximum 5 activity photos allowed.");
+    if (activityPhotos.length + files.length > 10) {
+      if (showToast) showToast("warning", "Maximum 10 activity photos allowed.");
       return;
     }
 
@@ -565,13 +568,26 @@ function LateAttendanceRequestModal({
                               key={i}
                               className="relative rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-xs hover:border-blue-300 transition"
                             >
-                              <div className="aspect-square bg-slate-100 overflow-hidden flex items-center justify-center">
+                              <div
+                                className="aspect-square bg-slate-100 overflow-hidden flex items-center justify-center cursor-pointer relative"
+                                onClick={() => {
+                                  if (typeInfo.isImage && studentDocPreviews[i]) {
+                                    setLightboxImage(studentDocPreviews[i]);
+                                    setLightboxTitle(`Student Attendance: ${file.name}`);
+                                  }
+                                }}
+                              >
                                 {typeInfo.isImage && studentDocPreviews[i] ? (
-                                  <img
-                                    src={studentDocPreviews[i]}
-                                    alt={file.name}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition"
-                                  />
+                                  <>
+                                    <img
+                                      src={studentDocPreviews[i]}
+                                      alt={file.name}
+                                      className="w-full h-full object-cover group-hover:scale-105 transition"
+                                    />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                                      <Maximize2 className="h-4 w-4" />
+                                    </div>
+                                  </>
                                 ) : typeInfo.kind === "pdf" ? (
                                   <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-red-50 text-red-600">
                                     <FileText className="w-8 h-8 mb-1 text-red-500" />
@@ -598,7 +614,7 @@ function LateAttendanceRequestModal({
                               <button
                                 type="button"
                                 onClick={() => removeStudentDoc(i)}
-                                className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer"
+                                className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer z-10"
                                 title="Remove file"
                               >
                                 <XMarkIcon className="w-3.5 h-3.5" />
@@ -611,7 +627,7 @@ function LateAttendanceRequestModal({
 
                     {/* Upload Dropzone / Add More Button */}
                     {studentDocs.length < 10 ? (
-                      <label className={`border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-blue-50/30 transition group ${studentDocs.length > 0 ? 'py-2' : 'py-3.5'}`}>
+                      <label className={`border-2 border-dashed border-blue-200 hover:border-blue-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-blue-50/30 transition group ${studentDocs.length > 0 ? 'py-2.5' : 'py-3.5'}`}>
                         <input
                           type="file"
                           accept=".pdf,.xls,.xlsx,.csv,image/*"
@@ -622,8 +638,10 @@ function LateAttendanceRequestModal({
                         <div className="flex items-center gap-2">
                           {studentDocs.length > 0 ? (
                             <>
-                              <Plus className="h-4 w-4 text-blue-600" />
-                              <span className="text-xs font-bold text-blue-700">Add More Files ({10 - studentDocs.length} remaining)</span>
+                              <span className="h-6 w-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                +
+                              </span>
+                              <span className="text-xs font-bold text-blue-700">Add More Attendance Files ({10 - studentDocs.length} remaining)</span>
                             </>
                           ) : (
                             <div className="flex flex-col items-center">
@@ -643,7 +661,7 @@ function LateAttendanceRequestModal({
                 )}
               </div>
 
-              {/* Proof 3: Students Classroom Activities (up to 5 photos) */}
+              {/* Proof 3: Students Classroom Activities (up to 10 photos) */}
               <div className={`border rounded-xl p-3.5 transition space-y-2.5 sm:col-span-2 ${isActivitiesAlreadyUploaded ? 'bg-emerald-50/30 border-emerald-200' : 'bg-gray-50/50 border-gray-200 hover:bg-gray-50/80'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
@@ -656,7 +674,7 @@ function LateAttendanceRequestModal({
                     </span>
                   ) : activityPhotos.length > 0 ? (
                     <span className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length}/5 Photo(s) Selected
+                      <CheckCircleIcon className="h-3.5 w-3.5" /> {activityPhotos.length}/10 Photo(s) Selected
                     </span>
                   ) : (
                     <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 font-bold">Missing Proof</span>
@@ -667,8 +685,18 @@ function LateAttendanceRequestModal({
                   <div className="space-y-1 pt-1">
                     <div className="flex flex-wrap gap-2">
                       {existingActivityPhotos.map((photoUrl, i) => (
-                        <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300 shadow-xs">
-                          <img src={getSecureImageUrl(photoUrl)} alt={`Existing Activity ${i + 1}`} className="w-full h-full object-cover" />
+                        <div
+                          key={i}
+                          onClick={() => {
+                            setLightboxImage(getSecureImageUrl(photoUrl));
+                            setLightboxTitle(`Uploaded Activity Photo ${i + 1}`);
+                          }}
+                          className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-300 shadow-xs cursor-pointer group"
+                        >
+                          <img src={getSecureImageUrl(photoUrl)} alt={`Existing Activity ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                            <Maximize2 className="h-3.5 w-3.5" />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -684,12 +712,23 @@ function LateAttendanceRequestModal({
                             key={i}
                             className="relative rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-xs hover:border-purple-300 transition"
                           >
-                            <div className="aspect-square bg-slate-100 overflow-hidden">
+                            <div
+                              className="aspect-square bg-slate-100 overflow-hidden cursor-pointer relative"
+                              onClick={() => {
+                                if (activityPreviews[i]) {
+                                  setLightboxImage(activityPreviews[i]);
+                                  setLightboxTitle(`Activity Photo: ${file.name}`);
+                                }
+                              }}
+                            >
                               <img
                                 src={activityPreviews[i]}
                                 alt={file.name}
                                 className="w-full h-full object-cover group-hover:scale-105 transition"
                               />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                                <Maximize2 className="h-4 w-4" />
+                              </div>
                             </div>
                             <div className="p-1.5 bg-white border-t border-slate-100">
                               <p className="text-[10px] font-bold text-slate-800 truncate" title={file.name}>
@@ -700,7 +739,7 @@ function LateAttendanceRequestModal({
                             <button
                               type="button"
                               onClick={() => removeActivityPhoto(i)}
-                              className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer"
+                              className="absolute top-1 right-1 p-1 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow transition cursor-pointer z-10"
                               title="Remove photo"
                             >
                               <XMarkIcon className="w-3.5 h-3.5" />
@@ -711,8 +750,8 @@ function LateAttendanceRequestModal({
                     )}
 
                     {/* Upload Dropzone / Add More Photos Button */}
-                    {activityPhotos.length < 5 ? (
-                      <label className={`border-2 border-dashed border-purple-200 hover:border-purple-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-purple-50/30 transition group ${activityPhotos.length > 0 ? 'py-2' : 'py-4'}`}>
+                    {activityPhotos.length < 10 ? (
+                      <label className={`border-2 border-dashed border-purple-200 hover:border-purple-400 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer bg-white hover:bg-purple-50/30 transition group ${activityPhotos.length > 0 ? 'py-2.5' : 'py-4'}`}>
                         <input
                           type="file"
                           accept="image/*"
@@ -723,21 +762,23 @@ function LateAttendanceRequestModal({
                         <div className="flex items-center gap-2">
                           {activityPhotos.length > 0 ? (
                             <>
-                              <Plus className="h-4 w-4 text-purple-600" />
-                              <span className="text-xs font-bold text-purple-700">Add More Photos ({5 - activityPhotos.length} remaining)</span>
+                              <span className="h-6 w-6 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                +
+                              </span>
+                              <span className="text-xs font-bold text-purple-700">Add More Photos ({10 - activityPhotos.length} remaining)</span>
                             </>
                           ) : (
                             <div className="flex flex-col items-center">
                               <PhotoIcon className="h-6 w-6 text-purple-500 mb-1 group-hover:scale-110 transition" />
                               <p className="text-xs font-bold text-slate-800">Select Classroom Activity Photos</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">Up to 5 images (PNG, JPG) showing students engaged in class</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">Up to 10 images (PNG, JPG) showing students engaged in class</p>
                             </div>
                           )}
                         </div>
                       </label>
                     ) : (
                       <p className="text-[11px] text-emerald-600 font-semibold text-center py-1 bg-emerald-50 rounded-lg">
-                        ✓ Maximum 5 activity photos reached
+                        ✓ Maximum 10 activity photos reached
                       </p>
                     )}
                   </div>
@@ -766,8 +807,17 @@ function LateAttendanceRequestModal({
 
                 {isCheckOutAlreadyUploaded ? (
                   <div className="flex items-center gap-3 pt-1">
-                    <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300 shadow-xs">
-                      <img src={getSecureImageUrl(existingCheckOutUrl)} alt="Check-Out Existing" className="w-full h-full object-cover" />
+                    <div
+                      onClick={() => {
+                        setLightboxImage(getSecureImageUrl(existingCheckOutUrl));
+                        setLightboxTitle("Check-Out Photo (Uploaded)");
+                      }}
+                      className="relative w-16 h-16 rounded-lg overflow-hidden border border-emerald-300 shadow-xs cursor-pointer group"
+                    >
+                      <img src={getSecureImageUrl(existingCheckOutUrl)} alt="Check-Out Existing" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                        <Maximize2 className="h-4 w-4" />
+                      </div>
                     </div>
                     <div className="text-xs text-slate-500">
                       <p className="font-semibold text-emerald-800">Check-out photo recorded</p>
@@ -778,8 +828,19 @@ function LateAttendanceRequestModal({
                   <div>
                     {checkOutImage ? (
                       <div className="relative flex items-center gap-2.5 p-2 bg-white border border-emerald-200 rounded-xl shadow-xs">
-                        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
-                          <img src={checkOutPreview} alt="Check-Out Preview" className="w-full h-full object-cover" />
+                        <div
+                          className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 bg-slate-100 cursor-pointer relative group"
+                          onClick={() => {
+                            if (checkOutPreview) {
+                              setLightboxImage(checkOutPreview);
+                              setLightboxTitle(`Check-Out Photo: ${checkOutImage.name}`);
+                            }
+                          }}
+                        >
+                          <img src={checkOutPreview} alt="Check-Out Preview" className="w-full h-full object-cover group-hover:scale-105 transition" />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                            <Maximize2 className="h-3.5 w-3.5" />
+                          </div>
                         </div>
                         <div className="flex-1 min-w-0 pr-6">
                           <p className="text-xs font-bold text-slate-800 truncate" title={checkOutImage.name}>
@@ -847,6 +908,37 @@ function LateAttendanceRequestModal({
             )}
           </button>
         </div>
+
+        {/* Fullscreen Interactive Lightbox Modal */}
+        {lightboxImage && (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+            onClick={() => setLightboxImage(null)}
+          >
+            <div
+              className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center p-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-full flex items-center justify-between px-4 py-2 text-white border-b border-slate-800">
+                <span className="text-xs font-bold truncate max-w-md">{lightboxTitle || 'Image Preview'}</span>
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(null)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-2 max-h-[80vh] overflow-auto flex items-center justify-center">
+                <img
+                  src={lightboxImage}
+                  alt="Preview"
+                  className="max-w-full max-h-[75vh] object-contain rounded-lg"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

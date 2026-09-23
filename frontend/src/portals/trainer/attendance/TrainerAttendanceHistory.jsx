@@ -77,6 +77,12 @@ const resolveImageUrl = (path) => {
 
 /* ─── style mappings ────────────────────────────────────────── */
 const STATUS_CONFIG = {
+  InProgress: {
+    badge: "bg-sky-50 text-sky-700 border-sky-200 ring-sky-600/10",
+    dot: "bg-sky-500 animate-pulse",
+    icon: Clock3,
+    label: "Session In Progress",
+  },
   Present: {
     badge: "bg-emerald-50 text-emerald-700 border-emerald-200 ring-emerald-600/10",
     dot: "bg-emerald-500",
@@ -645,25 +651,53 @@ function TrainerAttendanceHistory() {
           {!loading && !error && filteredRecords.length > 0 && (
             <div className="space-y-4">
               {filteredRecords.map((record, idx) => {
+                const todayIST = toCalendarYMD(new Date());
+                const now = new Date();
+                const formatter = new Intl.DateTimeFormat("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  hour: "numeric",
+                  minute: "numeric",
+                  hour12: false,
+                });
+                const parts = formatter.formatToParts(now);
+                const currentHour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+                const currentMinute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+                const currentMins = currentHour * 60 + currentMinute;
+
                 const lateReqNorm = String(record.lateRequestStatus || "").toLowerCase();
                 const verifNorm = String(record.verificationStatus || "").toLowerCase();
                 const statusNorm = String(record.status || record.attendanceStatus || "").toLowerCase();
 
-                const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkIn?.time || record.checkInTime);
+                const recYMD = toCalendarYMD(record.date || record.assignedDate || record.checkInTime || record.createdAt);
+                const isToday = recYMD === todayIST;
+                const sessionType = String(record.session || record.scheduleId?.session || "").toUpperCase();
+
+                const hasCheckIn = Boolean(record.imageUrl || record.checkInPhoto || record.checkInImage || record.checkIn?.time || record.checkInTime);
                 const hasStudentDoc = Boolean(record.attendancePdfUrl || record.attendanceExcelUrl || record.studentsPhotoUrl || record.attendancePhotoUrl || record.attendanceDocumentUrl || (Array.isArray(record.studentAttendanceImageUrls) && record.studentAttendanceImageUrls.length > 0));
                 const hasActivities = Boolean(Array.isArray(record.activityPhotos) && record.activityPhotos.length > 0);
                 const hasCheckOut = Boolean(record.checkOutGeoImageUrl || (Array.isArray(record.checkOut?.photos) && record.checkOut.photos.length > 0) || record.checkOutTime || record.checkOut?.time);
 
                 const hasAllProofs = hasCheckIn && hasStudentDoc && hasActivities && hasCheckOut;
 
-                const isPendingApproval = lateReqNorm === "pending" || (record.isLateRequest && verifNorm === "pending") || (verifNorm === "pending" && statusNorm === "pending" && !record.isSyntheticSchedule);
+                // For sessions today, check if session is active / within daily window
+                let isTodayClosed = false;
+                if (isToday) {
+                  if (sessionType === "FN" && currentMins >= 13 * 60 + 30) isTodayClosed = true;
+                  else if ((sessionType === "AN" || sessionType === "FULL_DAY") && currentMins >= 19 * 60) isTodayClosed = true;
+                }
+
+                const isSessionActiveToday = isToday && !isTodayClosed && hasCheckIn && !hasCheckOut;
+
+                const isPendingApproval = lateReqNorm === "pending" || (record.isLateRequest && verifNorm === "pending") || (verifNorm === "pending" && statusNorm === "pending" && !record.isSyntheticSchedule && !isSessionActiveToday);
                 const isApprovedPresent = (lateReqNorm === "approved" && hasCheckIn) || (verifNorm === "approved" && hasCheckIn && hasCheckOut);
                 const isRejected = lateReqNorm === "rejected" || verifNorm === "rejected";
 
-                const isMissingProofs = !record.isSyntheticSchedule && !isPendingApproval && !isApprovedPresent && !isRejected && hasCheckIn && !hasAllProofs;
+                const isMissingProofs = !record.isSyntheticSchedule && !isPendingApproval && !isApprovedPresent && !isRejected && hasCheckIn && !hasAllProofs && (!isToday || isTodayClosed);
 
                 let activeStatusKey = "Pending";
-                if (isPendingApproval) {
+                if (isSessionActiveToday) {
+                  activeStatusKey = "InProgress";
+                } else if (isPendingApproval) {
                   activeStatusKey = "PendingApproval";
                 } else if (isApprovedPresent) {
                   activeStatusKey = "Present";
@@ -693,8 +727,8 @@ function TrainerAttendanceHistory() {
                 const dayNum = record.dayNumber || record.scheduleId?.dayNumber || 1;
                 const duration = formatDuration(record.workingDurationMinutes);
 
-                const checkInImg = record.checkInImage || record.imageUrl;
-                const checkOutImg = record.checkOutImage || record.checkOutGeoImageUrl;
+                const checkInImg = record.checkInImage || record.imageUrl || record.checkInPhoto || record.checkIn?.photo;
+                const checkOutImg = record.checkOutImage || record.checkOutGeoImageUrl || record.checkOut?.photos?.[0]?.url;
 
                 return (
                   <div
@@ -803,15 +837,20 @@ function TrainerAttendanceHistory() {
                               <button
                                 type="button"
                                 onClick={() => setPreviewImage(resolveImageUrl(checkInImg))}
-                                className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-200 shadow-sm"
+                                className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-sm flex items-center justify-center"
                                 title="View Check-In Photo"
                               >
                                 <img loading="lazy"
                                   src={resolveImageUrl(checkInImg)}
                                   alt="Check-in GeoTag"
                                   className="h-full w-full object-cover transition group-hover:scale-110"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.parentElement.classList.add('flex', 'items-center', 'justify-center');
+                                  }}
                                 />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                <Camera className="h-5 w-5 text-slate-400 absolute" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100 z-10">
                                   <Eye className="h-4 w-4 text-white" />
                                 </div>
                               </button>
@@ -845,15 +884,20 @@ function TrainerAttendanceHistory() {
                               <button
                                 type="button"
                                 onClick={() => setPreviewImage(resolveImageUrl(checkOutImg))}
-                                className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-200 shadow-sm"
+                                className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 shadow-sm flex items-center justify-center"
                                 title="View Check-Out Photo"
                               >
                                 <img loading="lazy"
                                   src={resolveImageUrl(checkOutImg)}
                                   alt="Check-out GeoTag"
                                   className="h-full w-full object-cover transition group-hover:scale-110"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.parentElement.classList.add('flex', 'items-center', 'justify-center');
+                                  }}
                                 />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100">
+                                <Camera className="h-5 w-5 text-slate-400 absolute" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition group-hover:opacity-100 z-10">
                                   <Eye className="h-4 w-4 text-white" />
                                 </div>
                               </button>
@@ -881,7 +925,15 @@ function TrainerAttendanceHistory() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                          {isPendingApproval ? (
+                          {isSessionActiveToday ? (
+                            <Link
+                              href={`/trainer/activities?scheduleId=${record.scheduleId?._id || record.scheduleId || record._id}`}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#0f3f5c] hover:bg-[#1a6b9e] text-white shadow-sm transition active:scale-95"
+                            >
+                              <span>Resume Session Workflow</span>
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </Link>
+                          ) : isPendingApproval ? (
                             <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200 shadow-sm">
                               <Clock3 className="h-3.5 w-3.5 text-amber-600" />
                               Awaiting Admin Approval
