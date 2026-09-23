@@ -395,9 +395,34 @@ export default function TrainerAttendanceRequests() {
       {/* Proof Inspection & Verification Modal */}
       <Modal
         title={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Layers size={18} color="#4f46e5" />
-            <span>Review Late Attendance Request</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, paddingRight: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Layers size={18} color="#4f46e5" />
+              <span style={{ fontWeight: 600 }}>Review Late Attendance Request</span>
+            </div>
+            {(() => {
+              const driveFolderId =
+                selectedRecord?.driveFolderId ||
+                selectedRecord?.dayFolderId ||
+                selectedRecord?.scheduleId?.driveFolderId ||
+                selectedRecord?.scheduleId?.dayFolderId ||
+                selectedRecord?.collegeDriveFolderId ||
+                selectedRecord?.trainerId?.googleDriveFolderId ||
+                selectedRecord?.collegeId?.driveFolderId;
+              const driveFolderUrl = selectedRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+              return driveFolderUrl ? (
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<ExternalLink size={12} />}
+                  href={driveFolderUrl}
+                  target="_blank"
+                  style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
+                >
+                  Google Drive Folder
+                </Button>
+              ) : null;
+            })()}
           </div>
         }
         open={reviewModalVisible}

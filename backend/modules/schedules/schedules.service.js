@@ -1231,31 +1231,63 @@ const validateTrainerApproved = async (trainerId) => {
   }
 };
 
-const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTime, endTime, session, excludeScheduleId = null }) => {
-  if (!trainerId || !scheduledDate) return null;
+const checkTrainerScheduleConflict = async ({
+  trainerId,
+  scheduledDate,
+  startTime,
+  endTime,
+  session,
+  dayNumber = null,
+  collegeId = null,
+  excludeScheduleId = null,
+}) => {
+  if (!trainerId || (!scheduledDate && !dayNumber)) return null;
 
   try {
     const mongoose = require("mongoose");
     if (!mongoose.Types.ObjectId.isValid(trainerId)) return null;
 
-    const { Schedule } = require("../../models");
+    const { Schedule, Trainer } = require("../../models");
 
-    const targetDateStr = dayjs(scheduledDate).format("YYYY-MM-DD");
-    const startOfDay = dayjs(targetDateStr).startOf("day").toDate();
-    const endOfDay = dayjs(targetDateStr).endOf("day").toDate();
+    const normalizeDateStr = (d) => {
+      if (!d) return null;
+      if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+        return d.slice(0, 10);
+      }
+      try {
+        const dateObj = new Date(d);
+        if (isNaN(dateObj.getTime())) return null;
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const day = String(dateObj.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      } catch {
+        return null;
+      }
+    };
 
+    const targetDateStr = scheduledDate ? normalizeDateStr(scheduledDate) : null;
+
+    // Search query for active schedules of this trainer
     const query = {
       trainerId,
       status: { $nin: ["cancelled", "CANCELLED"] },
       isActive: { $ne: false },
-      $or: [
-        { scheduledDate: { $gte: startOfDay, $lte: endOfDay } },
-        { date: { $gte: startOfDay, $lte: endOfDay } },
-      ],
     };
 
+    if (targetDateStr) {
+      const startQuery = dayjs(targetDateStr).subtract(1, "day").startOf("day").toDate();
+      const endQuery = dayjs(targetDateStr).add(1, "day").endOf("day").toDate();
+      query.$or = [
+        { scheduledDate: { $gte: startQuery, $lte: endQuery } },
+        { date: { $gte: startQuery, $lte: endQuery } },
+      ];
+    } else if (dayNumber && collegeId && mongoose.Types.ObjectId.isValid(collegeId)) {
+      query.collegeId = collegeId;
+      query.dayNumber = Number(dayNumber);
+    }
+
     if (excludeScheduleId) {
-      const mongoose = require("mongoose");
       if (mongoose.Types.ObjectId.isValid(excludeScheduleId)) {
         query._id = { $ne: new mongoose.Types.ObjectId(excludeScheduleId) };
       }
@@ -1263,7 +1295,7 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
 
     const existingSchedules = await Schedule.find(query)
       .populate("collegeId", "name")
-      .populate({ path: "trainerId", select: "name trainerId", populate: { path: "userId", select: "name" } })
+      .populate({ path: "trainerId", select: "name trainerId firstName lastName", populate: { path: "userId", select: "name email" } })
       .lean();
 
     if (!existingSchedules.length) return null;
@@ -1285,9 +1317,16 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
     };
 
     const getSessionBounds = (sessionType, startStr, endStr) => {
-      const normalizedSession = String(sessionType || "").trim().toUpperCase();
-      if (normalizedSession === 'AN') return { start: 14 * 60, end: 18 * 60 };
-      if (normalizedSession === 'FN') return { start: 9 * 60, end: 13 * 60 + 30 };
+      const norm = String(sessionType || "").trim().toUpperCase();
+      if (norm === "FULL_DAY" || norm === "FULL" || norm === "ALL_DAY" || norm === "BOTH") {
+        return { start: 9 * 60, end: 18 * 60 + 30, isFullDay: true };
+      }
+      if (norm === "AN" || norm === "AFTERNOON") {
+        return { start: 13 * 60, end: 18 * 60 + 30, isAN: true };
+      }
+      if (norm === "FN" || norm === "FORENOON" || norm === "MORNING") {
+        return { start: 9 * 60, end: 13 * 60 + 30, isFN: true };
+      }
 
       if (startStr && endStr) {
         const parsedStart = parseTimeToMinutes(startStr, false);
@@ -1299,27 +1338,62 @@ const checkTrainerScheduleConflict = async ({ trainerId, scheduledDate, startTim
 
       return {
         start: 9 * 60,
-        end: 13 * 60 + 30
+        end: 18 * 60 + 30,
+        isFullDay: true,
       };
     };
 
     const newBounds = getSessionBounds(session, startTime, endTime);
+    const normalizedNewSession = String(session || "").trim().toUpperCase() || "FN";
 
     for (const existing of existingSchedules) {
+      // 1. Check Date alignment
+      const existingDateStr = normalizeDateStr(existing.scheduledDate || existing.date);
+      const isSameDate = targetDateStr && existingDateStr && targetDateStr === existingDateStr;
+      const isSameDayNumber = dayNumber && existing.dayNumber && Number(dayNumber) === Number(existing.dayNumber);
+
+      if (!isSameDate && !isSameDayNumber) {
+        continue;
+      }
+
       const existingBounds = getSessionBounds(existing.session, existing.startTime, existing.endTime);
+      const normalizedExistingSession = String(existing.session || "").trim().toUpperCase() || "FN";
 
-      // Strict time range overlap formula: startA < endB && endA > startB
-      const isOverlapping = (newBounds.start < existingBounds.end) && (newBounds.end > existingBounds.start);
+      // 2. Strict session conflict rules:
+      // Direct session match (FN vs FN, AN vs AN)
+      const isDirectSessionMatch = (
+        (normalizedNewSession === "FN" && normalizedExistingSession === "FN") ||
+        (normalizedNewSession === "AN" && normalizedExistingSession === "AN")
+      );
 
-      if (isOverlapping) {
-        const collegeName = existing.collegeId?.name || "Another College";
-        const trainerName = existing.trainerId?.name || existing.trainerId?.userId?.name || "This trainer";
-        const formattedDate = dayjs(existing.scheduledDate || existing.date).format("DD-MM-YYYY");
+      // Full day overlap (FULL_DAY conflicts with any FN, AN, or FULL_DAY)
+      const isFullDayOverlap = (
+        newBounds.isFullDay ||
+        existingBounds.isFullDay ||
+        normalizedNewSession === "FULL_DAY" ||
+        normalizedExistingSession === "FULL_DAY"
+      );
+
+      // Time range overlap formula: startA < endB && endA > startB
+      const isTimeOverlapping = (newBounds.start < existingBounds.end) && (newBounds.end > existingBounds.start);
+
+      const isConflict = isDirectSessionMatch || isFullDayOverlap || isTimeOverlapping;
+
+      if (isConflict) {
+        const collegeName = existing.collegeId?.name || "another college";
+        const trainerName =
+          existing.trainerId?.name ||
+          existing.trainerId?.userId?.name ||
+          (existing.trainerId?.firstName ? `${existing.trainerId.firstName} ${existing.trainerId.lastName || ''}`.trim() : "This trainer");
+        const formattedDate = targetDateStr
+          ? dayjs(targetDateStr).format("DD-MM-YYYY")
+          : (existingDateStr ? dayjs(existingDateStr).format("DD-MM-YYYY") : `Day ${existing.dayNumber || dayNumber}`);
         const existingSessionLabel = existing.session || "FN";
 
         return {
           conflict: true,
-          message: `Trainer ${trainerName} is already assigned at ${collegeName} on ${formattedDate} (${existingSessionLabel}).`,
+          message: `Schedule Conflict: Trainer ${trainerName} is already assigned on ${formattedDate} (${existingSessionLabel}) at ${collegeName}. Overlapping schedules on the same day/session are not allowed.`,
+          existingSchedule: existing,
         };
       }
     }
@@ -1370,13 +1444,15 @@ const createScheduleFeed = async ({
     await validateTrainerApproved(trainerId);
   }
 
-  if (trainerId && scheduledDate) {
+  if (trainerId && (scheduledDate || dayNumber)) {
     const conflictResult = await checkTrainerScheduleConflict({
       trainerId,
       scheduledDate,
       startTime,
       endTime,
       session,
+      dayNumber,
+      collegeId,
     });
     if (conflictResult?.conflict) {
       const conflictError = new Error(conflictResult.message);
@@ -2375,7 +2451,7 @@ const assignScheduleFeed = async ({
     await validateTrainerApproved(trainerId);
   }
 
-  if (trainerId && (scheduledDate || schedule.scheduledDate)) {
+  if (trainerId && (scheduledDate || schedule.scheduledDate || schedule.dayNumber)) {
     const targetDate = scheduledDate || schedule.scheduledDate;
     const conflictResult = await checkTrainerScheduleConflict({
       trainerId,
@@ -2383,6 +2459,8 @@ const assignScheduleFeed = async ({
       startTime: startTime || schedule.startTime,
       endTime: endTime || schedule.endTime,
       session: session || schedule.session,
+      dayNumber: schedule.dayNumber,
+      collegeId: schedule.collegeId,
       excludeScheduleId: schedule._id,
     });
     if (conflictResult?.conflict) {
@@ -2598,13 +2676,15 @@ const updateScheduleFeed = async ({
     schedule.session = normalizeSessionType(schedule.session, schedule.startTime, schedule.endTime);
   }
   
-  if (schedule.trainerId && schedule.scheduledDate && (payload?.trainerId !== undefined || payload?.scheduledDate !== undefined || payload?.startTime !== undefined || payload?.endTime !== undefined || payload?.session !== undefined)) {
+  if (schedule.trainerId && (schedule.scheduledDate || schedule.dayNumber) && (payload?.trainerId !== undefined || payload?.scheduledDate !== undefined || payload?.startTime !== undefined || payload?.endTime !== undefined || payload?.session !== undefined || payload?.dayNumber !== undefined)) {
     const conflictResult = await checkTrainerScheduleConflict({
       trainerId: schedule.trainerId,
       scheduledDate: schedule.scheduledDate,
       startTime: schedule.startTime,
       endTime: schedule.endTime,
       session: schedule.session,
+      dayNumber: schedule.dayNumber,
+      collegeId: schedule.collegeId,
       excludeScheduleId: schedule._id,
     });
     if (conflictResult?.conflict) {

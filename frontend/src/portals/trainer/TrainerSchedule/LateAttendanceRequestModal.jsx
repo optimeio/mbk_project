@@ -622,6 +622,24 @@ function LateAttendanceRequestModal({
                             </div>
                           );
                         })}
+
+                        {/* Inline + Add More Tile in Grid */}
+                        {studentDocs.length < 10 && (
+                          <label className="aspect-square rounded-xl border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-100/50 flex flex-col items-center justify-center cursor-pointer transition group shadow-xs">
+                            <input
+                              type="file"
+                              accept=".pdf,.xls,.xlsx,.csv,image/*"
+                              multiple
+                              onChange={handleStudentDocChange}
+                              className="hidden"
+                            />
+                            <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold mb-1 group-hover:scale-110 transition shadow-xs">
+                              <span className="text-xl leading-none font-black">+</span>
+                            </div>
+                            <span className="text-[11px] font-bold text-blue-800">Add More</span>
+                            <span className="text-[9px] text-slate-400">{10 - studentDocs.length} left</span>
+                          </label>
+                        )}
                       </div>
                     )}
 

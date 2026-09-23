@@ -1097,12 +1097,30 @@ export default function TrainerActivities() {
                             </div>
                           );
                         })}
+
+                        {/* Direct + Add More Button Tile inside the grid */}
+                        {attendanceFiles.length < 10 && (
+                          <label className="aspect-square rounded-xl border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/40 hover:bg-amber-100/50 dark:bg-slate-800/40 dark:hover:bg-slate-800 flex flex-col items-center justify-center cursor-pointer transition group shadow-xs">
+                            <input
+                              type="file"
+                              multiple
+                              accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,image/*"
+                              onChange={handleAttendanceFileChange}
+                              className="hidden"
+                            />
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold mb-1 group-hover:scale-110 transition shadow-sm">
+                              <span className="text-xl leading-none font-black">+</span>
+                            </div>
+                            <span className="text-xs font-bold text-amber-800 dark:text-amber-300">Add More</span>
+                            <span className="text-[10px] text-slate-400 font-medium">{10 - attendanceFiles.length} slots left</span>
+                          </label>
+                        )}
                       </div>
                     )}
 
                     {/* Upload input area — allows up to 10 files */}
                     {attendanceFiles.length < 10 && (
-                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
+                      <label className="border-2 border-dashed border-slate-300 hover:border-amber-500 dark:border-slate-700 dark:hover:border-amber-400 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/20 dark:bg-slate-800/20 transition group">
                         <input
                           type="file"
                           multiple
@@ -1115,15 +1133,16 @@ export default function TrainerActivities() {
                           <FileText className="h-6 w-6 group-hover:scale-110 transition" />
                           <FileSpreadsheet className="h-6 w-6 group-hover:scale-110 transition" />
                         </div>
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                          {attendanceFiles.length > 0 ? 'Add more attendance photos or documents' : 'Upload Student Attendance (Photos, PDF, or Excel)'}
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                          <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-500 text-white font-bold text-xs">+</span>
+                          {attendanceFiles.length > 0 ? 'Click to add more attendance photos, PDF or Excel files' : 'Upload Student Attendance (Photos, PDF, or Excel)'}
                         </p>
                         <p className="text-xs text-slate-500 mt-1 max-w-md">
                           Select multiple photos of physical attendance sheets, signed rosters, PDF documents, or Excel files ({10 - attendanceFiles.length} more allowed, max 15MB each).
                         </p>
                         <span className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs font-bold shadow-sm group-hover:shadow transition">
                           <UploadCloud className="h-4 w-4" />
-                          Browse Files
+                          Browse &amp; Add Files
                         </span>
                       </label>
                     )}
@@ -1204,7 +1223,7 @@ export default function TrainerActivities() {
                         Classroom Photos <span className="text-rose-500">*</span>
                       </label>
                       <span className="text-[11px] font-semibold text-slate-400">
-                        {activityImages.length}/5 uploaded
+                        {activityImages.length}/10 uploaded
                       </span>
                     </div>
 
@@ -1212,20 +1231,38 @@ export default function TrainerActivities() {
                       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
                         {activityPreviews.map((p, idx) => (
                           <div key={`${p}-${idx}`} className="relative aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden group shadow-sm">
-                            <img src={p} alt={`Activity ${idx + 1}`} className="w-full h-full object-cover" />
+                            <img src={p} alt={`Activity ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition" />
                             <button
                               type="button"
                               onClick={() => removeActivityImage(idx)}
-                              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700"
+                              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow transition hover:bg-rose-700 z-10"
                             >
                               <X className="h-3 w-3" />
                             </button>
                           </div>
                         ))}
+
+                        {/* Direct + Add Photo Button Tile inside grid */}
+                        {activityImages.length < 10 && (
+                          <label className="aspect-square rounded-xl border-2 border-dashed border-sky-300 hover:border-sky-500 bg-sky-50/40 hover:bg-sky-100/50 dark:bg-slate-800/40 dark:hover:bg-slate-800 flex flex-col items-center justify-center cursor-pointer transition group shadow-xs">
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              onChange={handleActivityFileChange}
+                              className="hidden"
+                            />
+                            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-500 text-white flex items-center justify-center font-bold mb-1 group-hover:scale-110 transition shadow-sm">
+                              <span className="text-lg leading-none font-black">+</span>
+                            </div>
+                            <span className="text-[11px] font-bold text-sky-800 dark:text-sky-300">Add Photo</span>
+                            <span className="text-[9px] text-slate-400 font-medium">{10 - activityImages.length} slots left</span>
+                          </label>
+                        )}
                       </div>
                     )}
 
-                    {activityImages.length < 5 && (
+                    {activityImages.length < 10 && (
                       <label className="border-2 border-dashed border-slate-300 hover:border-sky-500 dark:border-slate-700 dark:hover:border-sky-400 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 hover:bg-sky-50/20 dark:bg-slate-800/20 transition group">
                         <input
                           type="file"
@@ -1235,11 +1272,12 @@ export default function TrainerActivities() {
                           className="hidden"
                         />
                         <ImageIcon className="h-6 w-6 text-sky-600 mb-1.5 group-hover:scale-110 transition" />
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                          Click to upload classroom session photos
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                          <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-sky-500 text-white font-bold text-[10px]">+</span>
+                          {activityImages.length > 0 ? 'Click to add more classroom session photos' : 'Upload Classroom Session Photos (Up to 10)'}
                         </p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {5 - activityImages.length} more photos allowed (max 10MB each)
+                          {10 - activityImages.length} more photos allowed (max 10MB each)
                         </p>
                       </label>
                     )}

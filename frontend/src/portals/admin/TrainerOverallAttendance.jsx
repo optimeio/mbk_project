@@ -2105,20 +2105,68 @@ const TrainerOverallAttendance = () => {
             <Modal
                 open={Boolean(selectedGeoRecord)}
                 title={
-                  <Space>
-                    <UserRound size={18} color="#1890ff" />
-                    <span style={{ fontSize: "16px", fontWeight: 600 }}>
-                      Day {selectedGeoRecord?.dayNumber || selectedGeoRecord?.scheduleId?.dayNumber || "1"} ({selectedGeoRecord?.session || selectedGeoRecord?.scheduleId?.session || "FN"}) Attendance & Evidence Details - {selectedGeoRecord?.trainerId?.userId?.name || selectedGeoRecord?.trainerId?.name || 'Trainer'} {selectedGeoRecord?.collegeId?.name ? `(${selectedGeoRecord.collegeId.name})` : (selectedGeoRecord?.scheduleId?.collegeId?.name ? `(${selectedGeoRecord.scheduleId.collegeId.name})` : '')}
-                    </span>
-                  </Space>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingRight: 24 }}>
+                    <Space>
+                      <UserRound size={18} color="#1890ff" />
+                      <span style={{ fontSize: "15px", fontWeight: 600 }}>
+                        Day {selectedGeoRecord?.dayNumber || selectedGeoRecord?.scheduleId?.dayNumber || "1"} ({selectedGeoRecord?.session || selectedGeoRecord?.scheduleId?.session || "FN"}) Attendance Details - {selectedGeoRecord?.trainerId?.userId?.name || selectedGeoRecord?.trainerId?.name || 'Trainer'} {selectedGeoRecord?.collegeId?.name ? `(${selectedGeoRecord.collegeId.name})` : (selectedGeoRecord?.scheduleId?.collegeId?.name ? `(${selectedGeoRecord.scheduleId.collegeId.name})` : '')}
+                      </span>
+                    </Space>
+                    {(() => {
+                      const driveFolderId =
+                        selectedGeoRecord?.driveFolderId ||
+                        selectedGeoRecord?.dayFolderId ||
+                        selectedGeoRecord?.scheduleId?.driveFolderId ||
+                        selectedGeoRecord?.scheduleId?.dayFolderId ||
+                        selectedGeoRecord?.collegeDriveFolderId ||
+                        selectedGeoRecord?.trainerId?.googleDriveFolderId ||
+                        selectedGeoRecord?.collegeId?.driveFolderId;
+                      const driveFolderUrl = selectedGeoRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+                      return driveFolderUrl ? (
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<ExternalLink size={12} />}
+                          href={driveFolderUrl}
+                          target="_blank"
+                          style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
+                        >
+                          Google Drive Folder
+                        </Button>
+                      ) : null;
+                    })()}
+                  </div>
                 }
                 onCancel={() => setSelectedGeoRecord(null)}
                 footer={[
+                    (() => {
+                      const driveFolderId =
+                        selectedGeoRecord?.driveFolderId ||
+                        selectedGeoRecord?.dayFolderId ||
+                        selectedGeoRecord?.scheduleId?.driveFolderId ||
+                        selectedGeoRecord?.scheduleId?.dayFolderId ||
+                        selectedGeoRecord?.collegeDriveFolderId ||
+                        selectedGeoRecord?.trainerId?.googleDriveFolderId ||
+                        selectedGeoRecord?.collegeId?.driveFolderId;
+                      const driveFolderUrl = selectedGeoRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+                      return driveFolderUrl ? (
+                        <Button
+                          key="drive"
+                          type="default"
+                          icon={<ExternalLink size={14} />}
+                          href={driveFolderUrl}
+                          target="_blank"
+                          style={{ color: '#059669', borderColor: '#059669', fontWeight: 600 }}
+                        >
+                          Open in Google Drive
+                        </Button>
+                      ) : null;
+                    })(),
                     <Button key="close" type="primary" onClick={() => setSelectedGeoRecord(null)}>
                         Close
                     </Button>,
                 ]}
-                width={940}
+                width={960}
             >
                 {selectedGeoRecord ? (() => {
                     const checkOutEvidence = getCheckOutEvidenceEntries(selectedGeoRecord);
@@ -2137,6 +2185,16 @@ const TrainerOverallAttendance = () => {
                     const absentCount = selectedGeoRecord?.studentsAbsent ?? (studentsList.length > 0 ? studentsList.filter(s => s.status === 'Absent').length : 0);
                     const totalStudents = presentCount + absentCount || studentsList.length || 0;
                     const attendancePercent = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : null;
+
+                    const driveFolderId =
+                      selectedGeoRecord?.driveFolderId ||
+                      selectedGeoRecord?.dayFolderId ||
+                      selectedGeoRecord?.scheduleId?.driveFolderId ||
+                      selectedGeoRecord?.scheduleId?.dayFolderId ||
+                      selectedGeoRecord?.collegeDriveFolderId ||
+                      selectedGeoRecord?.trainerId?.googleDriveFolderId ||
+                      selectedGeoRecord?.collegeId?.driveFolderId;
+                    const driveFolderUrl = selectedGeoRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
 
                     const checkInMapsUrl =
                         checkInLoc?.hasCoords

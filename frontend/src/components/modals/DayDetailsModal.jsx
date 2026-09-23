@@ -377,9 +377,17 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
     if (day) {
         const dayNumberValue = day.dayNumber ?? day.dayNo ?? day.dayIndex;
         const dayLabel = dayNumberValue ? `Day ${dayNumberValue}` : null;
+        const driveFolderId = day.driveFolderId
+            || day.dayFolderId
+            || day.schedule?.driveFolderId
+            || day.schedule?.dayFolderId
+            || day.attendance?.driveFolderId
+            || day.trainerId?.googleDriveFolderId
+            || day.collegeId?.driveFolderId;
         const driveFolderUrl = day.driveFolderLink
             || day.dayFolderLink
-            || (day.driveFolderId ? `https://drive.google.com/drive/folders/${day.driveFolderId}` : null);
+            || day.driveFolderUrl
+            || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
 
         const handleVerification = (status) => {
             if (onVerify) {
