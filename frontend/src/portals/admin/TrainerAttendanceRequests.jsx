@@ -545,51 +545,60 @@ export default function TrainerAttendanceRequests() {
                     <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
                       <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#1d4ed8", display: "flex", alignItems: "center", gap: 4 }}>
                         <FileSpreadsheet size={13} />
-                        <span>2. Student Attendance {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 1 ? `(${selectedRecord.studentAttendanceImageUrls.length})` : ''}</span>
+                        <span>
+                          2. Student Attendance{' '}
+                          {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0
+                            ? `(${selectedRecord.studentAttendanceImageUrls.length} photo${selectedRecord.studentAttendanceImageUrls.length > 1 ? 's' : ''})`
+                            : ''}
+                        </span>
                       </div>
-                      {selectedRecord.attendancePdfUrl ? (
-                        <Button
-                          type="primary"
-                          danger
-                          icon={<FileText size={13} />}
-                          href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
-                          target="_blank"
-                          style={{ width: "100%", fontSize: 11, height: 32 }}
-                        >
-                          View PDF Roster
-                        </Button>
-                      ) : selectedRecord.attendanceExcelUrl ? (
-                        <Button
-                          type="primary"
-                          icon={<FileSpreadsheet size={13} />}
-                          href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
-                          target="_blank"
-                          style={{ width: "100%", fontSize: 11, height: 32, backgroundColor: "#15803d", borderColor: "#15803d" }}
-                        >
-                          Download Excel Roster
-                        </Button>
-                      ) : Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 1 ? (
-                        <Image.PreviewGroup>
-                          <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
-                            {selectedRecord.studentAttendanceImageUrls.map((img, i) => (
-                              <Image
-                                key={i}
-                                src={getSecureImageUrl(img)}
-                                alt={`Attendance Sheet ${i + 1}`}
-                                style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
-                              />
-                            ))}
-                          </div>
-                        </Image.PreviewGroup>
-                      ) : cleanAttendanceSheetUrl ? (
-                        <Image
-                          src={getSecureImageUrl(cleanAttendanceSheetUrl)}
-                          alt="Student Sheet"
-                          style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
-                        />
-                      ) : (
-                        <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                      )}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {selectedRecord.attendancePdfUrl && (
+                          <Button
+                            type="primary"
+                            danger
+                            icon={<FileText size={13} />}
+                            href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
+                            target="_blank"
+                            style={{ width: "100%", fontSize: 11, height: 30 }}
+                          >
+                            View PDF Roster
+                          </Button>
+                        )}
+                        {selectedRecord.attendanceExcelUrl && (
+                          <Button
+                            type="primary"
+                            icon={<FileSpreadsheet size={13} />}
+                            href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
+                            target="_blank"
+                            style={{ width: "100%", fontSize: 11, height: 30, backgroundColor: "#15803d", borderColor: "#15803d" }}
+                          >
+                            Download Excel Roster
+                          </Button>
+                        )}
+                        {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0 ? (
+                          <Image.PreviewGroup>
+                            <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+                              {selectedRecord.studentAttendanceImageUrls.map((img, i) => (
+                                <Image
+                                  key={i}
+                                  src={getSecureImageUrl(img)}
+                                  alt={`Attendance Sheet ${i + 1}`}
+                                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 4 }}
+                                />
+                              ))}
+                            </div>
+                          </Image.PreviewGroup>
+                        ) : cleanAttendanceSheetUrl ? (
+                          <Image
+                            src={getSecureImageUrl(cleanAttendanceSheetUrl)}
+                            alt="Student Sheet"
+                            style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 4 }}
+                          />
+                        ) : !selectedRecord.attendancePdfUrl && !selectedRecord.attendanceExcelUrl ? (
+                          <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                        ) : null}
+                      </div>
                     </div>
 
                     {/* Proof 3: Student Classroom Activities */}

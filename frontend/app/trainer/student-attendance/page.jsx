@@ -10,8 +10,8 @@ import { MapPin, RefreshCw, Loader2 } from 'lucide-react';
 export default function StudentAttendancePage() {
   const { currentUser } = useAuth();
 
-  const [excelFile, setExcelFile] = useState(null);
-  const [liveFile, setLiveFile] = useState(null);
+  const [docFiles, setDocFiles] = useState([]);
+  const [liveFiles, setLiveFiles] = useState([]);
 
   // Location State
   const [location, setLocation] = useState(null); // {lat, lng, accuracy}
@@ -66,19 +66,42 @@ export default function StudentAttendancePage() {
     captureLocation();
   }, [captureLocation]);
 
-  const handleExcelUpload = async (file, onProgress) => {
+  const handleDocUpload = async (fileList, onProgress) => {
     if (!trainerId) {
       const errorMsg = 'Trainer session not found. Please log in again.';
       toast.error(errorMsg);
       throw new Error(errorMsg);
     }
 
+    const filesToUpload = Array.isArray(fileList) ? fileList : [fileList];
+    if (filesToUpload.length === 0) return;
+
     const formData = new FormData();
-    formData.append('attendanceExcel', file);
     formData.append('trainer_id', String(trainerId));
     formData.append('attendance_date', new Date().toISOString().split('T')[0]);
     formData.append('status', 'Present');
     formData.append('checkInTime', new Date().toTimeString().slice(0, 5));
+
+    let hasExcel = false;
+    let hasPdf = false;
+
+    filesToUpload.forEach((f) => {
+      const isImg = f.type?.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(f.name);
+      const isPdf = /\.pdf$/i.test(f.name) || f.type?.includes('pdf');
+      const isExcel = /\.(xlsx?|csv)$/i.test(f.name) || f.type?.includes('spreadsheet') || f.type?.includes('excel');
+
+      if (isImg) {
+        formData.append('studentAttendanceImages', f);
+      } else if (isExcel && !hasExcel) {
+        formData.append('attendanceExcel', f);
+        hasExcel = true;
+      } else if (isPdf && !hasPdf) {
+        formData.append('attendancePdf', f);
+        hasPdf = true;
+      } else {
+        formData.append('attendanceDocument', f);
+      }
+    });
 
     if (locationStatus === "ready" && location) {
       formData.append(
@@ -93,16 +116,16 @@ export default function StudentAttendancePage() {
 
     try {
       await api.uploadWithProgress('/student-activities/attendance/submit', formData, onProgress);
-      toast.success('Excel sheet uploaded successfully');
-      setExcelFile(null);
+      toast.success('Attendance documents uploaded successfully');
+      setDocFiles([]);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Excel upload failed';
+      const msg = err?.response?.data?.message || err?.message || 'Attendance upload failed';
       toast.error(msg);
       throw new Error(msg);
     }
   };
 
-  const handleLiveUpload = async (file, onProgress) => {
+  const handleLiveUpload = async (fileList, onProgress) => {
     if (!trainerId) {
       const errorMsg = 'Trainer session not found. Please log in again.';
       toast.error(errorMsg);
@@ -115,9 +138,10 @@ export default function StudentAttendancePage() {
       throw new Error(errorMsg);
     }
 
+    const filesToUpload = Array.isArray(fileList) ? fileList : [fileList];
+    if (filesToUpload.length === 0) return;
+
     const formData = new FormData();
-    const fieldName = file.type.startsWith('image/') ? 'studentsPhoto' : 'attendancePdf';
-    formData.append(fieldName, file);
     formData.append('trainer_id', String(trainerId));
     formData.append('attendance_date', new Date().toISOString().split('T')[0]);
     formData.append('status', 'Present');
@@ -131,10 +155,22 @@ export default function StudentAttendancePage() {
       })
     );
 
+    filesToUpload.forEach((f) => {
+      const isImg = f.type?.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(f.name);
+      if (isImg) {
+        formData.append('studentAttendanceImages', f);
+        formData.append('studentsPhoto', f);
+      } else if (f.name?.endsWith('.pdf') || f.type?.includes('pdf')) {
+        formData.append('attendancePdf', f);
+      } else {
+        formData.append('attendanceDocument', f);
+      }
+    });
+
     try {
       await api.uploadWithProgress('/student-activities/attendance/submit', formData, onProgress);
       toast.success('Live attendance evidence uploaded successfully');
-      setLiveFile(null);
+      setLiveFiles([]);
     } catch (err) {
       const msg = err?.response?.data?.message || err?.message || 'Live attendance upload failed';
       toast.error(msg);
@@ -152,7 +188,7 @@ export default function StudentAttendancePage() {
               Student Attendance Records
             </h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Submit daily student attendance logs using Excel sheets or take a live geo-tagged picture/PDF of the class.
+              Submit daily student attendance logs using Excel sheets, PDFs, or multiple classroom photos.
             </p>
           </div>
         </div>
@@ -213,24 +249,28 @@ export default function StudentAttendancePage() {
         {/* Upload Cards Grid */}
         <div className="grid gap-8 md:grid-cols-2">
           <FileUploadCard
-            title="Student Attendance Document"
+            title="Student Attendance Documents"
             accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.webp"
-            maxSizeMb={10}
-            file={excelFile}
-            setFile={setExcelFile}
-            onSubmit={handleExcelUpload}
+            maxSizeMb={15}
+            maxFiles={10}
+            multiple={true}
+            files={docFiles}
+            setFiles={setDocFiles}
+            onSubmit={handleDocUpload}
             required
-            description="Upload the attendance document (Excel spreadsheet, PDF file, or classroom photo)."
+            description="Upload multiple attendance documents (Excel spreadsheet, PDF file, or signed classroom photos)."
           />
           <FileUploadCard
-            title="Live Student Attendance Record"
-            accept=".jpg,.jpeg,.png,.pdf"
-            maxSizeMb={5}
-            file={liveFile}
-            setFile={setLiveFile}
+            title="Live Classroom Attendance Evidence"
+            accept=".jpg,.jpeg,.png,.webp,.pdf"
+            maxSizeMb={15}
+            maxFiles={10}
+            multiple={true}
+            files={liveFiles}
+            setFiles={setLiveFiles}
             onSubmit={handleLiveUpload}
             required
-            description="Upload a live class photo evidence or a signed PDF sheet. GPS tracking is required."
+            description="Upload live classroom photos or signed PDF evidence. GPS tracking is verified."
           />
         </div>
       </section>

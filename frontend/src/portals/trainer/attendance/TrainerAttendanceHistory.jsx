@@ -1134,37 +1134,102 @@ function TrainerAttendanceHistory() {
                 </div>
               )}
 
-              {/* Uploaded Documents */}
-              {(selectedRecord.attendancePdfUrl ||
-                selectedRecord.scannedAttendancePdfUrl ||
-                selectedRecord.attendanceExcelUrl) && (
-                <div className="flex flex-wrap items-center gap-2 pt-2">
-                  {selectedRecord.attendancePdfUrl && (
-                    <a
-                      href={selectedRecord.attendancePdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      <FileText className="h-3.5 w-3.5 text-rose-500" />
-                      <span>Attendance PDF</span>
-                      <ExternalLink className="h-3 w-3 text-slate-400" />
-                    </a>
-                  )}
-                  {selectedRecord.attendanceExcelUrl && (
-                    <a
-                      href={selectedRecord.attendanceExcelUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                    >
-                      <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>Excel Roster</span>
-                      <ExternalLink className="h-3 w-3 text-slate-400" />
-                    </a>
-                  )}
-                </div>
-              )}
+              {/* Student Attendance Photos & Documents */}
+              {(() => {
+                const attImages = Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0
+                  ? selectedRecord.studentAttendanceImageUrls
+                  : selectedRecord.studentsPhotoUrl && selectedRecord.studentsPhotoUrl !== selectedRecord.imageUrl
+                  ? [selectedRecord.studentsPhotoUrl]
+                  : [];
+
+                const activityPhotos = Array.isArray(selectedRecord.activityPhotos) ? selectedRecord.activityPhotos.filter(Boolean) : [];
+
+                return (
+                  <div className="space-y-3 pt-2">
+                    {/* Attendance Documents (PDF / Excel) */}
+                    {(selectedRecord.attendancePdfUrl ||
+                      selectedRecord.scannedAttendancePdfUrl ||
+                      selectedRecord.attendanceExcelUrl) && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {selectedRecord.attendancePdfUrl && (
+                          <a
+                            href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                          >
+                            <FileText className="h-3.5 w-3.5 text-rose-500" />
+                            <span>Attendance PDF</span>
+                            <ExternalLink className="h-3 w-3 text-slate-400" />
+                          </a>
+                        )}
+                        {selectedRecord.attendanceExcelUrl && (
+                          <a
+                            href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                          >
+                            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Excel Roster</span>
+                            <ExternalLink className="h-3 w-3 text-slate-400" />
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Student Attendance Photos Gallery */}
+                    {attImages.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-blue-600" />
+                          Student Attendance Photos ({attImages.length})
+                        </span>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {attImages.map((img, i) => (
+                            <div
+                              key={`att-img-${i}`}
+                              onClick={() => setPreviewImage(resolveImageUrl(img))}
+                              className="aspect-square rounded-lg overflow-hidden border border-slate-200 cursor-pointer group relative"
+                            >
+                              <img
+                                src={resolveImageUrl(img)}
+                                alt={`Attendance Sheet ${i + 1}`}
+                                className="w-full h-full object-cover group-hover:scale-105 transition"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Classroom Activities Photos Gallery */}
+                    {activityPhotos.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                          <Camera className="h-3.5 w-3.5 text-purple-600" />
+                          Classroom Activities Photos ({activityPhotos.length})
+                        </span>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {activityPhotos.map((act, i) => (
+                            <div
+                              key={`act-img-${i}`}
+                              onClick={() => setPreviewImage(resolveImageUrl(act))}
+                              className="aspect-square rounded-lg overflow-hidden border border-slate-200 cursor-pointer group relative"
+                            >
+                              <img
+                                src={resolveImageUrl(act)}
+                                alt={`Activity Photo ${i + 1}`}
+                                className="w-full h-full object-cover group-hover:scale-105 transition"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Modal Footer */}
               <div className="flex items-center justify-end border-t border-slate-100 pt-4">

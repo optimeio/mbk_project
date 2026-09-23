@@ -1,33 +1,31 @@
 "use client";
 
 import { useState, useEffect, useCallback, useTransition } from "react";
-import { Loader2, X, CheckCircle2, AlertCircle, CloudUpload, FileSpreadsheet, FileText } from "lucide-react";
+import { Loader2, X, CheckCircle2, AlertCircle, CloudUpload, FileSpreadsheet, FileText, Plus, Maximize2, Image as ImageIcon } from "lucide-react";
 
 export default function FileUploadCard({
   title = "Upload File",
   accept = "*/*",
-  maxSizeMb = 5, // Default to 5MB according to requirements
+  maxSizeMb = 15,
+  maxFiles = 10,
+  multiple = false,
+  files = [],
+  setFiles,
   file,
   setFile,
   onSubmit,
   required = false,
   description = "",
 }) {
-  const [preview, setPreview] = useState(null);
+  const isMultipleMode = multiple || Boolean(setFiles);
+  const currentFiles = isMultipleMode ? (files || []) : (file ? [file] : []);
+
+  const [previews, setPreviews] = useState([]);
   const [status, setStatus] = useState("idle"); // idle|compressing|uploading|success|error
   const [error, setError] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [compressionRatio, setCompressionRatio] = useState(null);
+  const [lightboxImg, setLightboxImg] = useState(null);
   const [isPending, startTransition] = useTransition();
-
-  // Clean up preview URL on unmount
-  useEffect(() => {
-    return () => {
-      if (preview && preview.startsWith("blob:")) {
-        URL.revokeObjectURL(preview);
-      }
-    };
-  }, [preview]);
 
   // Generate a thumbnail on the client to avoid loading large images in full resolution
   const generateThumbnail = useCallback((imageFile) => {
@@ -38,7 +36,7 @@ export default function FileUploadCard({
         img.onload = () => {
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
-          const maxThumbSize = 150;
+          const maxThumbSize = 250;
           let width = img.width;
           let height = img.height;
 
@@ -63,7 +61,7 @@ export default function FileUploadCard({
             } else {
               resolve(event.target.result);
             }
-          }, "image/jpeg", 0.7);
+          }, "image/jpeg", 0.8);
         };
         img.src = event.target.result;
       };
@@ -72,88 +70,76 @@ export default function FileUploadCard({
   }, []);
 
   const handleFileChange = useCallback(async (e) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+    const rawFiles = Array.from(e.target.files || []);
+    if (rawFiles.length === 0) return;
 
-    // Strict validation: File type check (based on accept string)
-    const fileExtension = "." + selected.name.split(".").pop().toLowerCase();
-    const allowedExtensions = accept !== "*/*" 
-      ? new Set(accept.toLowerCase().split(",").map(ext => ext.trim())) 
+    const allowedExtensions = accept !== "*/*"
+      ? new Set(accept.toLowerCase().split(",").map(ext => ext.trim()))
       : null;
 
-    if (allowedExtensions && !allowedExtensions.has(fileExtension)) {
-      setError(`Invalid file type. Allowed formats: ${accept.replace(/\./g, " ")}`);
-      setStatus("error");
-      setFile(null);
-      setPreview(null);
-      setCompressionRatio(null);
-      return;
-    }
+    const maxSizeBytes = maxSizeMb * 1024 * 1024;
+    const validatedFiles = [];
+    const newPreviews = [];
 
-    // Strict validation: 5MB size limit on frontend
-    const maxSizeBytes = 5 * 1024 * 1024;
-    if (selected.size > maxSizeBytes) {
-      setError("File size exceeds the maximum limit of 5MB");
-      setStatus("error");
-      setFile(null);
-      setPreview(null);
-      setCompressionRatio(null);
-      return;
+    for (const f of rawFiles) {
+      const fileExtension = "." + f.name.split(".").pop().toLowerCase();
+      if (allowedExtensions && !allowedExtensions.has(fileExtension) && !allowedExtensions.has("image/*")) {
+        setError(`Invalid file format: ${f.name}. Allowed: ${accept}`);
+        setStatus("error");
+        return;
+      }
+
+      if (f.size > maxSizeBytes) {
+        setError(`File ${f.name} exceeds ${maxSizeMb}MB size limit.`);
+        setStatus("error");
+        return;
+      }
+
+      validatedFiles.push(f);
+      if (f.type.startsWith("image/")) {
+        const thumb = await generateThumbnail(f);
+        newPreviews.push({ name: f.name, url: thumb, type: 'image', size: f.size });
+      } else if (f.name.endsWith('.pdf') || f.type.includes('pdf')) {
+        newPreviews.push({ name: f.name, url: null, type: 'pdf', size: f.size });
+      } else {
+        newPreviews.push({ name: f.name, url: null, type: 'excel', size: f.size });
+      }
     }
 
     setError("");
     setStatus("idle");
-    setCompressionRatio(null);
 
-    // If it is an image, compress and resize it on the client side
-    if (selected.type.startsWith("image/")) {
-      setStatus("compressing");
-      
-      // Generate canvas thumbnail preview instantly
-      const thumbUrl = await generateThumbnail(selected);
-      setPreview(thumbUrl);
-
-      const compressionOptions = {
-        maxSizeMB: 1, // Target web-optimized size under 1MB
-        maxWidthOrHeight: 1280, // Web-optimized dimensions
-        useWebWorker: true,
-      };
-
-      try {
-        const imageCompression = (await import("browser-image-compression")).default;
-        const compressedBlob = await imageCompression(selected, compressionOptions);
-        const compressedFile = new File([compressedBlob], selected.name, {
-          type: selected.type,
-          lastModified: Date.now(),
-        });
-
-        // Calculate compression stats
-        const ratio = ((1 - (compressedFile.size / selected.size)) * 100).toFixed(0);
-        setCompressionRatio(ratio > 0 ? ratio : null);
-        
-        setFile(compressedFile);
-        setStatus("idle");
-      } catch (err) {
-        console.warn("Client compression failed, using original file:", err);
-        setFile(selected);
-        setStatus("idle");
+    if (isMultipleMode) {
+      if (setFiles) {
+        setFiles(prev => [...(prev || []), ...validatedFiles].slice(0, maxFiles));
       }
+      setPreviews(prev => [...prev, ...newPreviews].slice(0, maxFiles));
     } else {
-      setFile(selected);
-      setPreview(null);
+      if (setFile) setFile(validatedFiles[0]);
+      setPreviews(newPreviews.slice(0, 1));
     }
-  }, [accept, generateThumbnail, setFile]);
+    e.target.value = "";
+  }, [accept, generateThumbnail, isMultipleMode, maxFiles, maxSizeMb, setFile, setFiles]);
+
+  const removeFileAt = (idx) => {
+    if (isMultipleMode && setFiles) {
+      setFiles(prev => (prev || []).filter((_, i) => i !== idx));
+    } else if (setFile) {
+      setFile(null);
+    }
+    setPreviews(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleUpload = useCallback(async () => {
-    if (!file) return;
+    if (currentFiles.length === 0) return;
     setStatus("uploading");
     setUploadProgress(0);
     setError("");
 
     startTransition(async () => {
       try {
-        // Run the onSubmit upload and pass the progress tracking callback
-        await onSubmit(file, (progress) => {
+        const payload = isMultipleMode ? currentFiles : currentFiles[0];
+        await onSubmit(payload, (progress) => {
           setUploadProgress(progress);
         });
         setStatus("success");
@@ -162,72 +148,111 @@ export default function FileUploadCard({
         setStatus("error");
       }
     });
-  }, [file, onSubmit]);
+  }, [currentFiles, isMultipleMode, onSubmit]);
 
-  const reset = useCallback(() => {
-    setFile(null);
-    if (preview && preview.startsWith("blob:")) {
-      URL.revokeObjectURL(preview);
-    }
-    setPreview(null);
+  const resetAll = useCallback(() => {
+    if (isMultipleMode && setFiles) setFiles([]);
+    if (setFile) setFile(null);
+    setPreviews([]);
     setStatus("idle");
     setError("");
     setUploadProgress(0);
-    setCompressionRatio(null);
-  }, [preview, setFile]);
-
-  // Determine file icon
-  const isExcel = file?.name?.endsWith(".xlsx") || file?.name?.endsWith(".xls") || file?.type?.includes("spreadsheet");
-  const isPdf = file?.name?.endsWith(".pdf") || file?.type === "application/pdf";
+  }, [isMultipleMode, setFile, setFiles]);
 
   return (
     <div className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
-      <div className="mb-4">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          {title}
-          {required && <span className="text-rose-500 font-normal text-sm">*</span>}
-        </h3>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            {title}
+            {required && <span className="text-rose-500 font-normal text-sm">*</span>}
+          </h3>
+          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        </div>
+        {currentFiles.length > 0 && (
+          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+            {currentFiles.length} file{currentFiles.length === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col justify-center">
-        {file ? (
-          <div className="relative flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 p-6">
-            {preview ? (
-              <div className="relative mb-3 h-32 w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-white flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="preview thumbnail" className="max-h-full max-w-full object-contain" loading="lazy" />
-              </div>
-            ) : (
-              <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-                {isExcel ? (
-                  <FileSpreadsheet className="h-8 w-8 text-emerald-600" />
-                ) : isPdf ? (
-                  <FileText className="h-8 w-8 text-rose-600" />
-                ) : (
-                  <FileText className="h-8 w-8" />
-                )}
-              </div>
-            )}
+        {currentFiles.length > 0 ? (
+          <div className="space-y-3">
+            {/* Grid of files */}
+            <div className={`grid gap-3 ${currentFiles.length === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'}`}>
+              {currentFiles.map((f, idx) => {
+                const prev = previews[idx];
+                const isImg = f.type?.startsWith("image/") || prev?.type === 'image';
+                const isPdf = f.name?.endsWith(".pdf") || f.type?.includes("pdf") || prev?.type === 'pdf';
+                const isExcel = f.name?.endsWith(".xlsx") || f.name?.endsWith(".xls") || f.name?.endsWith(".csv") || prev?.type === 'excel';
 
-            <div className="text-center max-w-full">
-              <p className="truncate text-sm font-semibold text-slate-700 px-4">{file.name}</p>
-              <p className="text-xs text-slate-400">
-                {(file.size / 1024 / 1024).toFixed(2)} MB 
-                {compressionRatio && (
-                  <span className="text-emerald-600 font-medium ml-1">(-{compressionRatio}% compressed)</span>
-                )}
-              </p>
+                return (
+                  <div
+                    key={`${f.name}-${idx}`}
+                    className="relative rounded-2xl border border-slate-200 bg-slate-50 p-3 flex flex-col justify-between group overflow-hidden"
+                  >
+                    <div
+                      className="relative h-28 w-full overflow-hidden rounded-xl bg-white border border-slate-200 flex items-center justify-center cursor-pointer"
+                      onClick={() => {
+                        if (isImg && prev?.url) setLightboxImg(prev.url);
+                      }}
+                    >
+                      {isImg && prev?.url ? (
+                        <>
+                          <img src={prev.url} alt={f.name} className="h-full w-full object-cover group-hover:scale-105 transition" />
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white">
+                            <Maximize2 className="h-5 w-5" />
+                          </div>
+                        </>
+                      ) : isExcel ? (
+                        <div className="flex flex-col items-center justify-center text-emerald-600">
+                          <FileSpreadsheet className="h-8 w-8 mb-1" />
+                          <span className="text-[10px] font-bold uppercase bg-emerald-50 px-2 py-0.5 rounded">Excel</span>
+                        </div>
+                      ) : isPdf ? (
+                        <div className="flex flex-col items-center justify-center text-rose-600">
+                          <FileText className="h-8 w-8 mb-1" />
+                          <span className="text-[10px] font-bold uppercase bg-rose-50 px-2 py-0.5 rounded">PDF</span>
+                        </div>
+                      ) : (
+                        <FileText className="h-8 w-8 text-slate-500" />
+                      )}
+                    </div>
+
+                    <div className="mt-2 min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-700" title={f.name}>{f.name}</p>
+                      <p className="text-[10px] text-slate-400">{(f.size / 1024).toFixed(0)} KB</p>
+                    </div>
+
+                    {status !== "uploading" && status !== "success" && (
+                      <button
+                        type="button"
+                        onClick={() => removeFileAt(idx)}
+                        className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-rose-600 text-white shadow hover:bg-rose-700 transition cursor-pointer"
+                        title="Remove file"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {status !== "uploading" && status !== "success" && (
-              <button
-                type="button"
-                onClick={reset}
-                className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition"
-              >
-                <X className="h-4 w-4" />
-              </button>
+            {/* Add More Button */}
+            {isMultipleMode && currentFiles.length < maxFiles && (
+              <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl p-4 flex items-center justify-center gap-2 cursor-pointer bg-slate-50/50 hover:bg-blue-50/20 transition">
+                <input
+                  type="file"
+                  accept={accept}
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Plus className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-bold text-blue-700">Add More Photos / Files ({maxFiles - currentFiles.length} remaining)</span>
+              </label>
             )}
           </div>
         ) : (
@@ -235,6 +260,7 @@ export default function FileUploadCard({
             <input
               type="file"
               accept={accept}
+              multiple={isMultipleMode}
               onChange={handleFileChange}
               className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
             />
@@ -242,26 +268,20 @@ export default function FileUploadCard({
               <CloudUpload className="h-6 w-6 text-slate-400 group-hover:text-[#1a6b9e] transition" />
             </div>
             <p className="text-sm font-semibold text-slate-700 group-hover:text-[#1a6b9e] transition text-center">
-              Drag & drop or click to upload
+              Drag & drop or click to upload {isMultipleMode ? 'multiple files' : 'file'}
             </p>
             <p className="mt-1 text-xs text-slate-400 text-center">
-              Supported files: {accept.replace(/\./g, " ")} (max 5MB)
+              Supported files: {accept.replace(/\./g, " ")} (up to {maxFiles} files, max {maxSizeMb}MB each)
             </p>
           </div>
         )}
       </div>
 
-      {status === "compressing" && (
-        <div className="mt-4 flex items-center justify-center text-sm font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-xl py-2 animate-pulse">
-          <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" /> Web-optimizing & compressing image…
-        </div>
-      )}
-
       {status === "uploading" && (
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold text-blue-600">
             <span className="flex items-center">
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Uploading to server…
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Uploading to server & Drive…
             </span>
             <span>{uploadProgress}%</span>
           </div>
@@ -293,15 +313,42 @@ export default function FileUploadCard({
         </div>
       )}
 
-      {file && status !== "success" && status !== "uploading" && status !== "compressing" && (
-        <button
-          type="button"
-          onClick={handleUpload}
-          disabled={isPending}
-          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-[#0f3f5c] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1a6b9e] shadow-sm transition active:scale-[0.98] disabled:opacity-50"
+      {currentFiles.length > 0 && status !== "success" && status !== "uploading" && (
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={resetAll}
+            className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-xs font-semibold hover:bg-slate-100 transition"
+          >
+            Clear All
+          </button>
+          <button
+            type="button"
+            onClick={handleUpload}
+            disabled={isPending}
+            className="flex-2 flex items-center justify-center gap-2 rounded-xl bg-[#0f3f5c] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1a6b9e] shadow-sm transition active:scale-[0.98] disabled:opacity-50"
+          >
+            Confirm & Upload ({currentFiles.length})
+          </button>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => setLightboxImg(null)}
         >
-          Confirm and Upload
-        </button>
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+            <img src={lightboxImg} alt="Preview" className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl" />
+            <button
+              onClick={() => setLightboxImg(null)}
+              className="absolute top-2 right-2 h-9 w-9 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

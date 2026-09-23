@@ -205,16 +205,16 @@ const uploadFields = multer({
         fileFilter(req, file, cb);
     },
     limits: {
-        fileSize: 5 * 1024 * 1024 // Strict 5MB limit
+        fileSize: 15 * 1024 * 1024 // 15MB limit for high-res attendance photos and multi-page PDFs
     }
 }).fields([
-    { name: 'attendanceDocument', maxCount: 1 },
-    { name: 'attendancePdf', maxCount: 1 },
-    { name: 'attendanceExcel', maxCount: 1 },
-    { name: 'attendancePhoto', maxCount: 1 },
-    { name: 'attendance_photo', maxCount: 1 },
-    { name: 'attendanceFile', maxCount: 1 },
-    { name: 'studentsPhoto', maxCount: 1 },
+    { name: 'attendanceDocument', maxCount: 10 },
+    { name: 'attendancePdf', maxCount: 10 },
+    { name: 'attendanceExcel', maxCount: 10 },
+    { name: 'attendancePhoto', maxCount: 10 },
+    { name: 'attendance_photo', maxCount: 10 },
+    { name: 'attendanceFile', maxCount: 10 },
+    { name: 'studentsPhoto', maxCount: 10 },
     { name: 'studentAttendanceImages', maxCount: 10 },
     { name: 'signature', maxCount: 1 },
     { name: 'photo', maxCount: 10 },        // Added plural/singular variations for robustness
