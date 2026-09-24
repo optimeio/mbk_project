@@ -2120,8 +2120,15 @@ const TrainerOverallAttendance = () => {
                         selectedGeoRecord?.scheduleId?.dayFolderId ||
                         selectedGeoRecord?.collegeDriveFolderId ||
                         selectedGeoRecord?.trainerId?.googleDriveFolderId ||
+                        selectedGeoRecord?.trainerId?.driveFolderId ||
+                        selectedGeoRecord?.collegeId?.googleDriveFolderId ||
                         selectedGeoRecord?.collegeId?.driveFolderId;
-                      const driveFolderUrl = selectedGeoRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+                      const driveFolderUrl =
+                        selectedGeoRecord?.driveFolderUrl ||
+                        selectedGeoRecord?.driveFolderLink ||
+                        selectedGeoRecord?.scheduleId?.driveFolderLink ||
+                        selectedGeoRecord?.scheduleId?.driveFolderUrl ||
+                        (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
                       return driveFolderUrl ? (
                         <Button
                           size="small"
@@ -2147,8 +2154,15 @@ const TrainerOverallAttendance = () => {
                         selectedGeoRecord?.scheduleId?.dayFolderId ||
                         selectedGeoRecord?.collegeDriveFolderId ||
                         selectedGeoRecord?.trainerId?.googleDriveFolderId ||
+                        selectedGeoRecord?.trainerId?.driveFolderId ||
+                        selectedGeoRecord?.collegeId?.googleDriveFolderId ||
                         selectedGeoRecord?.collegeId?.driveFolderId;
-                      const driveFolderUrl = selectedGeoRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+                      const driveFolderUrl =
+                        selectedGeoRecord?.driveFolderUrl ||
+                        selectedGeoRecord?.driveFolderLink ||
+                        selectedGeoRecord?.scheduleId?.driveFolderLink ||
+                        selectedGeoRecord?.scheduleId?.driveFolderUrl ||
+                        (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
                       return driveFolderUrl ? (
                         <Button
                           key="drive"
@@ -2193,8 +2207,15 @@ const TrainerOverallAttendance = () => {
                       selectedGeoRecord?.scheduleId?.dayFolderId ||
                       selectedGeoRecord?.collegeDriveFolderId ||
                       selectedGeoRecord?.trainerId?.googleDriveFolderId ||
+                      selectedGeoRecord?.trainerId?.driveFolderId ||
+                      selectedGeoRecord?.collegeId?.googleDriveFolderId ||
                       selectedGeoRecord?.collegeId?.driveFolderId;
-                    const driveFolderUrl = selectedGeoRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+                    const driveFolderUrl =
+                      selectedGeoRecord?.driveFolderUrl ||
+                      selectedGeoRecord?.driveFolderLink ||
+                      selectedGeoRecord?.scheduleId?.driveFolderLink ||
+                      selectedGeoRecord?.scheduleId?.driveFolderUrl ||
+                      (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
 
                     const checkInMapsUrl =
                         checkInLoc?.hasCoords
@@ -2395,9 +2416,23 @@ const TrainerOverallAttendance = () => {
                             {/* Attendance Files Section */}
                             {attendanceFiles.length > 0 ? (
                               <div>
-                                <Title level={5} style={{ margin: '4px 0 12px 0' }}>
-                                  Uploaded Attendance Documents & Files ({attendanceFiles.length})
-                                </Title>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 12px 0', flexWrap: 'wrap', gap: 8 }}>
+                                  <Title level={5} style={{ margin: 0 }}>
+                                    Uploaded Attendance Documents & Files ({attendanceFiles.length})
+                                  </Title>
+                                  {driveFolderUrl && (
+                                    <Button
+                                      size="small"
+                                      type="primary"
+                                      icon={<ExternalLink size={12} />}
+                                      href={driveFolderUrl}
+                                      target="_blank"
+                                      style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
+                                    >
+                                      Google Drive Folder
+                                    </Button>
+                                  )}
+                                </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                   {attendanceFiles.map((file, idx) => (
                                     <Card key={idx} size="small" style={{ borderRadius: 8 }}>
@@ -2412,19 +2447,26 @@ const TrainerOverallAttendance = () => {
                                               fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
                                             />
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                                             <div>
                                               <Text strong>{file.name}</Text>
                                               <br />
                                               <Text type="secondary" style={{ fontSize: '12px' }}>Student Attendance Document / Sheet Photo</Text>
                                             </div>
-                                            <Button size="small" type="primary" href={file.url} target="_blank">
-                                              Open Full Document
-                                            </Button>
+                                            <Space size={8}>
+                                              <Button size="small" type="primary" href={file.url} target="_blank">
+                                                Open Full Document
+                                              </Button>
+                                              {driveFolderUrl && (
+                                                <Button size="small" icon={<ExternalLink size={12} />} href={driveFolderUrl} target="_blank" style={{ color: '#059669', borderColor: '#059669' }}>
+                                                  Drive Folder
+                                                </Button>
+                                              )}
+                                            </Space>
                                           </div>
                                         </div>
                                       ) : (
-                                        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                                        <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
                                           <Space>
                                             {file.type === 'pdf' ? <FileText size={22} color="#ff4d4f" /> : <FileSpreadsheet size={22} color="#16a34a" />}
                                             <div>
@@ -2433,9 +2475,16 @@ const TrainerOverallAttendance = () => {
                                               <Text type="secondary" style={{ fontSize: '12px' }}>{file.type.toUpperCase()} Attendance Document</Text>
                                             </div>
                                           </Space>
-                                          <Button type="primary" size="small" href={file.url} target="_blank" icon={<ExternalLink size={12} />}>
-                                            View / Download
-                                          </Button>
+                                          <Space size={8}>
+                                            <Button type="primary" size="small" href={file.url} target="_blank" icon={<ExternalLink size={12} />}>
+                                              View / Download
+                                            </Button>
+                                            {driveFolderUrl && (
+                                              <Button size="small" icon={<ExternalLink size={12} />} href={driveFolderUrl} target="_blank" style={{ color: '#059669', borderColor: '#059669' }}>
+                                                Drive Folder
+                                              </Button>
+                                            )}
+                                          </Space>
                                         </Space>
                                       )}
                                     </Card>
@@ -2476,29 +2525,55 @@ const TrainerOverallAttendance = () => {
                         children: (
                           <div style={{ padding: '4px 0' }}>
                             {activityFiles.length > 0 ? (
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                                {activityFiles.map((item, idx) => (
-                                  <Card key={idx} size="small" style={{ borderRadius: 8 }}>
-                                    {item.type === 'image' ? (
-                                      <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #eee', background: '#f5f5f5', textAlign: 'center' }}>
-                                        <Image
-                                          src={item.url}
-                                          alt={item.title}
-                                          style={{ width: '100%', height: 200, objectFit: 'contain' }}
-                                          preview={{ mask: 'Click to Preview' }}
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div style={{ aspectRatio: '4/3', borderRadius: 6, overflow: 'hidden', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <video src={item.url} controls style={{ width: '100%', maxHeight: '100%' }} />
-                                      </div>
-                                    )}
-                                    <Text strong style={{ fontSize: '13px', marginTop: 8, display: 'block' }}>{item.title}</Text>
-                                    <Button size="small" type="link" href={item.url} target="_blank" style={{ paddingLeft: 0, fontSize: '12px' }}>
-                                      Open File in New Tab
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 12px 0', flexWrap: 'wrap', gap: 8 }}>
+                                  <Title level={5} style={{ margin: 0 }}>
+                                    Student Activities ({activityFiles.length})
+                                  </Title>
+                                  {driveFolderUrl && (
+                                    <Button
+                                      size="small"
+                                      type="primary"
+                                      icon={<ExternalLink size={12} />}
+                                      href={driveFolderUrl}
+                                      target="_blank"
+                                      style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
+                                    >
+                                      Google Drive Folder
                                     </Button>
-                                  </Card>
-                                ))}
+                                  )}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                                  {activityFiles.map((item, idx) => (
+                                    <Card key={idx} size="small" style={{ borderRadius: 8 }}>
+                                      {item.type === 'image' ? (
+                                        <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #eee', background: '#f5f5f5', textAlign: 'center' }}>
+                                          <Image
+                                            src={item.url}
+                                            alt={item.title}
+                                            style={{ width: '100%', height: 200, objectFit: 'contain' }}
+                                            preview={{ mask: 'Click to Preview' }}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div style={{ aspectRatio: '4/3', borderRadius: 6, overflow: 'hidden', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          <video src={item.url} controls style={{ width: '100%', maxHeight: '100%' }} />
+                                        </div>
+                                      )}
+                                      <Text strong style={{ fontSize: '13px', marginTop: 8, display: 'block' }}>{item.title}</Text>
+                                      <Space size={8} style={{ marginTop: 4 }}>
+                                        <Button size="small" type="link" href={item.url} target="_blank" style={{ paddingLeft: 0, fontSize: '12px' }}>
+                                          Open File in New Tab
+                                        </Button>
+                                        {driveFolderUrl && (
+                                          <Button size="small" type="link" href={driveFolderUrl} target="_blank" style={{ paddingLeft: 0, fontSize: '12px', color: '#059669' }}>
+                                            Drive Folder
+                                          </Button>
+                                        )}
+                                      </Space>
+                                    </Card>
+                                  ))}
+                                </div>
                               </div>
                             ) : (
                               <Empty

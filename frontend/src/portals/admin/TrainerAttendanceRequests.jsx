@@ -37,6 +37,7 @@ import {
   RefreshCw,
   Camera,
   Layers,
+  ExternalLink,
 } from "lucide-react";
 import { api } from "@/services/api";
 import { getSecureImageUrl } from "@/utils/imageUtils";

@@ -24,6 +24,7 @@ import {
 import { ADMIN_PENDING_USERS_KEY } from '@/shared/config/adminQueryKeys';
 import { QUERY_STALE_TIMES, withQueryPolicy } from '@/shared/config/queryPolicies';
 import { getProfilePictureUrl } from '@/utils/imageUtils';
+import { api } from '@/services/api';
 
 const PENDING_USERS_QUERY_KEY = ADMIN_PENDING_USERS_KEY;
 

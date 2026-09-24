@@ -131,6 +131,7 @@ const normalizeSessionType = (session, startTime, endTime) => {
     const s = String(session).trim().toUpperCase();
     if (s === "FN" || s === "FORENOON" || s === "MORNING") return "FN";
     if (s === "AN" || s === "AFTERNOON" || s === "EVENING") return "AN";
+    if (s === "FULL_DAY" || s === "FULL" || s === "ALL_DAY" || s === "BOTH") return "FULL_DAY";
   }
 
   if (startTime || endTime) {
@@ -150,12 +151,18 @@ const normalizeSessionType = (session, startTime, endTime) => {
     const endMins = parseToMins(endTime);
 
     if (startMins !== null && endMins !== null) {
-      if (endMins <= 13 * 60 + 30 || startMins < 13 * 60 + 30) {
+      if (startMins >= 13 * 60) {
+        return "AN";
+      }
+      if (endMins <= 13 * 60) {
         return "FN";
       }
-      return "AN";
+      if (endMins - startMins > 5 * 60) {
+        return "FULL_DAY";
+      }
+      return "FN";
     } else if (startMins !== null) {
-      if (startMins >= 13 * 60 + 30) return "AN";
+      if (startMins >= 13 * 60) return "AN";
       return "FN";
     }
   }
@@ -1319,13 +1326,13 @@ const checkTrainerScheduleConflict = async ({
     const getSessionBounds = (sessionType, startStr, endStr) => {
       const norm = String(sessionType || "").trim().toUpperCase();
       if (norm === "FULL_DAY" || norm === "FULL" || norm === "ALL_DAY" || norm === "BOTH") {
-        return { start: 9 * 60, end: 18 * 60 + 30, isFullDay: true };
+        return { start: 9 * 60, end: 18 * 60, isFullDay: true };
       }
-      if (norm === "AN" || norm === "AFTERNOON") {
-        return { start: 13 * 60, end: 18 * 60 + 30, isAN: true };
+      if (norm === "AN" || norm === "AFTERNOON" || norm === "EVENING") {
+        return { start: 13 * 60, end: 18 * 60, isAN: true };
       }
       if (norm === "FN" || norm === "FORENOON" || norm === "MORNING") {
-        return { start: 9 * 60, end: 13 * 60 + 30, isFN: true };
+        return { start: 9 * 60, end: 13 * 60, isFN: true };
       }
 
       if (startStr && endStr) {
@@ -1338,13 +1345,13 @@ const checkTrainerScheduleConflict = async ({
 
       return {
         start: 9 * 60,
-        end: 18 * 60 + 30,
+        end: 18 * 60,
         isFullDay: true,
       };
     };
 
     const newBounds = getSessionBounds(session, startTime, endTime);
-    const normalizedNewSession = String(session || "").trim().toUpperCase() || "FN";
+    const normalizedNewSession = normalizeSessionType(session, startTime, endTime);
 
     for (const existing of existingSchedules) {
       // 1. Check Date alignment
@@ -1357,16 +1364,16 @@ const checkTrainerScheduleConflict = async ({
       }
 
       const existingBounds = getSessionBounds(existing.session, existing.startTime, existing.endTime);
-      const normalizedExistingSession = String(existing.session || "").trim().toUpperCase() || "FN";
+      const normalizedExistingSession = normalizeSessionType(existing.session, existing.startTime, existing.endTime);
 
       // 2. Strict session conflict rules:
-      // Direct session match (FN vs FN, AN vs AN)
-      const isDirectSessionMatch = (
-        (normalizedNewSession === "FN" && normalizedExistingSession === "FN") ||
-        (normalizedNewSession === "AN" && normalizedExistingSession === "AN")
-      );
+      // A) Direct session match on same day:
+      // FN vs FN -> Conflict
+      // AN vs AN -> Conflict
+      const isBothFN = normalizedNewSession === "FN" && normalizedExistingSession === "FN";
+      const isBothAN = normalizedNewSession === "AN" && normalizedExistingSession === "AN";
 
-      // Full day overlap (FULL_DAY conflicts with any FN, AN, or FULL_DAY)
+      // B) Full day overlap (FULL_DAY conflicts with any FN, AN, or FULL_DAY)
       const isFullDayOverlap = (
         newBounds.isFullDay ||
         existingBounds.isFullDay ||
@@ -1374,10 +1381,27 @@ const checkTrainerScheduleConflict = async ({
         normalizedExistingSession === "FULL_DAY"
       );
 
-      // Time range overlap formula: startA < endB && endA > startB
-      const isTimeOverlapping = (newBounds.start < existingBounds.end) && (newBounds.end > existingBounds.start);
+      // C) Disjoint sessions (FN vs AN or AN vs FN) on the same day are allowed
+      // Unless explicit custom times are specified that truly overlap (startA < endB && endA > startB)
+      const isDisjointHalfDaySessions = (
+        (normalizedNewSession === "FN" && normalizedExistingSession === "AN") ||
+        (normalizedNewSession === "AN" && normalizedExistingSession === "FN")
+      );
 
-      const isConflict = isDirectSessionMatch || isFullDayOverlap || isTimeOverlapping;
+      let isConflict = false;
+      if (isBothFN || isBothAN || isFullDayOverlap) {
+        isConflict = true;
+      } else if (isDisjointHalfDaySessions) {
+        // FN (9:00 - 13:00) and AN (13:00 - 18:00) on the same day DO NOT conflict
+        const hasExplicitCustomTimes = startTime && endTime && existing.startTime && existing.endTime;
+        if (hasExplicitCustomTimes) {
+          isConflict = (newBounds.start < existingBounds.end) && (newBounds.end > existingBounds.start);
+        } else {
+          isConflict = false;
+        }
+      } else {
+        isConflict = (newBounds.start < existingBounds.end) && (newBounds.end > existingBounds.start);
+      }
 
       if (isConflict) {
         const collegeName = existing.collegeId?.name || "another college";
@@ -1388,11 +1412,11 @@ const checkTrainerScheduleConflict = async ({
         const formattedDate = targetDateStr
           ? dayjs(targetDateStr).format("DD-MM-YYYY")
           : (existingDateStr ? dayjs(existingDateStr).format("DD-MM-YYYY") : `Day ${existing.dayNumber || dayNumber}`);
-        const existingSessionLabel = existing.session || "FN";
+        const existingSessionLabel = existing.session || normalizedExistingSession || "FN";
 
         return {
           conflict: true,
-          message: `Schedule Conflict: Trainer ${trainerName} is already assigned on ${formattedDate} (${existingSessionLabel}) at ${collegeName}. Overlapping schedules on the same day/session are not allowed.`,
+          message: `Schedule Conflict: Trainer ${trainerName} is already assigned on ${formattedDate} (${existingSessionLabel}) at ${collegeName}. Overlapping schedules on the same day and session are not allowed.`,
           existingSchedule: existing,
         };
       }

@@ -5669,17 +5669,17 @@ router.get('/late-requests', authenticate, async (req, res) => {
                 .populate({
                     path: 'trainerId',
                     populate: { path: 'userId', select: 'name email phone' },
-                    select: 'name trainerId email phone userId'
+                    select: 'name trainerId email phone userId googleDriveFolderId driveFolderId collegeDriveFolderId'
                 })
-                .populate('collegeId', 'name location city')
+                .populate('collegeId', 'name location city googleDriveFolderId driveFolderId driveFolderLink')
                 .populate('courseId', 'title name code')
                 .populate({
                     path: 'scheduleId',
                     populate: [
                         { path: 'courseId', select: 'title name code' },
-                        { path: 'collegeId', select: 'name location city' }
+                        { path: 'collegeId', select: 'name location city googleDriveFolderId driveFolderId driveFolderLink' }
                     ],
-                    select: 'scheduledDate dayNumber session startTime endTime status subject venue courseId collegeId'
+                    select: 'scheduledDate dayNumber session startTime endTime status subject venue courseId collegeId driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder'
                 })
                 .sort({ lateRequestSubmittedAt: -1, createdAt: -1 })
                 .skip(skip)
@@ -5729,6 +5729,27 @@ router.get('/late-requests', authenticate, async (req, res) => {
             if (!Array.isArray(item.activityPhotos)) {
                 item.activityPhotos = [];
             }
+
+            // 6. Resolve Google Drive folder link
+            const resolvedDriveFolderId =
+                item.driveFolderId ||
+                item.dayFolderId ||
+                item.scheduleId?.driveFolderId ||
+                item.scheduleId?.dayFolderId ||
+                item.collegeDriveFolderId ||
+                item.trainerId?.googleDriveFolderId ||
+                item.trainerId?.driveFolderId ||
+                item.collegeId?.googleDriveFolderId ||
+                item.collegeId?.driveFolderId;
+
+            if (!item.driveFolderUrl) {
+                item.driveFolderUrl =
+                    item.driveFolderLink ||
+                    item.scheduleId?.driveFolderLink ||
+                    item.scheduleId?.driveFolderUrl ||
+                    (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : null);
+            }
+            item.driveFolderId = resolvedDriveFolderId || item.driveFolderId;
 
             return item;
         });

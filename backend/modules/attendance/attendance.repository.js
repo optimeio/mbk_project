@@ -274,6 +274,12 @@ const buildDefaultAttendanceQuery = (filters = {}) =>
         "checkOutLongitude",
         "checkOutGeoDistanceMeters",
         "driveSyncStatus",
+        "driveFolderId",
+        "driveFolderUrl",
+        "dayFolderId",
+        "collegeDriveFolderId",
+        "trainerDriveFolderId",
+        "documents",
         ...ATTENDANCE_LIST_CHECK_OUT_SELECT_FIELDS,
         "checkOutGeoImageUrl",
         "checkOutGeoImageUrls",
@@ -283,12 +289,12 @@ const buildDefaultAttendanceQuery = (filters = {}) =>
     )
     .populate({
       path: "trainerId",
-      select: "name trainerId userId email phone",
+      select: "name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId",
       populate: { path: "userId", select: "name email" },
     })
     .populate({
       path: "collegeId",
-      select: "name latitude longitude companyId code",
+      select: "name latitude longitude companyId code googleDriveFolderId driveFolderId driveFolderLink",
       populate: { path: "companyId", select: "name" },
     })
     .populate({
@@ -297,7 +303,7 @@ const buildDefaultAttendanceQuery = (filters = {}) =>
     })
     .populate({
       path: "scheduleId",
-      select: "dayNumber subject courseId session startTime endTime",
+      select: "dayNumber subject courseId session startTime endTime driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder checkInFolder attendanceFolder studentActivitiesFolder checkOutFolder",
       populate: { path: "courseId", select: "name title" },
     })
     .sort({ date: -1, createdAt: -1 })
@@ -501,17 +507,23 @@ const findAttendanceDetailsById = async (attendanceId) =>
         "latitude",
         "longitude",
         "finalStatus",
+        "driveFolderId",
+        "driveFolderUrl",
+        "dayFolderId",
+        "collegeDriveFolderId",
+        "trainerDriveFolderId",
+        "documents",
         "createdAt",
       ].join(" "),
     )
     .populate({
       path: "trainerId",
-      select: "name trainerId userId",
+      select: "name trainerId userId googleDriveFolderId driveFolderId collegeDriveFolderId",
       populate: { path: "userId", select: "name email" },
     })
     .populate({
       path: "collegeId",
-      select: "name latitude longitude companyId",
+      select: "name latitude longitude companyId googleDriveFolderId driveFolderId driveFolderLink",
       populate: { path: "companyId", select: "name" },
     })
     .populate({
@@ -520,7 +532,7 @@ const findAttendanceDetailsById = async (attendanceId) =>
     })
     .populate({
       path: "scheduleId",
-      select: "subject dayNumber courseId session startTime endTime",
+      select: "subject dayNumber courseId session startTime endTime driveFolderId dayFolderId driveFolderLink driveFolderUrl",
       populate: { path: "courseId", select: "name title" },
     })
     .populate({
