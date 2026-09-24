@@ -377,6 +377,30 @@ export default function TrainerActivities() {
     }
   }, [scheduleChecked, hasScheduleToday, router]);
 
+  // Auto-fill activity topic title and details from assignment / schedule
+  useEffect(() => {
+    if (assignment || scheduleInfo) {
+      const defaultTitle =
+        assignment?.syllabus ||
+        assignment?.topic ||
+        assignment?.courseName ||
+        assignment?.course ||
+        scheduleInfo?.title ||
+        scheduleInfo?.subject ||
+        scheduleInfo?.courseName ||
+        'Classroom Training Session';
+
+      const defaultDesc =
+        assignment?.topic ||
+        (assignment?.courseName
+          ? `Classroom training lecture, hands-on lab exercises, and student queries resolved for ${assignment.courseName}.`
+          : 'Classroom training lecture, hands-on lab exercises, and student queries resolved.');
+
+      setActivityTitle((prev) => (prev ? prev : defaultTitle));
+      setActivityDesc((prev) => (prev ? prev : defaultDesc));
+    }
+  }, [assignment, scheduleInfo]);
+
   // Validate geofence
   useEffect(() => {
     if (coords && assignment) {
@@ -585,8 +609,8 @@ export default function TrainerActivities() {
   // Step 3: Student Activity Photos Handler
   const handleActivityFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
-    if (activityImages.length + files.length > 5) {
-      toast.error("You can upload a maximum of 5 activity photos.");
+    if (activityImages.length + files.length > 10) {
+      toast.error("You can upload a maximum of 10 activity photos.");
       return;
     }
 
@@ -620,21 +644,37 @@ export default function TrainerActivities() {
   };
 
   const handleActivitySubmit = async (e) => {
-    e.preventDefault();
-    if (!activityTitle.trim() || !activityDesc.trim()) {
-      toast.error("Please enter activity topic title and details.");
-      return;
-    }
+    if (e && e.preventDefault) e.preventDefault();
+
     if (activityImages.length === 0) {
       toast.error("Please upload at least 1 classroom activity photo.");
       return;
     }
 
+    const resolvedTitle = (
+      activityTitle.trim() ||
+      assignment?.syllabus ||
+      assignment?.topic ||
+      assignment?.courseName ||
+      assignment?.course ||
+      scheduleInfo?.title ||
+      scheduleInfo?.subject ||
+      'Classroom Training Session'
+    ).trim();
+
+    const resolvedDesc = (
+      activityDesc.trim() ||
+      assignment?.topic ||
+      (assignment?.courseName
+        ? `Classroom training lecture, hands-on lab exercises, and student queries resolved for ${assignment.courseName}.`
+        : `Classroom training session and practical exercises conducted for ${resolvedTitle}.`)
+    ).trim();
+
     setLoading(true);
     const formData = new FormData();
     formData.append('attendanceId', attendanceId);
-    formData.append('title', activityTitle.trim());
-    formData.append('description', activityDesc.trim());
+    formData.append('title', resolvedTitle);
+    formData.append('description', resolvedDesc);
     const lat = coords?.lat || assignment?.latitude || 0;
     const lng = coords?.lng || assignment?.longitude || 0;
     formData.append('latitude', lat);
@@ -1193,7 +1233,7 @@ export default function TrainerActivities() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                      Activity / Syllabus Topic <span className="text-rose-500">*</span>
+                      Activity / Syllabus Topic <span className="text-slate-400 font-normal normal-case">(Auto-filled / Optional)</span>
                     </label>
                     <input
                       type="text"
@@ -1206,7 +1246,7 @@ export default function TrainerActivities() {
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
-                      Session Details &amp; Exercises <span className="text-rose-500">*</span>
+                      Session Details &amp; Exercises <span className="text-slate-400 font-normal normal-case">(Auto-filled / Optional)</span>
                     </label>
                     <textarea
                       placeholder="Detail the topics covered, hands-on lab exercises, student queries resolved…"
@@ -1286,7 +1326,7 @@ export default function TrainerActivities() {
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                     <button
                       type="submit"
-                      disabled={loading || !activityTitle.trim() || !activityDesc.trim() || activityImages.length === 0}
+                      disabled={loading || activityImages.length === 0}
                       className="inline-flex items-center gap-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

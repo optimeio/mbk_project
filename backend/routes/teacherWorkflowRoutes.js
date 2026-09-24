@@ -974,10 +974,9 @@ router.post("/student-attendance/live", authenticate, async (req, res) => {
 // 6. POST /api/student-activities
 router.post("/student-activities", authenticate, uploadAttendance, async (req, res) => {
   try {
-    const { attendanceId, title, description, latitude, longitude } = req.body;
-    if (!title || !description) {
-      return res.status(400).json({ success: false, message: "Activity title and description are required" });
-    }
+    const { attendanceId, latitude, longitude } = req.body;
+    const title = (req.body.title && String(req.body.title).trim()) ? String(req.body.title).trim() : "Classroom Training Session";
+    const description = (req.body.description && String(req.body.description).trim()) ? String(req.body.description).trim() : `Classroom training session and practical exercises conducted for ${title}.`;
 
     const trainer = await findTrainerSafely(req.user, false);
     if (!trainer) {
