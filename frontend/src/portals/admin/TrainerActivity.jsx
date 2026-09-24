@@ -677,7 +677,8 @@ const TrainerActivity = () => {
           const photoUrl = item.imageUrl || item.studentsPhotoUrl || item.attendancePhotoUrl;
           const excelUrl = item.attendanceExcelUrl;
           const checkOutUrl = item.checkOutImageUrl;
-          const driveLink = item.googleDriveFolderLink || item.driveFolderLink || item.collegeDriveFolderLink;
+          const folderId = item.googleDriveFolderId || item.driveFolderId || item.collegeDriveFolderId || item.dayFolderId;
+          const driveLink = item.googleDriveFolderLink || item.driveFolderLink || item.collegeDriveFolderLink || (folderId ? `https://drive.google.com/drive/folders/${folderId}` : (item.trainerName || item.collegeName ? `https://drive.google.com/drive/search?q=${encodeURIComponent([item.trainerName, item.collegeName].filter(Boolean).join(' '))}` : 'https://drive.google.com/drive/my-drive'));
 
           return (
             <Space orientation="vertical" size={3}>
@@ -698,29 +699,25 @@ const TrainerActivity = () => {
                   </a>
                 )}
               </div>
-              {driveLink ? (
-                <a
-                  href={driveLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "2px 8px",
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    borderRadius: "6px",
-                    fontSize: "11px",
-                    fontWeight: "bold",
-                    color: "#1d4ed8"
-                  }}
-                >
-                  ☁️ Google Drive Folder
-                </a>
-              ) : (
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>Drive Synced</span>
-              )}
+              <a
+                href={driveLink}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: "2px 8px",
+                  background: "#ecfdf5",
+                  border: "1px solid #a7f3d0",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  color: "#059669"
+                }}
+              >
+                ☁️ Google Drive Folder
+              </a>
             </Space>
           );
         },

@@ -38,12 +38,81 @@ import {
   Camera,
   Layers,
   ExternalLink,
+  FolderOpen,
 } from "lucide-react";
 import { api } from "@/services/api";
 import { getSecureImageUrl } from "@/utils/imageUtils";
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
+
+const resolveDriveFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+
+  // Direct URLs
+  if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http")) return record.driveFolderUrl;
+  if (record.driveFolderLink && typeof record.driveFolderLink === "string" && record.driveFolderLink.startsWith("http")) return record.driveFolderLink;
+  if (record.scheduleId?.driveFolderUrl && typeof record.scheduleId.driveFolderUrl === "string" && record.scheduleId.driveFolderUrl.startsWith("http")) return record.scheduleId.driveFolderUrl;
+  if (record.scheduleId?.driveFolderLink && typeof record.scheduleId.driveFolderLink === "string" && record.scheduleId.driveFolderLink.startsWith("http")) return record.scheduleId.driveFolderLink;
+  if (record.collegeId?.driveFolderLink && typeof record.collegeId.driveFolderLink === "string" && record.collegeId.driveFolderLink.startsWith("http")) return record.collegeId.driveFolderLink;
+  if (record.collegeId?.driveFolderUrl && typeof record.collegeId.driveFolderUrl === "string" && record.collegeId.driveFolderUrl.startsWith("http")) return record.collegeId.driveFolderUrl;
+
+  // Folder IDs
+  const folderId =
+    record.driveFolderId ||
+    record.dayFolderId ||
+    record.scheduleId?.driveFolderId ||
+    record.scheduleId?.dayFolderId ||
+    record.collegeDriveFolderId ||
+    record.trainerId?.googleDriveFolderId ||
+    record.trainerId?.driveFolderId ||
+    record.trainerId?.collegeDriveFolderId ||
+    record.collegeId?.googleDriveFolderId ||
+    record.collegeId?.driveFolderId ||
+    record.courseId?.driveFolderId ||
+    record.departmentId?.driveFolderId;
+
+  if (folderId && typeof folderId === "string" && folderId.trim().length > 3) {
+    return `https://drive.google.com/drive/folders/${folderId.trim()}`;
+  }
+
+  // Check trainer.colleges array
+  if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
+    const colMatch = record.trainerId.colleges.find(
+      (c) =>
+        (record.collegeId && (c.collegeId === record.collegeId._id || c.collegeId === record.collegeId || c._id === record.collegeId._id)) ||
+        c.googleDriveFolderId ||
+        c.driveFolderId
+    );
+    const colFolderId = colMatch?.googleDriveFolderId || colMatch?.driveFolderId || record.trainerId.colleges[0]?.googleDriveFolderId || record.trainerId.colleges[0]?.driveFolderId;
+    if (colFolderId) {
+      return `https://drive.google.com/drive/folders/${colFolderId.trim()}`;
+    }
+  }
+
+  // Fallback: Google Drive Search URL with Trainer Name, College Name, Course Name
+  const trainerName =
+    record.trainerId?.userId?.name ||
+    record.trainerId?.name ||
+    record.trainerName ||
+    "";
+  const collegeName =
+    record.collegeId?.name ||
+    record.collegeName ||
+    "";
+  const courseName =
+    record.courseId?.title ||
+    record.courseId?.name ||
+    record.subject ||
+    "";
+
+  const searchTerms = [trainerName, collegeName, courseName].filter(Boolean).join(" ");
+  if (searchTerms.trim().length > 0) {
+    return `https://drive.google.com/drive/search?q=${encodeURIComponent(searchTerms.trim())}`;
+  }
+
+  return "https://drive.google.com/drive/my-drive";
+};
 
 export default function TrainerAttendanceRequests() {
   const [requests, setRequests] = useState([]);
@@ -295,18 +364,32 @@ export default function TrainerAttendanceRequests() {
     {
       title: <span style={{ whiteSpace: "nowrap" }}>Action</span>,
       key: "action",
-      width: 130,
-      render: (_, record) => (
-        <Button
-          size="small"
-          type="primary"
-          icon={<Eye size={12} />}
-          onClick={() => handleOpenReview(record)}
-          style={{ fontSize: 12 }}
-        >
-          Review Proofs
-        </Button>
-      ),
+      width: 190,
+      render: (_, record) => {
+        const driveUrl = resolveDriveFolderUrl(record);
+        return (
+          <Space size={6}>
+            <Button
+              size="small"
+              type="primary"
+              icon={<Eye size={12} />}
+              onClick={() => handleOpenReview(record)}
+              style={{ fontSize: 12 }}
+            >
+              Review
+            </Button>
+            <Button
+              size="small"
+              icon={<FolderOpen size={12} />}
+              href={driveUrl}
+              target="_blank"
+              style={{ color: "#059669", borderColor: "#059669", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 3 }}
+            >
+              Drive
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -401,29 +484,16 @@ export default function TrainerAttendanceRequests() {
               <Layers size={18} color="#4f46e5" />
               <span style={{ fontWeight: 600 }}>Review Late Attendance Request</span>
             </div>
-            {(() => {
-              const driveFolderId =
-                selectedRecord?.driveFolderId ||
-                selectedRecord?.dayFolderId ||
-                selectedRecord?.scheduleId?.driveFolderId ||
-                selectedRecord?.scheduleId?.dayFolderId ||
-                selectedRecord?.collegeDriveFolderId ||
-                selectedRecord?.trainerId?.googleDriveFolderId ||
-                selectedRecord?.collegeId?.driveFolderId;
-              const driveFolderUrl = selectedRecord?.driveFolderUrl || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
-              return driveFolderUrl ? (
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<ExternalLink size={12} />}
-                  href={driveFolderUrl}
-                  target="_blank"
-                  style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
-                >
-                  Google Drive Folder
-                </Button>
-              ) : null;
-            })()}
+            <Button
+              size="small"
+              type="primary"
+              icon={<FolderOpen size={14} />}
+              href={resolveDriveFolderUrl(selectedRecord)}
+              target="_blank"
+              style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              Google Drive Folder
+            </Button>
           </div>
         }
         open={reviewModalVisible}

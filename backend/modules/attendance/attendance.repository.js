@@ -289,7 +289,7 @@ const buildDefaultAttendanceQuery = (filters = {}) =>
     )
     .populate({
       path: "trainerId",
-      select: "name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId",
+      select: "name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId colleges",
       populate: { path: "userId", select: "name email" },
     })
     .populate({
@@ -518,7 +518,7 @@ const findAttendanceDetailsById = async (attendanceId) =>
     )
     .populate({
       path: "trainerId",
-      select: "name trainerId userId googleDriveFolderId driveFolderId collegeDriveFolderId",
+      select: "name trainerId userId googleDriveFolderId driveFolderId collegeDriveFolderId colleges",
       populate: { path: "userId", select: "name email" },
     })
     .populate({
