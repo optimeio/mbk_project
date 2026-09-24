@@ -5731,7 +5731,16 @@ router.get('/late-requests', authenticate, async (req, res) => {
             }
 
             // 6. Resolve Google Drive folder link
+            const sessionType = String(item.session || item.scheduleId?.session || "FN").toUpperCase();
+            const sessionFolderLink = sessionType === "AN"
+                ? (item.scheduleId?.anFolder?.driveFolderLink || item.scheduleId?.anFolder?.driveFolderUrl)
+                : (item.scheduleId?.fnFolder?.driveFolderLink || item.scheduleId?.fnFolder?.driveFolderUrl);
+            const sessionFolderId = sessionType === "AN"
+                ? (item.scheduleId?.anFolder?.id || item.scheduleId?.anFolder?.driveFolderId)
+                : (item.scheduleId?.fnFolder?.id || item.scheduleId?.fnFolder?.driveFolderId);
+
             const resolvedDriveFolderId =
+                sessionFolderId ||
                 item.driveFolderId ||
                 item.dayFolderId ||
                 item.scheduleId?.driveFolderId ||
@@ -5742,13 +5751,14 @@ router.get('/late-requests', authenticate, async (req, res) => {
                 item.collegeId?.googleDriveFolderId ||
                 item.collegeId?.driveFolderId;
 
-            if (!item.driveFolderUrl) {
-                item.driveFolderUrl =
-                    item.driveFolderLink ||
-                    item.scheduleId?.driveFolderLink ||
-                    item.scheduleId?.driveFolderUrl ||
-                    (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : null);
-            }
+            item.driveFolderUrl =
+                sessionFolderLink ||
+                item.driveFolderUrl ||
+                item.driveFolderLink ||
+                item.scheduleId?.driveFolderLink ||
+                item.scheduleId?.driveFolderUrl ||
+                (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : "https://drive.google.com/drive/my-drive");
+
             item.driveFolderId = resolvedDriveFolderId || item.driveFolderId;
 
             return item;
