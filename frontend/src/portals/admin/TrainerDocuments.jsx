@@ -479,15 +479,34 @@ const getStatusTag = (status) => {
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-8 text-center">
-            <InboxOutlined className="mb-3 text-4xl text-slate-300" />
-            <Text className="block text-sm font-medium text-slate-500">
-              No document found
-            </Text>
-            <Text className="mt-1 block text-xs text-slate-400">
-              Admin can upload on behalf of trainer
-            </Text>
-          </div>
+          <Upload.Dragger
+            showUploadList={false}
+            beforeUpload={(file) => handleDocumentUpload(type, file)}
+            accept={
+              type === "resumePdf"
+                ? ".pdf"
+                : type === "ndaAgreement"
+                  ? ".pdf,.doc,.docx"
+                : type === "selfiePhoto" || type === "passportPhoto"
+                  ? ".jpg,.jpeg,.png"
+                  : ".jpg,.jpeg,.png,.pdf"
+            }
+            className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-indigo-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/40 transition-all p-4 text-center cursor-pointer group"
+          >
+            <div className="flex flex-col items-center justify-center py-4">
+              <InboxOutlined className="mb-2 text-3xl text-indigo-400 group-hover:scale-110 transition-transform" />
+              <Text className="block text-xs font-bold text-slate-700">
+                Drag &amp; drop file here, or browse
+              </Text>
+              <Text className="mt-1 block text-[11px] text-slate-400">
+                {type === "resumePdf"
+                  ? "PDF (max 15MB)"
+                  : type === "ndaAgreement"
+                    ? "PDF, DOC, DOCX (max 15MB)"
+                    : "JPG, PNG, PDF (max 15MB)"}
+              </Text>
+            </div>
+          </Upload.Dragger>
         )}
       </div>
     );
@@ -991,9 +1010,14 @@ const TrainerDocuments = () => {
     }
 
     const formData = new FormData();
-    formData.append("document", file); // Backend expects 'document', not 'file'
+    formData.append("document", file);
+    formData.append("file", file);
     formData.append("documentType", documentType);
-    formData.append("targetTrainerId", trainerId); // Backend expects 'targetTrainerId' for SuperAdmin
+    formData.append("targetTrainerId", trainerId);
+    formData.append("trainerId", trainerId);
+    if (selectedTrainer?.email) {
+      formData.append("email", selectedTrainer.email);
+    }
 
     try {
       message.loading({ content: "Uploading document...", key: "upload" });

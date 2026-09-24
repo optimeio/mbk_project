@@ -275,26 +275,26 @@ const DocumentCard = memo(function DocumentCard({
                 </div>
               </div>
             ) : (
-              <Upload
+              <Upload.Dragger
                 accept={accept}
                 showUploadList={false}
                 beforeUpload={handleBeforeUpload}
                 disabled={isUploading}
-                className="w-full"
+                multiple={false}
+                className="w-full !rounded-xl !border-dashed !border-indigo-200 hover:!border-indigo-400 !bg-slate-50/50 hover:!bg-indigo-50/30 p-2 cursor-pointer transition-all"
               >
-                <Button
-                  block
-                  icon={<UploadOutlined />}
-                  loading={isUploading}
-                  className={`h-11 rounded-xl font-bold text-xs uppercase tracking-widest border-0 shadow-sm transition-all ${
-                    isRejected
-                      ? "bg-rose-600 text-white hover:bg-rose-700"
-                      : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200 text-shadow-sm"
-                  }`}
-                >
-                  {isRejected ? "Re-Upload File" : "Upload Document"}
-                </Button>
-              </Upload>
+                <div className="flex flex-col items-center justify-center py-2">
+                  <UploadOutlined className="text-xl text-indigo-500 mb-1" />
+                  <p className="text-xs font-bold text-slate-700 m-0">
+                    {isRejected ? "Re-Upload File (Drag & Drop)" : "Drag & drop or Click to Upload"}
+                  </p>
+                  <p className="text-[10px] text-slate-400 m-0 mt-0.5">
+                    {accept === ".pdf" || accept === "application/pdf"
+                      ? "PDF (max 15MB)"
+                      : "JPG, PNG, PDF (max 15MB)"}
+                  </p>
+                </div>
+              </Upload.Dragger>
             )}
 
             <div className="mt-4 flex items-center justify-center gap-2">

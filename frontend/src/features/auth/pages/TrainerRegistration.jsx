@@ -1166,6 +1166,7 @@ const Step3 = ({
   const [previewUrls, setPreviewUrls] = useState(
     initialStep3State.restoredPreviewUrls,
   );
+  const [dragOverKey, setDragOverKey] = useState(null);
   const [error, setError] = useState("");
   const [uploadErrors, setUploadErrors] = useState({});
   const [completing, setCompleting] = useState(false);
@@ -1311,6 +1312,27 @@ const Step3 = ({
     }
   };
 
+  const handleFileDrop = (key, file) => {
+    if (!file) return;
+    setError("");
+    setUploadErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setFiles((f) => ({ ...f, [key]: file }));
+    setStatus((s) => ({ ...s, [key]: "idle" }));
+    if (key === "selfiePhoto") {
+      try {
+        const dataUrl = URL.createObjectURL(file);
+        setPreviewUrls((prev) => ({ ...prev, selfiePhoto: dataUrl }));
+      } catch (e) {
+        console.error("Failed to generate preview URL", e);
+      }
+    }
+  };
+
   const handleCameraCapture = async (file, dataUrl) => {
     setError("");
     setUploadErrors((prev) => {
@@ -1391,8 +1413,13 @@ const Step3 = ({
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("document", file);
       fd.append("documentType", key);
       if (email) fd.append("email", email);
+      if (regData?.id || regData?._id) {
+        fd.append("targetTrainerId", regData.id || regData._id);
+        fd.append("trainerId", regData.id || regData._id);
+      }
       const res = await uploadDocument(fd);
       if (res.success && res.data) {
         const savedPath = res.data.filePath || res.data.fileLink;
@@ -1623,7 +1650,24 @@ const Step3 = ({
 
             return (
               <React.Fragment key={doc.key}>
-                <div className={`tr-selfie-upload-wrapper ${docState}`}>
+                <div
+                  className={`tr-selfie-upload-wrapper ${docState} ${
+                    dragOverKey === doc.key ? "ring-2 ring-indigo-500 bg-indigo-50/70" : ""
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (needsUpload) setDragOverKey(doc.key);
+                  }}
+                  onDragLeave={() => setDragOverKey((prev) => (prev === doc.key ? null : prev))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverKey(null);
+                    const droppedFile = e.dataTransfer?.files?.[0];
+                    if (droppedFile && needsUpload) {
+                      handleFileDrop(doc.key, droppedFile);
+                    }
+                  }}
+                >
                   <div className="tr-selfie-header-info">
                     <strong>{doc.label}</strong>
                     <span className="tr-doc-hint">{doc.hint}</span>
@@ -1738,7 +1782,24 @@ const Step3 = ({
 
           return (
             <React.Fragment key={doc.key}>
-              <div className={`tr-doc-item ${docState}`}>
+              <div
+                className={`tr-doc-item ${docState} ${
+                  dragOverKey === doc.key ? "ring-2 ring-indigo-500 bg-indigo-50/70" : ""
+                }`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (needsUpload) setDragOverKey(doc.key);
+                }}
+                onDragLeave={() => setDragOverKey((prev) => (prev === doc.key ? null : prev))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverKey(null);
+                  const droppedFile = e.dataTransfer?.files?.[0];
+                  if (droppedFile && needsUpload) {
+                    handleFileDrop(doc.key, droppedFile);
+                  }
+                }}
+              >
                 <div className="tr-doc-info">
                   <strong>{doc.label}</strong>
                   <span className="tr-doc-hint">{doc.hint}</span>

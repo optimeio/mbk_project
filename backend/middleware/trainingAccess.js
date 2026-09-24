@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const { Trainer } = require("../models");
 const {
   canManageTrainingHierarchy,
@@ -13,9 +14,15 @@ const attachTrainingRequester = async (req, res, next) => {
     let trainerProfile = null;
 
     if (isTrainerRole(role) && req.user?.id) {
-      trainerProfile = await Trainer.findOne({ userId: req.user.id }).select(
-        "_id trainerId userId",
-      );
+      const isObjectId = mongoose.Types.ObjectId.isValid(String(req.user.id));
+      trainerProfile = await Trainer.findOne({
+        $or: [
+          ...(isObjectId
+            ? [{ userId: req.user.id }, { _id: req.user.id }]
+            : [{ userId: req.user.id }]),
+          ...(req.user.email ? [{ email: req.user.email.toLowerCase() }] : []),
+        ],
+      }).select("_id trainerId userId");
 
       if (!trainerProfile) {
         return res.status(404).json({

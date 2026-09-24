@@ -1,11 +1,45 @@
 const mongoose = require("mongoose");
 const { Notification, Trainer, TrainerDocument, User } = require("../../models");
 
-const findTrainerByUserId = async ({ userId } = {}) =>
-  Trainer.findOne({ userId });
+const escapeRegExp = (str) =>
+  String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const findTrainerByEmail = async ({ email } = {}) =>
-  Trainer.findOne({ email });
+const findTrainerByUserId = async ({ userId } = {}) => {
+  if (!userId) return null;
+  const cleanId = String(userId).trim();
+  const isObjId = mongoose.Types.ObjectId.isValid(cleanId);
+  if (isObjId) {
+    let trainer = await Trainer.findOne({ userId: cleanId });
+    if (trainer) return trainer;
+    trainer = await Trainer.findById(cleanId);
+    if (trainer) return trainer;
+  }
+  return Trainer.findOne({
+    $or: [
+      { email: { $regex: new RegExp(`^${escapeRegExp(cleanId)}$`, "i") } },
+      { trainerId: cleanId },
+    ],
+  });
+};
+
+const findTrainerByEmail = async ({ email } = {}) => {
+  if (!email) return null;
+  const normalizedEmail = String(email).trim();
+  const emailRegex = new RegExp(`^${escapeRegExp(normalizedEmail)}$`, "i");
+
+  let trainer = await Trainer.findOne({ email: emailRegex });
+  if (trainer) return trainer;
+
+  const user = await User.findOne({ email: emailRegex });
+  if (user) {
+    trainer = await Trainer.findOne({
+      $or: [{ userId: user._id }, { _id: user._id }, { email: emailRegex }],
+    });
+    if (trainer) return trainer;
+  }
+
+  return null;
+};
 
 const findTrainerForNdaBackfill = async ({ trainerId } = {}) =>
   Trainer.findById(trainerId).select(
@@ -43,11 +77,41 @@ const findDocumentByIdWithTrainerUser = async ({ documentId } = {}) =>
     populate: { path: "userId" },
   });
 
-const findTrainerById = async ({ trainerId } = {}) =>
-  Trainer.findById(trainerId);
+const findTrainerById = async ({ trainerId } = {}) => {
+  if (!trainerId) return null;
+  const cleanId = String(trainerId).trim();
+  const isObjId = mongoose.Types.ObjectId.isValid(cleanId);
+  if (isObjId) {
+    let trainer = await Trainer.findById(cleanId);
+    if (trainer) return trainer;
+    trainer = await Trainer.findOne({ userId: cleanId });
+    if (trainer) return trainer;
+  }
+  return Trainer.findOne({
+    $or: [
+      { trainerId: cleanId },
+      { email: { $regex: new RegExp(`^${escapeRegExp(cleanId)}$`, "i") } },
+    ],
+  });
+};
 
-const findTrainerByIdWithUser = async ({ trainerId } = {}) =>
-  Trainer.findById(trainerId).populate("userId");
+const findTrainerByIdWithUser = async ({ trainerId } = {}) => {
+  if (!trainerId) return null;
+  const cleanId = String(trainerId).trim();
+  const isObjId = mongoose.Types.ObjectId.isValid(cleanId);
+  if (isObjId) {
+    let trainer = await Trainer.findById(cleanId).populate("userId");
+    if (trainer) return trainer;
+    trainer = await Trainer.findOne({ userId: cleanId }).populate("userId");
+    if (trainer) return trainer;
+  }
+  return Trainer.findOne({
+    $or: [
+      { trainerId: cleanId },
+      { email: { $regex: new RegExp(`^${escapeRegExp(cleanId)}$`, "i") } },
+    ],
+  }).populate("userId");
+};
 
 const findUserByIdWithPlainPassword = async ({ userId } = {}) =>
   User.findById(userId).select("+plainPassword");

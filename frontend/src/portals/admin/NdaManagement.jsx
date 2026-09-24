@@ -250,8 +250,13 @@ const NdaManagement = ({ compact = false }) => {
 
             const formData = new FormData();
             formData.append('document', file);
+            formData.append('file', file);
             formData.append('documentType', 'ndaAgreement');
             formData.append('targetTrainerId', targetRow.id);
+            formData.append('trainerId', targetRow.id);
+            if (targetRow.email && targetRow.email !== 'N/A') {
+                formData.append('email', targetRow.email);
+            }
 
             await uploadNdaMutation.mutateAsync(formData);
 

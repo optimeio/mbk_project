@@ -170,28 +170,33 @@ const TrainerComplaints = () => {
                             label="Attachment (Optional)"
                             className="mb-0"
                         >
-                            <Upload
-                                    fileList={fileList}
-                                    onChange={handleUploadChange}
-                                    beforeUpload={beforeUpload}
-                                    maxCount={1}
-                                    listType="text"
-                                    className="w-full"
-                                >
-                                    <Button icon={<UploadOutlined />} size="large" block>Tap to Upload File</Button>
-                                    </Upload>
-                                    {fileList.length > 0 && (
-                                      <div className="mt-2 flex items-center space-x-4">
-                                        <img loading="lazy"
-                                          src={URL.createObjectURL(fileList[0].originFileObj)}
-                                          alt="preview"
-                                          className="h-16 w-16 object-cover rounded"
-                                        />
-                                        <span className="text-sm text-gray-600">
-                                          {fileList[0].name} - {(fileList[0].size / 1024).toFixed(2)} KB
-                                        </span>
-                                      </div>
-                                    )}
+                            <Upload.Dragger
+                                fileList={fileList}
+                                onChange={handleUploadChange}
+                                beforeUpload={beforeUpload}
+                                maxCount={1}
+                                multiple={false}
+                                listType="text"
+                                className="w-full !rounded-xl !border-dashed !border-indigo-200 hover:!border-indigo-400 !bg-slate-50/50 p-3"
+                            >
+                                <div className="flex flex-col items-center justify-center py-2">
+                                    <UploadOutlined className="text-xl text-indigo-500 mb-1" />
+                                    <p className="text-xs font-bold text-slate-700 m-0">Drag &amp; drop file here, or click to upload</p>
+                                    <p className="text-[11px] text-slate-400 m-0 mt-0.5">JPG or PNG image up to 5MB</p>
+                                </div>
+                            </Upload.Dragger>
+                            {fileList.length > 0 && (
+                                <div className="mt-2 flex items-center space-x-4">
+                                  <img loading="lazy"
+                                    src={URL.createObjectURL(fileList[0].originFileObj)}
+                                    alt="preview"
+                                    className="h-16 w-16 object-cover rounded"
+                                  />
+                                  <span className="text-sm text-gray-600">
+                                    {fileList[0].name} - {(fileList[0].size / 1024).toFixed(2)} KB
+                                  </span>
+                                </div>
+                            )}
 
                         </Form.Item>
 

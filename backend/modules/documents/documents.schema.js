@@ -52,7 +52,13 @@ const parseUploadDocumentBody = (body = {}) => ({
   bankName: body?.bankName,
   ifscCode: body?.ifscCode,
   email: body?.email,
-  targetTrainerId: body?.targetTrainerId,
+  targetTrainerId:
+    body?.targetTrainerId ||
+    body?.trainerId ||
+    body?.trainer ||
+    body?.id ||
+    body?.targetId ||
+    null,
 });
 
 const parseUploadDocumentContext = (user = null) => ({

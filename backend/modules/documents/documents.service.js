@@ -611,10 +611,13 @@ const uploadTrainerDocumentFeed = async ({
   let trainer = null;
   const actorRole = String(actorUser?.role || "").trim();
   const actorUserId = actorUser?.id || actorUser?._id || null;
+  const targetId = targetTrainerId || payload?.trainerId || payload?.trainer || payload?.id;
+  const targetEmail = email || payload?.email || null;
+  const isAdminRole = ["SuperAdmin", "Admin"].includes(actorRole);
   const isAdminUpload = Boolean(
     targetTrainerId &&
       actorUser &&
-      ["SuperAdmin", "Admin"].includes(actorRole),
+      isAdminRole,
   );
 
   if (isAdminUpload) {
@@ -622,10 +625,20 @@ const uploadTrainerDocumentFeed = async ({
       throw createStatusError(400, INVALID_TRAINER_ID_MESSAGE);
     }
     trainer = await findTrainerByIdLoader({ trainerId: targetTrainerId });
-  } else if (email) {
-    trainer = await findTrainerByEmailLoader({ email });
+  } else if (targetId) {
+    trainer = await findTrainerByIdLoader({ trainerId: targetId });
+  } else if (targetEmail) {
+    trainer = await findTrainerByEmailLoader({ email: targetEmail });
   } else if (actorUserId) {
     trainer = await findTrainerByUserIdLoader({ userId: actorUserId });
+  }
+
+  if (!trainer && targetEmail) {
+    trainer = await findTrainerByEmailLoader({ email: targetEmail });
+  }
+
+  if (!trainer && actorUser?.email) {
+    trainer = await findTrainerByEmailLoader({ email: actorUser.email });
   }
 
   if (!trainer) {
