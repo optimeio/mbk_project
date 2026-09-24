@@ -57,10 +57,17 @@ const resolveDriveFolderUrl = (record) => {
   if (record.collegeId?.driveFolderLink && typeof record.collegeId.driveFolderLink === "string" && record.collegeId.driveFolderLink.startsWith("http")) return record.collegeId.driveFolderLink;
   if (record.collegeId?.driveFolderUrl && typeof record.collegeId.driveFolderUrl === "string" && record.collegeId.driveFolderUrl.startsWith("http")) return record.collegeId.driveFolderUrl;
 
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  if (sessionType === "AN" && record.scheduleId?.anFolder?.driveFolderLink) return record.scheduleId.anFolder.driveFolderLink;
+  if (sessionType === "FN" && record.scheduleId?.fnFolder?.driveFolderLink) return record.scheduleId.fnFolder.driveFolderLink;
+  if (sessionType === "AN" && record.scheduleId?.anFolder?.driveFolderUrl) return record.scheduleId.anFolder.driveFolderUrl;
+  if (sessionType === "FN" && record.scheduleId?.fnFolder?.driveFolderUrl) return record.scheduleId.fnFolder.driveFolderUrl;
+
   // Folder IDs
   const folderId =
     record.driveFolderId ||
     record.dayFolderId ||
+    (sessionType === "AN" ? (record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId) : (record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId)) ||
     record.scheduleId?.driveFolderId ||
     record.scheduleId?.dayFolderId ||
     record.collegeDriveFolderId ||
@@ -80,9 +87,9 @@ const resolveDriveFolderUrl = (record) => {
   if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
     const colMatch = record.trainerId.colleges.find(
       (c) =>
-        (record.collegeId && (c.collegeId === record.collegeId._id || c.collegeId === record.collegeId || c._id === record.collegeId._id)) ||
-        c.googleDriveFolderId ||
-        c.driveFolderId
+        (record.collegeId && (c?.collegeId === record.collegeId._id || c?.collegeId === record.collegeId || c?._id === record.collegeId._id)) ||
+        c?.googleDriveFolderId ||
+        c?.driveFolderId
     );
     const colFolderId = colMatch?.googleDriveFolderId || colMatch?.driveFolderId || record.trainerId.colleges[0]?.googleDriveFolderId || record.trainerId.colleges[0]?.driveFolderId;
     if (colFolderId) {
@@ -579,8 +586,9 @@ export default function TrainerAttendanceRequests() {
             {/* 4 Proofs Showcase Grid */}
             {(() => {
               const checkInPhotoUrl = selectedRecord.imageUrl || selectedRecord.checkInPhoto || selectedRecord.checkIn?.photo;
-              const attendanceDoc = (Array.isArray(selectedRecord.documents) ? selectedRecord.documents : []).find(
-                (d) => d.fileType === 'attendance' || String(d.fileField || '').toLowerCase().includes('attendance')
+              const documentsList = Array.isArray(selectedRecord.documents) ? selectedRecord.documents.filter(Boolean) : [];
+              const attendanceDoc = documentsList.find(
+                (d) => d?.fileType === 'attendance' || String(d?.fileField || '').toLowerCase().includes('attendance')
               );
               const attendanceSheetUrl =
                 attendanceDoc?.fileUrl ||
@@ -762,29 +770,39 @@ export default function TrainerAttendanceRequests() {
             </div>
 
             {/* Action Buttons */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-              <Button onClick={() => setReviewModalVisible(false)} disabled={isVerifying}>
-                Close
-              </Button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
               <Button
-                danger
-                icon={<XCircle size={14} />}
-                onClick={() => handleVerify("reject")}
-                loading={isVerifying}
-                disabled={isVerifying}
+                icon={<FolderOpen size={14} />}
+                href={resolveDriveFolderUrl(selectedRecord)}
+                target="_blank"
+                style={{ color: "#059669", borderColor: "#059669", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}
               >
-                Reject Request
+                Open in Google Drive
               </Button>
-              <Button
-                type="primary"
-                icon={<CheckCircle2 size={14} />}
-                onClick={() => handleVerify("approve")}
-                loading={isVerifying}
-                disabled={isVerifying}
-                style={{ backgroundColor: "#16a34a", borderColor: "#16a34a" }}
-              >
-                Approve Attendance
-              </Button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Button onClick={() => setReviewModalVisible(false)} disabled={isVerifying}>
+                  Close
+                </Button>
+                <Button
+                  danger
+                  icon={<XCircle size={14} />}
+                  onClick={() => handleVerify("reject")}
+                  loading={isVerifying}
+                  disabled={isVerifying}
+                >
+                  Reject Request
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<CheckCircle2 size={14} />}
+                  onClick={() => handleVerify("approve")}
+                  loading={isVerifying}
+                  disabled={isVerifying}
+                  style={{ backgroundColor: "#16a34a", borderColor: "#16a34a" }}
+                >
+                  Approve Attendance
+                </Button>
+              </div>
             </div>
           </div>
         )}
