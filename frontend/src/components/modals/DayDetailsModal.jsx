@@ -79,6 +79,71 @@ const DistanceDisplay = ({ checkInGeo, collegeLat, collegeLng }) => {
     );
 };
 
+const resolveDayDriveFolderUrl = (day, college, trainers) => {
+    if (!day) return "https://drive.google.com/drive/my-drive";
+
+    // Direct URLs
+    if (day.driveFolderUrl && typeof day.driveFolderUrl === "string" && day.driveFolderUrl.startsWith("http")) return day.driveFolderUrl;
+    if (day.driveFolderLink && typeof day.driveFolderLink === "string" && day.driveFolderLink.startsWith("http")) return day.driveFolderLink;
+    if (day.dayFolderLink && typeof day.dayFolderLink === "string" && day.dayFolderLink.startsWith("http")) return day.dayFolderLink;
+    if (day.schedule?.driveFolderUrl && typeof day.schedule.driveFolderUrl === "string" && day.schedule.driveFolderUrl.startsWith("http")) return day.schedule.driveFolderUrl;
+    if (day.schedule?.driveFolderLink && typeof day.schedule.driveFolderLink === "string" && day.schedule.driveFolderLink.startsWith("http")) return day.schedule.driveFolderLink;
+    if (day.scheduleId?.driveFolderUrl && typeof day.scheduleId.driveFolderUrl === "string" && day.scheduleId.driveFolderUrl.startsWith("http")) return day.scheduleId.driveFolderUrl;
+    if (day.scheduleId?.driveFolderLink && typeof day.scheduleId.driveFolderLink === "string" && day.scheduleId.driveFolderLink.startsWith("http")) return day.scheduleId.driveFolderLink;
+    if (college?.driveFolderLink && typeof college.driveFolderLink === "string" && college.driveFolderLink.startsWith("http")) return college.driveFolderLink;
+    if (college?.driveFolderUrl && typeof college.driveFolderUrl === "string" && college.driveFolderUrl.startsWith("http")) return college.driveFolderUrl;
+    if (day.collegeId?.driveFolderLink && typeof day.collegeId.driveFolderLink === "string" && day.collegeId.driveFolderLink.startsWith("http")) return day.collegeId.driveFolderLink;
+    if (day.collegeId?.driveFolderUrl && typeof day.collegeId.driveFolderUrl === "string" && day.collegeId.driveFolderUrl.startsWith("http")) return day.collegeId.driveFolderUrl;
+
+    const sessionType = String(day.session || day.schedule?.session || day.scheduleId?.session || "FN").toUpperCase();
+    if (sessionType === "AN" && (day.anFolder?.driveFolderLink || day.schedule?.anFolder?.driveFolderLink || day.scheduleId?.anFolder?.driveFolderLink)) {
+        return day.anFolder?.driveFolderLink || day.schedule?.anFolder?.driveFolderLink || day.scheduleId?.anFolder?.driveFolderLink;
+    }
+    if (sessionType === "FN" && (day.fnFolder?.driveFolderLink || day.schedule?.fnFolder?.driveFolderLink || day.scheduleId?.fnFolder?.driveFolderLink)) {
+        return day.fnFolder?.driveFolderLink || day.schedule?.fnFolder?.driveFolderLink || day.scheduleId?.fnFolder?.driveFolderLink;
+    }
+
+    // Folder IDs
+    const folderId =
+        day.driveFolderId ||
+        day.dayFolderId ||
+        (sessionType === "AN" ? (day.anFolder?.id || day.anFolder?.driveFolderId || day.schedule?.anFolder?.id || day.scheduleId?.anFolder?.id) : (day.fnFolder?.id || day.fnFolder?.driveFolderId || day.schedule?.fnFolder?.id || day.scheduleId?.fnFolder?.id)) ||
+        day.schedule?.driveFolderId ||
+        day.schedule?.dayFolderId ||
+        day.scheduleId?.driveFolderId ||
+        day.scheduleId?.dayFolderId ||
+        day.collegeDriveFolderId ||
+        day.trainerId?.googleDriveFolderId ||
+        day.trainerId?.driveFolderId ||
+        day.trainerId?.collegeDriveFolderId ||
+        day.collegeId?.googleDriveFolderId ||
+        day.collegeId?.driveFolderId ||
+        college?.googleDriveFolderId ||
+        college?.driveFolderId;
+
+    if (folderId && typeof folderId === "string" && folderId.trim().length > 3) {
+        return `https://drive.google.com/drive/folders/${folderId.trim()}`;
+    }
+
+    // Fallback: Google Drive Search
+    const trainerName =
+        day.trainerName ||
+        (trainers && trainers.find(t => t._id === day.trainerId)?.userId?.name) ||
+        (trainers && trainers.find(t => t._id === day.trainerId)?.name) ||
+        day.trainerId?.userId?.name ||
+        day.trainerId?.name ||
+        "";
+    const collegeName = college?.name || day.collegeName || day.collegeId?.name || "";
+    const courseName = day.syllabusName || day.courseName || day.courseId?.title || "";
+
+    const searchTerms = [trainerName, collegeName, courseName].filter(Boolean).join(" ");
+    if (searchTerms.trim().length > 0) {
+        return `https://drive.google.com/drive/search?q=${encodeURIComponent(searchTerms.trim())}`;
+    }
+
+    return "https://drive.google.com/drive/my-drive";
+};
+
 const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify, onSave, onDelete }) => {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState('overview');
@@ -377,17 +442,7 @@ const DayDetailsModal = ({ open, onClose, day, college, trainers = [], onVerify,
     if (day) {
         const dayNumberValue = day.dayNumber ?? day.dayNo ?? day.dayIndex;
         const dayLabel = dayNumberValue ? `Day ${dayNumberValue}` : null;
-        const driveFolderId = day.driveFolderId
-            || day.dayFolderId
-            || day.schedule?.driveFolderId
-            || day.schedule?.dayFolderId
-            || day.attendance?.driveFolderId
-            || day.trainerId?.googleDriveFolderId
-            || day.collegeId?.driveFolderId;
-        const driveFolderUrl = day.driveFolderLink
-            || day.dayFolderLink
-            || day.driveFolderUrl
-            || (driveFolderId ? `https://drive.google.com/drive/folders/${driveFolderId}` : null);
+        const driveFolderUrl = resolveDayDriveFolderUrl(day, college, availableTrainers);
 
         const handleVerification = (status) => {
             if (onVerify) {

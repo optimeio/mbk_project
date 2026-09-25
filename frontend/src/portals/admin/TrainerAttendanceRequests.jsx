@@ -49,25 +49,42 @@ const { TextArea } = Input;
 const resolveDriveFolderUrl = (record) => {
   if (!record) return "https://drive.google.com/drive/my-drive";
 
-  // Direct URLs
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+
+  // 1. Check Session-specific direct URLs first
+  if (sessionType === "AN") {
+    if (record.anFolder?.driveFolderLink && typeof record.anFolder.driveFolderLink === "string" && record.anFolder.driveFolderLink.startsWith("http")) return record.anFolder.driveFolderLink;
+    if (record.scheduleId?.anFolder?.driveFolderLink && typeof record.scheduleId.anFolder.driveFolderLink === "string" && record.scheduleId.anFolder.driveFolderLink.startsWith("http")) return record.scheduleId.anFolder.driveFolderLink;
+    if (record.anFolder?.driveFolderUrl && typeof record.anFolder.driveFolderUrl === "string" && record.anFolder.driveFolderUrl.startsWith("http")) return record.anFolder.driveFolderUrl;
+    if (record.scheduleId?.anFolder?.driveFolderUrl && typeof record.scheduleId.anFolder.driveFolderUrl === "string" && record.scheduleId.anFolder.driveFolderUrl.startsWith("http")) return record.scheduleId.anFolder.driveFolderUrl;
+  } else {
+    if (record.fnFolder?.driveFolderLink && typeof record.fnFolder.driveFolderLink === "string" && record.fnFolder.driveFolderLink.startsWith("http")) return record.fnFolder.driveFolderLink;
+    if (record.scheduleId?.fnFolder?.driveFolderLink && typeof record.scheduleId.fnFolder.driveFolderLink === "string" && record.scheduleId.fnFolder.driveFolderLink.startsWith("http")) return record.scheduleId.fnFolder.driveFolderLink;
+    if (record.fnFolder?.driveFolderUrl && typeof record.fnFolder.driveFolderUrl === "string" && record.fnFolder.driveFolderUrl.startsWith("http")) return record.fnFolder.driveFolderUrl;
+    if (record.scheduleId?.fnFolder?.driveFolderUrl && typeof record.scheduleId.fnFolder.driveFolderUrl === "string" && record.scheduleId.fnFolder.driveFolderUrl.startsWith("http")) return record.scheduleId.fnFolder.driveFolderUrl;
+  }
+
+  // 2. Direct URLs on record or schedule or college
   if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http")) return record.driveFolderUrl;
   if (record.driveFolderLink && typeof record.driveFolderLink === "string" && record.driveFolderLink.startsWith("http")) return record.driveFolderLink;
+  if (record.dayFolderLink && typeof record.dayFolderLink === "string" && record.dayFolderLink.startsWith("http")) return record.dayFolderLink;
   if (record.scheduleId?.driveFolderUrl && typeof record.scheduleId.driveFolderUrl === "string" && record.scheduleId.driveFolderUrl.startsWith("http")) return record.scheduleId.driveFolderUrl;
   if (record.scheduleId?.driveFolderLink && typeof record.scheduleId.driveFolderLink === "string" && record.scheduleId.driveFolderLink.startsWith("http")) return record.scheduleId.driveFolderLink;
+  if (record.scheduleId?.dayFolderLink && typeof record.scheduleId.dayFolderLink === "string" && record.scheduleId.dayFolderLink.startsWith("http")) return record.scheduleId.dayFolderLink;
   if (record.collegeId?.driveFolderLink && typeof record.collegeId.driveFolderLink === "string" && record.collegeId.driveFolderLink.startsWith("http")) return record.collegeId.driveFolderLink;
   if (record.collegeId?.driveFolderUrl && typeof record.collegeId.driveFolderUrl === "string" && record.collegeId.driveFolderUrl.startsWith("http")) return record.collegeId.driveFolderUrl;
+  if (record.scheduleId?.collegeId?.driveFolderLink && typeof record.scheduleId.collegeId.driveFolderLink === "string" && record.scheduleId.collegeId.driveFolderLink.startsWith("http")) return record.scheduleId.collegeId.driveFolderLink;
+  if (record.scheduleId?.collegeId?.driveFolderUrl && typeof record.scheduleId.collegeId.driveFolderUrl === "string" && record.scheduleId.collegeId.driveFolderUrl.startsWith("http")) return record.scheduleId.collegeId.driveFolderUrl;
 
-  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
-  if (sessionType === "AN" && record.scheduleId?.anFolder?.driveFolderLink) return record.scheduleId.anFolder.driveFolderLink;
-  if (sessionType === "FN" && record.scheduleId?.fnFolder?.driveFolderLink) return record.scheduleId.fnFolder.driveFolderLink;
-  if (sessionType === "AN" && record.scheduleId?.anFolder?.driveFolderUrl) return record.scheduleId.anFolder.driveFolderUrl;
-  if (sessionType === "FN" && record.scheduleId?.fnFolder?.driveFolderUrl) return record.scheduleId.fnFolder.driveFolderUrl;
+  // 3. Folder IDs
+  const sessionFolderId = sessionType === "AN"
+    ? (record.anFolder?.id || record.anFolder?.driveFolderId || record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId)
+    : (record.fnFolder?.id || record.fnFolder?.driveFolderId || record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId);
 
-  // Folder IDs
   const folderId =
+    sessionFolderId ||
     record.driveFolderId ||
     record.dayFolderId ||
-    (sessionType === "AN" ? (record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId) : (record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId)) ||
     record.scheduleId?.driveFolderId ||
     record.scheduleId?.dayFolderId ||
     record.collegeDriveFolderId ||
@@ -76,6 +93,8 @@ const resolveDriveFolderUrl = (record) => {
     record.trainerId?.collegeDriveFolderId ||
     record.collegeId?.googleDriveFolderId ||
     record.collegeId?.driveFolderId ||
+    record.scheduleId?.collegeId?.googleDriveFolderId ||
+    record.scheduleId?.collegeId?.driveFolderId ||
     record.courseId?.driveFolderId ||
     record.departmentId?.driveFolderId;
 
@@ -83,11 +102,12 @@ const resolveDriveFolderUrl = (record) => {
     return `https://drive.google.com/drive/folders/${folderId.trim()}`;
   }
 
-  // Check trainer.colleges array
+  // 4. Check trainer.colleges array
   if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
     const colMatch = record.trainerId.colleges.find(
       (c) =>
         (record.collegeId && (c?.collegeId === record.collegeId._id || c?.collegeId === record.collegeId || c?._id === record.collegeId._id)) ||
+        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId._id)) ||
         c?.googleDriveFolderId ||
         c?.driveFolderId
     );
@@ -97,7 +117,7 @@ const resolveDriveFolderUrl = (record) => {
     }
   }
 
-  // Fallback: Google Drive Search URL with Trainer Name, College Name, Course Name
+  // 5. Fallback: Google Drive Search URL with Trainer Name, College Name, Course Name
   const trainerName =
     record.trainerId?.userId?.name ||
     record.trainerId?.name ||
@@ -105,11 +125,15 @@ const resolveDriveFolderUrl = (record) => {
     "";
   const collegeName =
     record.collegeId?.name ||
+    record.scheduleId?.collegeId?.name ||
     record.collegeName ||
     "";
   const courseName =
     record.courseId?.title ||
     record.courseId?.name ||
+    record.scheduleId?.courseId?.title ||
+    record.scheduleId?.courseId?.name ||
+    record.syllabus ||
     record.subject ||
     "";
 
@@ -383,13 +407,14 @@ export default function TrainerAttendanceRequests() {
               onClick={() => handleOpenReview(record)}
               style={{ fontSize: 12 }}
             >
-              Review
+              Review Proofs
             </Button>
             <Button
               size="small"
               icon={<FolderOpen size={12} />}
               href={driveUrl}
               target="_blank"
+              rel="noopener noreferrer"
               style={{ color: "#059669", borderColor: "#059669", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 3 }}
             >
               Drive

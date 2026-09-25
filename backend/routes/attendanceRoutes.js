@@ -5669,17 +5669,17 @@ router.get('/late-requests', authenticate, async (req, res) => {
                 .populate({
                     path: 'trainerId',
                     populate: { path: 'userId', select: 'name email phone' },
-                    select: 'name trainerId email phone userId googleDriveFolderId driveFolderId collegeDriveFolderId'
+                    select: 'name trainerId email phone userId googleDriveFolderId driveFolderId collegeDriveFolderId colleges'
                 })
-                .populate('collegeId', 'name location city googleDriveFolderId driveFolderId driveFolderLink')
+                .populate('collegeId', 'name location city googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl')
                 .populate('courseId', 'title name code')
                 .populate({
                     path: 'scheduleId',
                     populate: [
                         { path: 'courseId', select: 'title name code' },
-                        { path: 'collegeId', select: 'name location city googleDriveFolderId driveFolderId driveFolderLink' }
+                        { path: 'collegeId', select: 'name location city googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl' }
                     ],
-                    select: 'scheduledDate dayNumber session startTime endTime status subject venue courseId collegeId driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder'
+                    select: 'scheduledDate dayNumber session startTime endTime status subject venue courseId collegeId driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder checkInFolder attendanceFolder studentActivitiesFolder checkOutFolder'
                 })
                 .sort({ lateRequestSubmittedAt: -1, createdAt: -1 })
                 .skip(skip)

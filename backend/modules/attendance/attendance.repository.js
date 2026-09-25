@@ -188,6 +188,14 @@ const buildGeoVerificationAttendanceQuery = (filters = {}) =>
         "checkOutGeoDistanceMeters",
         "checkOutVerifiedAt",
         "driveSyncStatus",
+        "driveFolderId",
+        "driveFolderUrl",
+        "driveFolderLink",
+        "dayFolderId",
+        "collegeDriveFolderId",
+        "trainerDriveFolderId",
+        "documents",
+        "studentAttendanceImageUrls",
         "checkOutTime",
         ...ATTENDANCE_LIST_CHECK_OUT_SELECT_FIELDS,
         "checkOutGeoImageUrl",
@@ -202,12 +210,12 @@ const buildGeoVerificationAttendanceQuery = (filters = {}) =>
     )
     .populate({
       path: "trainerId",
-      select: "name trainerId userId",
+      select: "name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId colleges",
       populate: { path: "userId", select: "name email" },
     })
     .populate({
       path: "collegeId",
-      select: "name latitude longitude companyId",
+      select: "name latitude longitude companyId code googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl",
       populate: { path: "companyId", select: "name" },
     })
     .populate({
@@ -216,7 +224,7 @@ const buildGeoVerificationAttendanceQuery = (filters = {}) =>
     })
     .populate({
       path: "scheduleId",
-      select: "subject dayNumber courseId session startTime endTime",
+      select: "dayNumber subject courseId session startTime endTime driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder checkInFolder attendanceFolder studentActivitiesFolder checkOutFolder",
       populate: { path: "courseId", select: "name title" },
     })
     .sort({ date: -1, createdAt: -1 })
@@ -373,12 +381,12 @@ const findAttendanceVerificationPage = async ({
       unrecordedSchedules = await Schedule.find(scheduleFilters)
         .populate({
           path: "trainerId",
-          select: "name trainerId userId email phone",
+          select: "name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId colleges",
           populate: { path: "userId", select: "name email" },
         })
         .populate({
           path: "collegeId",
-          select: "name latitude longitude companyId code",
+          select: "name latitude longitude companyId code googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl",
           populate: { path: "companyId", select: "name" },
         })
         .populate({
@@ -408,6 +416,16 @@ const findAttendanceVerificationPage = async ({
         session: s.session || "FN",
         startTime: s.startTime || "",
         endTime: s.endTime || "",
+        driveFolderId: s.driveFolderId || null,
+        dayFolderId: s.dayFolderId || null,
+        driveFolderLink: s.driveFolderLink || null,
+        driveFolderUrl: s.driveFolderUrl || null,
+        fnFolder: s.fnFolder || null,
+        anFolder: s.anFolder || null,
+        checkInFolder: s.checkInFolder || null,
+        attendanceFolder: s.attendanceFolder || null,
+        studentActivitiesFolder: s.studentActivitiesFolder || null,
+        checkOutFolder: s.checkOutFolder || null,
       },
       trainerId: s.trainerId || null,
       collegeId: s.collegeId || null,
@@ -431,6 +449,10 @@ const findAttendanceVerificationPage = async ({
       attendancePhoto: null,
       activityPhotos: [],
       documents: [],
+      driveFolderId: s.driveFolderId || null,
+      dayFolderId: s.dayFolderId || null,
+      driveFolderLink: s.driveFolderLink || null,
+      driveFolderUrl: s.driveFolderUrl || null,
       createdAt: s.createdAt || schedDate,
     };
   });
