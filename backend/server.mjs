@@ -110,12 +110,22 @@ const matchesAllowedOriginPattern = (origin, allowedOriginPattern) => {
 };
 
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // Allows same-server calls, curl, and health checks.
-  const normalizedOrigin = normalizeOrigin(origin);
+  if (!origin) return true; // Allows same-server calls, curl, health checks.
+  const normalizedOrigin = normalizeOrigin(origin).toLowerCase();
 
   // In local development, allow localhost/127.0.0.1 across ports
   // so frontend port auto-switches (3000/3001/etc.) do not break API calls.
   if (!isProduction && isLocalDevOrigin(normalizedOrigin)) {
+    return true;
+  }
+
+  // Allow production domain and all subdomains (including www and api)
+  if (
+    normalizedOrigin.includes("mbktechnologies.info") ||
+    normalizedOrigin.includes("onrender.com") ||
+    normalizedOrigin.includes("localhost") ||
+    normalizedOrigin.includes("127.0.0.1")
+  ) {
     return true;
   }
 
@@ -133,7 +143,7 @@ const corsOriginHandler = (origin, callback) => {
     return;
   }
 
-  callback(new Error(`Not allowed by CORS: ${origin}`));
+  callback(null, false);
 };
 
 const app = express();

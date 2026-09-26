@@ -3988,42 +3988,44 @@ router.get('/', async (req, res) => {
             }
         }
 
-        // Deduplicate unrecorded schedules by composite key [collegeId, trainerId, dayNumber, dateStr]
-        // Also ensure slots that already have real attendance never get a synthetic "Absent" record
-        const seenSlots = new Set();
+        // Deduplicate records by composite key [trainerId, collegeId, dayNumber, dateStr, session]
+        const slotRecordMap = new Map();
+
+        const getSlotKey = (rec) => {
+            const tId = String(rec.trainerId?._id || rec.trainerId?.id || rec.trainerId || '');
+            const cId = String(rec.collegeId?._id || rec.collegeId?.id || rec.collegeId || '');
+            const dayNum = rec.dayNumber || rec.scheduleId?.dayNumber || 1;
+            const rawDate = rec.assignedDate || rec.scheduleId?.scheduledDate || rec.scheduleId?.date || rec.date;
+            const dStr = rawDate ? (rawDate instanceof Date ? rawDate.toISOString().split('T')[0] : String(rawDate).split('T')[0]) : '';
+            const rawSess = String(rec.session || rec.scheduleId?.session || 'FN').toUpperCase().trim();
+            const session = rawSess === 'AN' ? 'AN' : 'FN';
+            return `${tId}_${cId}_${dayNum}_${dStr}_${session}`;
+        };
+
+        // 1. Process actual attendance records from DB
         for (const att of allAttendance) {
-            const cId = String(att.collegeId?._id || att.collegeId || '');
-            const tId = String(att.trainerId?._id || att.trainerId || '');
-            const dayNum = att.dayNumber || 1;
-            const attDate = att.date || att.assignedDate;
-            const dStr = attDate ? (attDate instanceof Date ? attDate.toISOString().split('T')[0] : String(attDate).split('T')[0]) : '';
-            if (cId && tId) {
-                seenSlots.add(`${cId}_${tId}_${dayNum}_${dStr}`);
-                seenSlots.add(`${cId}_${tId}_${dayNum}`);
+            const key = getSlotKey(att);
+            if (!slotRecordMap.has(key)) {
+                slotRecordMap.set(key, att);
+            } else {
+                // If a duplicate exists, keep the one with check-in evidence or files
+                const existing = slotRecordMap.get(key);
+                const existingHasEvidence = Boolean(existing.checkInTime || existing.checkInPhoto || existing.imageUrl || existing.attendancePdfUrl || existing.attendanceExcelUrl);
+                const attHasEvidence = Boolean(att.checkInTime || att.checkInPhoto || att.imageUrl || att.attendancePdfUrl || att.attendanceExcelUrl);
+                if (!existingHasEvidence && attHasEvidence) {
+                    slotRecordMap.set(key, att);
+                }
             }
         }
 
-        const uniqueUnrecordedSchedules = [];
+        // 2. Add unrecorded synthetic schedules only for slots that don't have attendance yet
         for (const s of unrecordedSchedules) {
-            const cId = String(s.collegeId?._id || s.collegeId || '');
-            const tId = String(s.trainerId?._id || s.trainerId || '');
-            const dayNum = s.dayNumber || 1;
-            const schedDate = s.scheduledDate || s.date || new Date();
-            const dStr = schedDate ? (schedDate instanceof Date ? schedDate.toISOString().split('T')[0] : String(schedDate).split('T')[0]) : '';
-            const slotKey = `${cId}_${tId}_${dayNum}_${dStr}`;
-            const fallbackSlotKey = `${cId}_${tId}_${dayNum}`;
-
-            if (!seenSlots.has(slotKey) && !seenSlots.has(fallbackSlotKey)) {
-                seenSlots.add(slotKey);
-                uniqueUnrecordedSchedules.push(s);
-            }
-        }
-
-        const syntheticRecords = uniqueUnrecordedSchedules.map(s => {
             const schedDate = s.scheduledDate || s.date || new Date();
             const dateStr = schedDate ? (schedDate instanceof Date ? schedDate.toISOString().split('T')[0] : String(schedDate).split('T')[0]) : null;
-            const resolvedSession = s.session || 'FULL_DAY';
-            return {
+            const rawSess = String(s.session || 'FN').toUpperCase().trim();
+            const resolvedSession = rawSess === 'AN' ? 'AN' : 'FN';
+
+            const syntheticItem = {
                 _id: s._id,
                 scheduleId: {
                     _id: s._id,
@@ -4056,9 +4058,14 @@ router.get('/', async (req, res) => {
                 documents: [],
                 createdAt: s.createdAt || schedDate,
             };
-        });
 
-        const combinedRecords = [...allAttendance, ...syntheticRecords].sort((a, b) => {
+            const key = getSlotKey(syntheticItem);
+            if (!slotRecordMap.has(key)) {
+                slotRecordMap.set(key, syntheticItem);
+            }
+        }
+
+        const combinedRecords = Array.from(slotRecordMap.values()).sort((a, b) => {
             const dateA = a.date ? new Date(a.date).getTime() : 0;
             const dateB = b.date ? new Date(b.date).getTime() : 0;
             return dateB - dateA;

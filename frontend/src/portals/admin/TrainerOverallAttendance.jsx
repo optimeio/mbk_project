@@ -888,14 +888,42 @@ const TrainerOverallAttendance = () => {
     };
     const loading = attendanceQuery.isPending;
     const isRefreshing = attendanceQuery.isFetching && !attendanceQuery.isPending;
-    const tableData = useMemo(
-      () =>
-        data.map((row) => ({
-          ...row,
-          __searchIndex: buildAttendanceSearchIndex(row),
-        })),
-      [data],
-    );
+    const tableData = useMemo(() => {
+      const slotMap = new Map();
+      for (const row of data) {
+        const tId = String(row.trainerId?._id || row.trainerId?.id || row.trainerId?.trainerId || row.trainerId || "");
+        const cId = String(row.collegeId?._id || row.collegeId?.id || row.collegeId?.name || row.collegeId || "");
+        const dayNum = String(row.dayNumber || row.scheduleId?.dayNumber || "1");
+        const rawDate = row.assignedDate || row.scheduleId?.scheduledDate || row.scheduleId?.date || row.date;
+        const dateStr = rawDate ? dayjs(rawDate).format("YYYY-MM-DD") : "";
+        const session = resolveSessionMeta(row).label;
+        const slotKey = `${tId}_${cId}_${dayNum}_${dateStr}_${session}`;
+
+        if (!slotMap.has(slotKey)) {
+          slotMap.set(slotKey, row);
+        } else {
+          const existing = slotMap.get(slotKey);
+          const existingHasEvidence = Boolean(
+            existing.checkInTime || existing.checkInPhoto || existing.imageUrl ||
+            existing.attendancePdfUrl || existing.attendanceExcelUrl ||
+            (Array.isArray(existing.activityPhotos) && existing.activityPhotos.length > 0)
+          );
+          const rowHasEvidence = Boolean(
+            row.checkInTime || row.checkInPhoto || row.imageUrl ||
+            row.attendancePdfUrl || row.attendanceExcelUrl ||
+            (Array.isArray(row.activityPhotos) && row.activityPhotos.length > 0)
+          );
+          if (!existingHasEvidence && rowHasEvidence) {
+            slotMap.set(slotKey, row);
+          }
+        }
+      }
+
+      return Array.from(slotMap.values()).map((row) => ({
+        ...row,
+        __searchIndex: buildAttendanceSearchIndex(row),
+      }));
+    }, [data]);
 
     useEffect(() => {
       if (!pagination?.hasNextPage) {
