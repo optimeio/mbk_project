@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }) {
   const isDocumentsPage = pathname.startsWith("/dashboard/documents");
 
   return (
-    <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+    <ProtectedRoute allowedRoles={["superadmin", "admin", "spocadmin", "collegeadmin", "companyadmin"]}>
       <PortalViewport
         compact={isComplaintsPage}
         contentInnerClassName={isDocumentsPage ? "p-0 md:p-0" : ""}

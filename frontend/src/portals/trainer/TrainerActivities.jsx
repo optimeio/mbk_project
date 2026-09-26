@@ -314,18 +314,27 @@ export default function TrainerActivities() {
       } else if (res.hasScheduleToday && res.scheduleInfo) {
         // Not yet clocked in — check if FN or AN session is already closed
         const fnOnly = isSessionFN(res.scheduleInfo);
+        const schedIdToRequest = targetScheduleId || res.scheduleInfo?._id || res.scheduleInfo?.id || '';
         if (fnOnly && isFNSessionClosedNow()) {
-          toast('FN session closed at 1:30 PM. Redirecting to your dashboard.', {
+          toast('FN session closed at 1:30 PM. Redirecting to Attendance Request...', {
             icon: '🕐',
             duration: 4000,
           });
-          setTimeout(() => { if (!cancelledRef.current) router.push('/trainer/dashboard'); }, 1500);
+          setTimeout(() => {
+            if (!cancelledRef.current) {
+              router.push(schedIdToRequest ? `/trainer/schedule?openRequest=${encodeURIComponent(schedIdToRequest)}` : '/trainer/schedule');
+            }
+          }, 1500);
         } else if (!fnOnly && isANSessionClosedNow()) {
-          toast('AN session closed at 6:00 PM. Redirecting to your dashboard.', {
+          toast('AN session closed at 6:00 PM. Redirecting to Attendance Request...', {
             icon: '🕐',
             duration: 4000,
           });
-          setTimeout(() => { if (!cancelledRef.current) router.push('/trainer/dashboard'); }, 1500);
+          setTimeout(() => {
+            if (!cancelledRef.current) {
+              router.push(schedIdToRequest ? `/trainer/schedule?openRequest=${encodeURIComponent(schedIdToRequest)}` : '/trainer/schedule');
+            }
+          }, 1500);
         }
       }
     } catch (err) {

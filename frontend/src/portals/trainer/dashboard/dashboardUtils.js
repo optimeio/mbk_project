@@ -118,8 +118,9 @@ export const buildScheduleItem = (schedule = {}) => {
   const verificationStatus = schedule?.verificationStatus || att?.verificationStatus;
   const isLateRequest = Boolean(schedule?.isLateRequest || att?.isLateRequest);
   const hasUploadedImage = Boolean(
-    schedule?.imageUrl || schedule?.checkInImage ||
-    att?.imageUrl || att?.checkInImage
+    schedule?.imageUrl || schedule?.checkInImage || schedule?.checkInPhoto ||
+    att?.imageUrl || att?.checkInImage || att?.checkInPhoto || att?.checkIn?.photo ||
+    att?.checkInTime || schedule?.checkInTime
   );
 
   const rawStatus = String(schedule?.attendanceStatus || schedule?.status || att?.status || att?.attendanceStatus || "").trim().toLowerCase();
@@ -127,21 +128,19 @@ export const buildScheduleItem = (schedule = {}) => {
     rawStatus === "approved" ||
     rawStatus === "completed" ||
     rawStatus === "present" ||
-    schedule?.checkInTime ||
     schedule?.checkOutTime ||
-    att?.checkInTime ||
     att?.checkOutTime ||
     att?.checkOut?.time ||
     att?.status === "Present"
   );
 
-  let computedStatus = isLateRequest || lateRequestStatus === "pending"
+  let computedStatus = isLateRequest || lateRequestStatus === "pending" || (hasUploadedImage && (lateRequestStatus === "pending" || verificationStatus === "pending"))
     ? "pending"
     : isClockedOutOrPresent
     ? "completed"
     : isTimeOut
     ? "timeout"
-    : schedule?.attendanceStatus || schedule?.status || "scheduled";
+    : (rawStatus === "scheduled" || rawStatus === "assigned" ? "scheduled" : isTimeOut ? "timeout" : "scheduled");
 
   const dateLabel = isValidSchedDate
     ? formatCalendarDate(schedule?.scheduledDate || schedule?.date, { includeWeekday: true })
@@ -352,8 +351,10 @@ export const buildTrainerDashboardScheduleSummary = (
       resolvedVerificationStatus = matchingAtt.verificationStatus;
       resolvedIsLateRequest = Boolean(matchingAtt.isLateRequest);
       hasUploadedImage = Boolean(
-        matchingAtt.imageUrl || matchingAtt.checkInImage ||
-        matchingAtt.checkInTime || matchingAtt.checkIn?.time
+        matchingAtt.imageUrl || matchingAtt.checkInImage || matchingAtt.checkInPhoto ||
+        matchingAtt.checkInTime || matchingAtt.checkIn?.time ||
+        matchingAtt.studentsPhotoUrl || matchingAtt.attendancePdfUrl ||
+        (Array.isArray(matchingAtt.activityPhotos) && matchingAtt.activityPhotos.length > 0)
       );
 
       // Status priority: approved > pending upload > absent
@@ -377,7 +378,7 @@ export const buildTrainerDashboardScheduleSummary = (
       resolvedLateRequestStatus = formatted.lateRequestStatus;
       resolvedVerificationStatus = formatted.verificationStatus;
       resolvedIsLateRequest = formatted.isLateRequest;
-      hasUploadedImage = false;
+      hasUploadedImage = formatted.hasUploadedImage || false;
     }
 
     const formatted = buildScheduleItem(schedule);

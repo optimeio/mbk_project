@@ -152,7 +152,9 @@ function TrainerDashboardSchedulesSection({
 
                 // Determine display state based on merged attendance data
                 const isAdminApproved = activity.status === "completed";
-                const isPendingApproval = activity.status === "pending";
+                const isPendingApproval =
+                  activity.status === "pending" &&
+                  (Boolean(activity.hasUploadedImage) || Boolean(activity.isLateRequest) || Boolean(activity.lateRequestStatus === "pending"));
                 const isAbsent =
                   !isAdminApproved &&
                   !isPendingApproval &&
@@ -162,10 +164,14 @@ function TrainerDashboardSchedulesSection({
                     !activity.hasAttendanceRecord);
 
                 // Only show request button if session is past AND no upload exists
-                const canRequestAttendance = isAbsent && !activity.hasUploadedImage;
+                const canRequestAttendance = isAbsent && !activity.hasUploadedImage && !activity.isLateRequest;
 
                 const handleActivityClick = () => {
-                  router.push("/trainer/attendance");
+                  if (canRequestAttendance && activity.id) {
+                    router.push(`/trainer/schedule?openRequest=${encodeURIComponent(activity.id)}`);
+                  } else {
+                    router.push("/trainer/attendance");
+                  }
                 };
 
                 // Determine badge to show
@@ -232,7 +238,11 @@ function TrainerDashboardSchedulesSection({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleActivityClick();
+                            if (activity.id) {
+                              router.push(`/trainer/schedule?openRequest=${encodeURIComponent(activity.id)}`);
+                            } else {
+                              router.push("/trainer/schedule");
+                            }
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition"
                         >

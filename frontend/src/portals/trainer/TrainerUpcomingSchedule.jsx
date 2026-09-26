@@ -220,11 +220,48 @@ export default function TrainerUpcomingSchedule() {
               const isToday = toCalendarYMD(schedDate) === toCalendarYMD(new Date());
               const collegeName = sched.collegeId?.name || sched.collegeName || "Assigned College";
               const courseName = sched.courseId?.title || sched.courseId?.name || sched.courseName || sched.subject || "Course";
-              const sessionLabel = String(sched.session || "FN").toUpperCase() === "AN" ? "AN" : "FN";
+              const sessionType = String(sched.session || "FN").toUpperCase() === "AN" ? "AN" : "FN";
+              const sessionLabel = sessionType;
+
+              // Check if session has ended / closed today
+              let isClosedToday = false;
+              if (isToday) {
+                const now = new Date();
+                const formatter = new Intl.DateTimeFormat('en-IN', {
+                  timeZone: 'Asia/Kolkata',
+                  hour: 'numeric',
+                  minute: 'numeric',
+                  hour12: false,
+                });
+                const parts = formatter.formatToParts(now);
+                const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+                const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+                const currentMins = hour * 60 + minute;
+
+                if (sessionType === "FN" && currentMins >= 13 * 60 + 30) {
+                  isClosedToday = true;
+                } else if (sessionType === "AN" && currentMins >= 18 * 60) {
+                  isClosedToday = true;
+                }
+              }
+
+              const isCompleted =
+                sched.status === "COMPLETED" ||
+                sched.status === "completed" ||
+                sched.attendanceStatus === "approved" ||
+                sched.attendanceStatus === "PRESENT" ||
+                sched.attendanceStatus === "present";
+
+              const isLateRequestPending =
+                sched.isLateRequest === true ||
+                String(sched.lateRequestStatus || "").toLowerCase() === "pending" ||
+                String(sched.attendance?.lateRequestStatus || "").toLowerCase() === "pending";
+
+              const scheduleId = sched._id || sched.id;
 
               return (
                 <div
-                  key={sched._id || sched.id}
+                  key={scheduleId}
                   className={`overflow-hidden rounded-2xl border transition ${
                     isToday
                       ? "border-blue-300 bg-gradient-to-br from-blue-50/60 to-indigo-50/40 ring-1 ring-blue-400/30"
@@ -245,6 +282,11 @@ export default function TrainerUpcomingSchedule() {
                         <span className="inline-flex items-center rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800">
                           {sessionLabel}
                         </span>
+                        {isClosedToday && !isCompleted && !isLateRequestPending && (
+                          <span className="inline-flex items-center rounded-md bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">
+                            Session Closed
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-base font-bold text-slate-900 break-words mt-1">
                         {collegeName}
@@ -277,12 +319,39 @@ export default function TrainerUpcomingSchedule() {
 
                   <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
                     <span className="text-[11px] text-slate-400 italic">
-                      {isToday ? "Active session — click to start workflow" : "Upcoming session"}
+                      {isCompleted
+                        ? "Completed session"
+                        : isLateRequestPending
+                        ? "Attendance requested"
+                        : isToday && isClosedToday
+                        ? "Session time ended — request attendance"
+                        : isToday
+                        ? "Active session — click to start workflow"
+                        : "Upcoming session"}
                     </span>
 
-                    {isToday ? (
+                    {isCompleted ? (
+                      <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                        Present ✓
+                      </span>
+                    ) : isLateRequestPending ? (
+                      <span className="inline-flex items-center gap-1 rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-bold text-amber-800">
+                        <Clock className="h-3.5 w-3.5 text-amber-600" />
+                        Awaiting Admin Approval
+                      </span>
+                    ) : isToday && isClosedToday ? (
                       <Link
-                        href="/trainer/activities"
+                        href={`/trainer/schedule?openRequest=${encodeURIComponent(scheduleId)}`}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition active:scale-95"
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Request Attendance</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : isToday ? (
+                      <Link
+                        href={`/trainer/activities?scheduleId=${encodeURIComponent(scheduleId)}`}
                         className="inline-flex items-center gap-1.5 rounded-xl bg-[#0f3f5c] px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#1a6b9e] transition active:scale-95"
                       >
                         <span>Start Clock-In / Workflow</span>

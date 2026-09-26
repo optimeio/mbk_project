@@ -106,13 +106,13 @@ const resolveDriveFolderUrl = (record) => {
   if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
     const colMatch = record.trainerId.colleges.find(
       (c) =>
-        (record.collegeId && (c?.collegeId === record.collegeId._id || c?.collegeId === record.collegeId || c?._id === record.collegeId._id)) ||
-        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId._id)) ||
+        (record.collegeId && (c?.collegeId === record.collegeId?._id || c?.collegeId === record.collegeId || c?._id === record.collegeId?._id)) ||
+        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId?._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId?._id)) ||
         c?.googleDriveFolderId ||
         c?.driveFolderId
     );
     const colFolderId = colMatch?.googleDriveFolderId || colMatch?.driveFolderId || record.trainerId.colleges[0]?.googleDriveFolderId || record.trainerId.colleges[0]?.driveFolderId;
-    if (colFolderId) {
+    if (colFolderId && typeof colFolderId === "string" && colFolderId.trim().length > 3) {
       return `https://drive.google.com/drive/folders/${colFolderId.trim()}`;
     }
   }
@@ -163,16 +163,15 @@ export default function TrainerAttendanceRequests() {
   const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
-      const params = {
-        page,
-        limit: pageSize,
-      };
+      const queryParams = new URLSearchParams();
+      queryParams.set("page", String(page));
+      queryParams.set("limit", String(pageSize));
       if (statusFilter !== "all") {
-        params.status = statusFilter;
+        queryParams.set("status", statusFilter);
       }
-      const res = await api.get("/attendance/late-requests", { params });
+      const res = await api.get(`/attendance/late-requests?${queryParams.toString()}`);
       if (res?.success) {
-        setRequests(res.requests || []);
+        setRequests(Array.isArray(res.requests) ? res.requests : []);
         setTotal(res.pagination?.total || 0);
       } else {
         setRequests([]);
@@ -192,7 +191,7 @@ export default function TrainerAttendanceRequests() {
 
   const handleOpenReview = (record) => {
     setSelectedRecord(record);
-    setAdminRemarks(record.lateRequestAdminRemarks || record.verificationComment || "");
+    setAdminRemarks(record?.lateRequestAdminRemarks || record?.verificationComment || "");
     setReviewModalVisible(true);
   };
 
@@ -627,11 +626,16 @@ export default function TrainerAttendanceRequests() {
                   : null;
 
               const rawActivities = Array.isArray(selectedRecord.activityPhotos) ? selectedRecord.activityPhotos.filter(Boolean) : [];
-              const driveActivities = rawActivities.filter(
+              const normalizedActivities = rawActivities.map((p) => {
+                if (typeof p === 'string') return p;
+                if (p && typeof p === 'object') return p.url || p.photo || p.image || null;
+                return null;
+              }).filter(Boolean);
+              const driveActivities = normalizedActivities.filter(
                 (p) => typeof p === 'string' && (p.startsWith('http') || p.includes('googleusercontent') || p.includes('drive.google'))
               );
-              const effectiveActivities = (driveActivities.length > 0 ? driveActivities : rawActivities).filter(
-                (p) => p !== checkInPhotoUrl && !/check.?in/i.test(p)
+              const effectiveActivities = (driveActivities.length > 0 ? driveActivities : normalizedActivities).filter(
+                (p) => typeof p === 'string' && p !== checkInPhotoUrl && !/check.?in/i.test(p)
               );
               const uniqueActivities = Array.from(new Set(effectiveActivities));
 
