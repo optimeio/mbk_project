@@ -437,8 +437,21 @@ const getGeoStatusMeta = (recordOrStatus) => {
     return { label: 'Not Submitted', color: 'default' };
 };
 
-const resolveDriveFolderUrl = (record) => {
+const extractLinkOrId = (meta) => {
+  if (!meta) return null;
+  if (typeof meta === "string" && meta.startsWith("http")) return meta;
+  if (meta.webViewLink && typeof meta.webViewLink === "string" && meta.webViewLink.startsWith("http")) return meta.webViewLink;
+  if (meta.driveFolderLink && typeof meta.driveFolderLink === "string" && meta.driveFolderLink.startsWith("http")) return meta.driveFolderLink;
+  if (meta.driveFolderUrl && typeof meta.driveFolderUrl === "string" && meta.driveFolderUrl.startsWith("http")) return meta.driveFolderUrl;
+  if (meta.link && typeof meta.link === "string" && meta.link.startsWith("http")) return meta.link;
+  const fId = meta.id || meta.driveFolderId || meta.folderId;
+  if (fId && typeof fId === "string" && fId.length > 3) return `https://drive.google.com/drive/folders/${fId.trim()}`;
+  return null;
+};
+
+export const resolveSessionFolderUrl = (record) => {
   if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.sessionFolderUrl && typeof record.sessionFolderUrl === "string" && record.sessionFolderUrl.startsWith("http")) return record.sessionFolderUrl;
 
   const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
 
@@ -459,17 +472,13 @@ const resolveDriveFolderUrl = (record) => {
     if (record.scheduleId?.fnFolder?.driveFolderUrl && typeof record.scheduleId.fnFolder.driveFolderUrl === "string" && record.scheduleId.fnFolder.driveFolderUrl.startsWith("http")) return record.scheduleId.fnFolder.driveFolderUrl;
   }
 
-  // 2. Direct URLs on record or schedule or college
+  // 2. Direct URLs on record or schedule
   if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http")) return record.driveFolderUrl;
   if (record.driveFolderLink && typeof record.driveFolderLink === "string" && record.driveFolderLink.startsWith("http")) return record.driveFolderLink;
   if (record.dayFolderLink && typeof record.dayFolderLink === "string" && record.dayFolderLink.startsWith("http")) return record.dayFolderLink;
   if (record.scheduleId?.driveFolderUrl && typeof record.scheduleId.driveFolderUrl === "string" && record.scheduleId.driveFolderUrl.startsWith("http")) return record.scheduleId.driveFolderUrl;
   if (record.scheduleId?.driveFolderLink && typeof record.scheduleId.driveFolderLink === "string" && record.scheduleId.driveFolderLink.startsWith("http")) return record.scheduleId.driveFolderLink;
   if (record.scheduleId?.dayFolderLink && typeof record.scheduleId.dayFolderLink === "string" && record.scheduleId.dayFolderLink.startsWith("http")) return record.scheduleId.dayFolderLink;
-  if (record.collegeId?.driveFolderLink && typeof record.collegeId.driveFolderLink === "string" && record.collegeId.driveFolderLink.startsWith("http")) return record.collegeId.driveFolderLink;
-  if (record.collegeId?.driveFolderUrl && typeof record.collegeId.driveFolderUrl === "string" && record.collegeId.driveFolderUrl.startsWith("http")) return record.collegeId.driveFolderUrl;
-  if (record.scheduleId?.collegeId?.driveFolderLink && typeof record.scheduleId.collegeId.driveFolderLink === "string" && record.scheduleId.collegeId.driveFolderLink.startsWith("http")) return record.scheduleId.collegeId.driveFolderLink;
-  if (record.scheduleId?.collegeId?.driveFolderUrl && typeof record.scheduleId.collegeId.driveFolderUrl === "string" && record.scheduleId.collegeId.driveFolderUrl.startsWith("http")) return record.scheduleId.collegeId.driveFolderUrl;
 
   // 3. Folder IDs
   const sessionFolderId = sessionType === "AN"
@@ -484,43 +493,51 @@ const resolveDriveFolderUrl = (record) => {
     record.scheduleId?.dayFolderId ||
     record.collegeDriveFolderId ||
     record.trainerId?.googleDriveFolderId ||
-    record.trainerId?.driveFolderId ||
-    record.trainerId?.collegeDriveFolderId ||
-    record.collegeId?.googleDriveFolderId ||
-    record.collegeId?.driveFolderId ||
-    record.scheduleId?.collegeId?.googleDriveFolderId ||
-    record.scheduleId?.collegeId?.driveFolderId ||
-    record.courseId?.driveFolderId ||
-    record.departmentId?.driveFolderId;
+    record.trainerId?.driveFolderId;
 
   if (folderId && typeof folderId === "string" && folderId.trim().length > 3) {
     return `https://drive.google.com/drive/folders/${folderId.trim()}`;
   }
 
-  // 4. Check trainer.colleges array
-  if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
-    const colMatch = record.trainerId.colleges.find(
-      (c) =>
-        (record.collegeId && (c?.collegeId === record.collegeId?._id || c?.collegeId === record.collegeId || c?._id === record.collegeId?._id)) ||
-        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId?._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId?._id)) ||
-        c?.googleDriveFolderId ||
-        c?.driveFolderId
-    );
-    const colFolderId = colMatch?.googleDriveFolderId || colMatch?.driveFolderId || record.trainerId.colleges[0]?.googleDriveFolderId || record.trainerId.colleges[0]?.driveFolderId;
-    if (colFolderId && typeof colFolderId === "string" && colFolderId.trim().length > 3) {
-      return `https://drive.google.com/drive/folders/${colFolderId.trim()}`;
-    }
-  }
-
-  // 5. Check if any attached document has a parent drive file ID
-  if (Array.isArray(record.documents) && record.documents.length > 0) {
-    const docWithDrive = record.documents.find(d => d?.driveFileId || d?.driveViewLink);
-    if (docWithDrive?.driveFileId) {
-      return `https://drive.google.com/file/d/${docWithDrive.driveFileId}/view`;
-    }
-  }
-
   return "https://drive.google.com/drive/my-drive";
+};
+
+export const resolveDriveFolderUrl = resolveSessionFolderUrl;
+
+export const resolveCheckInFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.checkInFolderUrl && typeof record.checkInFolderUrl === "string" && record.checkInFolderUrl.startsWith("http")) return record.checkInFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const checkInMeta = sessionMeta?.checkInFolder || record.scheduleId?.checkInFolder || record.driveAssets?.folders?.checkIn || record.driveAssets?.folders?.geoTag;
+  return extractLinkOrId(checkInMeta) || resolveSessionFolderUrl(record);
+};
+
+export const resolveAttendanceFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.attendanceFolderUrl && typeof record.attendanceFolderUrl === "string" && record.attendanceFolderUrl.startsWith("http")) return record.attendanceFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const attMeta = sessionMeta?.attendanceFolder || record.scheduleId?.attendanceFolder || record.driveAssets?.folders?.attendance;
+  return extractLinkOrId(attMeta) || resolveSessionFolderUrl(record);
+};
+
+export const resolveActivitiesFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.studentActivitiesFolderUrl && typeof record.studentActivitiesFolderUrl === "string" && record.studentActivitiesFolderUrl.startsWith("http")) return record.studentActivitiesFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const actMeta = sessionMeta?.studentActivitiesFolder || record.scheduleId?.studentActivitiesFolder || record.driveAssets?.folders?.studentActivity;
+  return extractLinkOrId(actMeta) || resolveSessionFolderUrl(record);
+};
+
+export const resolveCheckOutFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.checkOutFolderUrl && typeof record.checkOutFolderUrl === "string" && record.checkOutFolderUrl.startsWith("http")) return record.checkOutFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const outMeta = sessionMeta?.checkOutFolder || record.scheduleId?.checkOutFolder || record.driveAssets?.folders?.checkOut;
+  return extractLinkOrId(outMeta) || resolveSessionFolderUrl(record);
 };
 
 const resolveSessionMeta = (record = {}) => {
@@ -2265,7 +2282,7 @@ const TrainerOverallAttendance = () => {
                       size="small"
                       type="primary"
                       icon={<FolderOpen size={14} />}
-                      href={resolveDriveFolderUrl(selectedGeoRecord)}
+                      href={resolveSessionFolderUrl(selectedGeoRecord)}
                       target="_blank"
                       style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                     >
@@ -2279,7 +2296,7 @@ const TrainerOverallAttendance = () => {
                       key="drive"
                       type="default"
                       icon={<FolderOpen size={14} />}
-                      href={resolveDriveFolderUrl(selectedGeoRecord)}
+                      href={resolveSessionFolderUrl(selectedGeoRecord)}
                       target="_blank"
                       style={{ color: '#059669', borderColor: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                     >
@@ -2309,7 +2326,11 @@ const TrainerOverallAttendance = () => {
                     const totalStudents = presentCount + absentCount || studentsList.length || 0;
                     const attendancePercent = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : null;
 
-                    const driveFolderUrl = resolveDriveFolderUrl(selectedGeoRecord);
+                    const sessionDriveUrl = resolveSessionFolderUrl(selectedGeoRecord);
+                    const checkInDriveUrl = resolveCheckInFolderUrl(selectedGeoRecord);
+                    const attendanceDriveUrl = resolveAttendanceFolderUrl(selectedGeoRecord);
+                    const activitiesDriveUrl = resolveActivitiesFolderUrl(selectedGeoRecord);
+                    const checkOutDriveUrl = resolveCheckOutFolderUrl(selectedGeoRecord);
 
                     const checkInMapsUrl =
                         checkInLoc?.hasCoords
@@ -2431,11 +2452,11 @@ const TrainerOverallAttendance = () => {
                                     size="small"
                                     type="primary"
                                     icon={<FolderOpen size={12} />}
-                                    href={driveFolderUrl}
+                                    href={checkInDriveUrl}
                                     target="_blank"
                                     style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                   >
-                                    Drive Folder
+                                    Check-In Folder
                                   </Button>
                                 </Space>
                               </div>
@@ -2444,20 +2465,10 @@ const TrainerOverallAttendance = () => {
                             {/* Check-In Photos and Signatures */}
                             {checkInEvidence.length > 0 ? (
                               <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0 12px 0' }}>
+                                <div style={{ margin: '8px 0 12px 0' }}>
                                   <Title level={5} style={{ margin: 0 }}>
                                     Check-In Photos & Signatures ({checkInEvidence.length})
                                   </Title>
-                                  <Button
-                                    size="small"
-                                    type="primary"
-                                    icon={<FolderOpen size={12} />}
-                                    href={driveFolderUrl}
-                                    target="_blank"
-                                    style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                  >
-                                    Drive Folder
-                                  </Button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                                   {checkInEvidence.map((entry) => (
@@ -2472,19 +2483,9 @@ const TrainerOverallAttendance = () => {
                                         />
                                       </div>
                                       <Text strong style={{ fontSize: '12px', marginTop: 8, display: 'block' }}>{entry.label}</Text>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                                      <div style={{ marginTop: 4 }}>
                                         <Button size="small" type="link" href={entry.previewUrl} target="_blank" style={{ paddingLeft: 0, fontSize: '12px' }}>
                                           Open Full Image
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          type="link"
-                                          icon={<FolderOpen size={12} />}
-                                          href={driveFolderUrl}
-                                          target="_blank"
-                                          style={{ color: '#059669', padding: 0, fontSize: '12px', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 2 }}
-                                        >
-                                          Drive Folder
                                         </Button>
                                       </div>
                                     </Card>
@@ -2543,22 +2544,10 @@ const TrainerOverallAttendance = () => {
                             {/* Attendance Files Section */}
                             {attendanceFiles.length > 0 ? (
                               <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 12px 0', flexWrap: 'wrap', gap: 8 }}>
+                                <div style={{ margin: '4px 0 12px 0' }}>
                                   <Title level={5} style={{ margin: 0 }}>
                                     Uploaded Attendance Documents & Files ({attendanceFiles.length})
                                   </Title>
-                                  {driveFolderUrl && (
-                                    <Button
-                                      size="small"
-                                      type="primary"
-                                      icon={<ExternalLink size={12} />}
-                                      href={driveFolderUrl}
-                                      target="_blank"
-                                      style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
-                                    >
-                                      Google Drive Folder
-                                    </Button>
-                                  )}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                   {attendanceFiles.map((file, idx) => (
@@ -2584,11 +2573,9 @@ const TrainerOverallAttendance = () => {
                                               <Button size="small" type="primary" href={file.url} target="_blank">
                                                 Open Full Document
                                               </Button>
-                                              {driveFolderUrl && (
-                                                <Button size="small" icon={<ExternalLink size={12} />} href={driveFolderUrl} target="_blank" style={{ color: '#059669', borderColor: '#059669' }}>
-                                                  Drive Folder
-                                                </Button>
-                                              )}
+                                              <Button size="small" icon={<FolderOpen size={12} />} href={attendanceDriveUrl} target="_blank" style={{ color: '#059669', borderColor: '#059669' }}>
+                                                Drive Folder
+                                              </Button>
                                             </Space>
                                           </div>
                                         </div>
@@ -2606,11 +2593,9 @@ const TrainerOverallAttendance = () => {
                                             <Button type="primary" size="small" href={file.url} target="_blank" icon={<ExternalLink size={12} />}>
                                               View / Download
                                             </Button>
-                                            {driveFolderUrl && (
-                                              <Button size="small" icon={<ExternalLink size={12} />} href={driveFolderUrl} target="_blank" style={{ color: '#059669', borderColor: '#059669' }}>
-                                                Drive Folder
-                                              </Button>
-                                            )}
+                                            <Button size="small" icon={<FolderOpen size={12} />} href={attendanceDriveUrl} target="_blank" style={{ color: '#059669', borderColor: '#059669' }}>
+                                              Drive Folder
+                                            </Button>
                                           </Space>
                                         </Space>
                                       )}
@@ -2657,18 +2642,16 @@ const TrainerOverallAttendance = () => {
                                   <Title level={5} style={{ margin: 0 }}>
                                     Student Activities ({activityFiles.length})
                                   </Title>
-                                  {driveFolderUrl && (
-                                    <Button
-                                      size="small"
-                                      type="primary"
-                                      icon={<ExternalLink size={12} />}
-                                      href={driveFolderUrl}
-                                      target="_blank"
-                                      style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
-                                    >
-                                      Google Drive Folder
-                                    </Button>
-                                  )}
+                                  <Button
+                                    size="small"
+                                    type="primary"
+                                    icon={<FolderOpen size={12} />}
+                                    href={activitiesDriveUrl}
+                                    target="_blank"
+                                    style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6 }}
+                                  >
+                                    Activities Drive Folder
+                                  </Button>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                                   {activityFiles.map((item, idx) => (
@@ -2680,6 +2663,7 @@ const TrainerOverallAttendance = () => {
                                             alt={item.title}
                                             style={{ width: '100%', height: 200, objectFit: 'contain' }}
                                             preview={{ mask: 'Click to Preview' }}
+                                            fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
                                           />
                                         </div>
                                       ) : (
@@ -2688,16 +2672,11 @@ const TrainerOverallAttendance = () => {
                                         </div>
                                       )}
                                       <Text strong style={{ fontSize: '13px', marginTop: 8, display: 'block' }}>{item.title}</Text>
-                                      <Space size={8} style={{ marginTop: 4 }}>
+                                      <div style={{ marginTop: 4 }}>
                                         <Button size="small" type="link" href={item.url} target="_blank" style={{ paddingLeft: 0, fontSize: '12px' }}>
                                           Open File in New Tab
                                         </Button>
-                                        {driveFolderUrl && (
-                                          <Button size="small" type="link" href={driveFolderUrl} target="_blank" style={{ paddingLeft: 0, fontSize: '12px', color: '#059669' }}>
-                                            Drive Folder
-                                          </Button>
-                                        )}
-                                      </Space>
+                                      </div>
                                     </Card>
                                   ))}
                                 </div>
@@ -2717,27 +2696,39 @@ const TrainerOverallAttendance = () => {
                         children: (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <Card size="small" style={{ background: '#f8fafc', borderColor: '#e2e8f0' }}>
-                              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-                                <Space wrap>
-                                  <Tag color={geoStatus.color} style={{ fontWeight: 600 }}>{geoStatus.label}</Tag>
-                                  <Tag color="blue" style={{ fontWeight: 600 }}>
-                                    Check-Out Time: {formattedCheckOut}
-                                  </Tag>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                <Space orientation="vertical" size={8}>
+                                  <Space wrap>
+                                    <Tag color={geoStatus.color} style={{ fontWeight: 600 }}>{geoStatus.label}</Tag>
+                                    <Tag color="blue" style={{ fontWeight: 600 }}>
+                                      Check-Out Time: {formattedCheckOut}
+                                    </Tag>
+                                  </Space>
+                                  {checkOutLoc ? (
+                                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                                      Check-Out Location: {checkOutLoc.lat ? checkOutLoc.lat.toFixed(4) : 'N/A'}, {checkOutLoc.lng ? checkOutLoc.lng.toFixed(4) : 'N/A'}
+                                      {typeof checkOutLoc.distanceFromCollege === 'number'
+                                        ? ` (${Math.round(checkOutLoc.distanceFromCollege)}m from college campus)`
+                                        : ''}
+                                    </Text>
+                                  ) : null}
+                                  {checkOutMapsUrl ? (
+                                    <Button size="small" type="link" href={checkOutMapsUrl} target="_blank" icon={<ExternalLink size={12} />} style={{ paddingLeft: 0 }}>
+                                      Open Google Maps
+                                    </Button>
+                                  ) : null}
                                 </Space>
-                                {checkOutLoc ? (
-                                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                                    Check-Out Location: {checkOutLoc.lat ? checkOutLoc.lat.toFixed(4) : 'N/A'}, {checkOutLoc.lng ? checkOutLoc.lng.toFixed(4) : 'N/A'}
-                                    {typeof checkOutLoc.distanceFromCollege === 'number'
-                                      ? ` (${Math.round(checkOutLoc.distanceFromCollege)}m from college campus)`
-                                      : ''}
-                                  </Text>
-                                ) : null}
-                                {checkOutMapsUrl ? (
-                                  <Button size="small" type="link" href={checkOutMapsUrl} target="_blank" icon={<ExternalLink size={12} />} style={{ paddingLeft: 0 }}>
-                                    Open Google Maps
-                                  </Button>
-                                ) : null}
-                              </Space>
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  icon={<FolderOpen size={12} />}
+                                  href={checkOutDriveUrl}
+                                  target="_blank"
+                                  style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600, borderRadius: 6, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                >
+                                  Check-Out Folder
+                                </Button>
+                              </div>
                             </Card>
 
                             {checkOutEvidence.length > 0 ? (
@@ -2745,14 +2736,22 @@ const TrainerOverallAttendance = () => {
                                 {checkOutEvidence.map((entry, index) => (
                                   <Card key={entry.key} size="small" style={{ borderRadius: 8 }}>
                                     <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #eee', background: '#f5f5f5', textAlign: 'center' }}>
-                                      <Image src={entry.previewUrl} alt={`Check-out ${index + 1}`} style={{ width: '100%', height: 180, objectFit: 'contain' }} preview={{ mask: 'Click to Preview' }} />
+                                      <Image
+                                        src={entry.previewUrl}
+                                        alt={`Check-out ${index + 1}`}
+                                        style={{ width: '100%', height: 180, objectFit: 'contain' }}
+                                        preview={{ mask: 'Click to Preview' }}
+                                        fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                      />
                                     </div>
                                     <Text type="secondary" style={{ fontSize: '12px', marginTop: 6, display: 'block' }}>
                                       {entry.capturedAt ? `Captured ${dayjs(entry.capturedAt).format('DD MMM YYYY hh:mm A')}` : `Check-Out Photo ${index + 1}`}
                                     </Text>
-                                    <Button size="small" type="link" href={entry.previewUrl} target="_blank" style={{ paddingLeft: 0, fontSize: '12px' }}>
-                                      Open Full Image
-                                    </Button>
+                                    <div style={{ marginTop: 4 }}>
+                                      <Button size="small" type="link" href={entry.previewUrl} target="_blank" style={{ paddingLeft: 0, fontSize: '12px' }}>
+                                        Open Full Image
+                                      </Button>
+                                    </div>
                                   </Card>
                                 ))}
                               </div>

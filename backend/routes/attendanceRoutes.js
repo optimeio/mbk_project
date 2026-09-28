@@ -3594,6 +3594,37 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             attendancePhoto = attendancePhoto || item.imageUrl;
         }
 
+        // Resolve Drive file IDs directly from attendance structured assets
+        if (!checkInPhoto && (item.checkIn?.driveFileId || item.driveAssets?.checkInDriveFileId)) {
+            const cId = item.checkIn?.driveFileId || item.driveAssets?.checkInDriveFileId;
+            checkInPhoto = `https://lh3.googleusercontent.com/d/${cId}=w1200`;
+        }
+
+        let checkOutGeoImageUrl = item.checkOutGeoImageUrl || item.checkOut?.photos?.[0]?.url || (Array.isArray(item.checkOutGeoImageUrls) ? item.checkOutGeoImageUrls[0] : null);
+        if (!checkOutGeoImageUrl && (item.checkOut?.driveFileId || item.driveAssets?.checkOutDriveFileId)) {
+            const coId = item.checkOut?.driveFileId || item.driveAssets?.checkOutDriveFileId;
+            checkOutGeoImageUrl = `https://lh3.googleusercontent.com/d/${coId}=w1200`;
+        }
+
+        if (Array.isArray(item.driveAssets?.files)) {
+            item.driveAssets.files.forEach(f => {
+                if (!f?.driveFileId) return;
+                const cdn = `https://lh3.googleusercontent.com/d/${f.driveFileId}=w1200`;
+                const preview = `https://drive.google.com/file/d/${f.driveFileId}/preview`;
+                if (f.fieldName === 'checkInPhoto' || f.fieldName === 'checkInImage') {
+                    if (!checkInPhoto || !checkInPhoto.startsWith('http')) checkInPhoto = cdn;
+                } else if (f.fieldName === 'checkOutGeoImage' || f.fieldName === 'checkOutPhoto') {
+                    if (!checkOutGeoImageUrl || !checkOutGeoImageUrl.startsWith('http')) checkOutGeoImageUrl = cdn;
+                } else if (f.fieldName === 'attendancePdf') {
+                    if (!attendancePdfUrl || !attendancePdfUrl.startsWith('http')) attendancePdfUrl = preview;
+                } else if (f.fieldName === 'attendanceExcel') {
+                    if (!attendanceExcelUrl || !attendanceExcelUrl.startsWith('http')) attendanceExcelUrl = preview;
+                } else if (f.fieldName === 'studentAttendanceImages' || f.fieldName === 'attendancePhoto') {
+                    if (!attendancePhoto || !attendancePhoto.startsWith('http')) attendancePhoto = cdn;
+                }
+            });
+        }
+
         matchingDocs.forEach((doc) => {
             const docUrl = doc.fileUrl || (doc.driveFileId ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
             if (!docUrl) return;
@@ -3610,6 +3641,7 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
                 (/attendance|sheet|roster/i.test(lowerName) && !/check.?in|check.?out|activity/i.test(lowerName))
             );
             const isGeotagDoc = doc.fileType === 'geotag' || docField === 'checkinphoto' || docField === 'check_in_image' || docField === 'signature' || /check.?in/i.test(lowerName);
+            const isCheckoutDoc = doc.fileType === 'checkout' || docField === 'checkoutphoto' || docField === 'check_out_image' || docField === 'checkoutgeoimage' || /check.?out/i.test(lowerName);
 
             if (isAttendanceDoc) {
                 const isPdf = lowerName.endsWith('.pdf') || docField === 'attendancepdf';
@@ -3628,6 +3660,8 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
                 } else if (!lowerName.includes('checkout') && !lowerName.includes('activity')) {
                     checkInPhoto = docUrl;
                 }
+            } else if (isCheckoutDoc) {
+                checkOutGeoImageUrl = docUrl;
             }
         });
 
@@ -3694,6 +3728,25 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             item.scheduleId?.collegeId?.driveFolderUrl ||
             (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : null);
 
+        // Helper to resolve specific subfolder links
+        const extractFolderLink = (meta) => {
+            if (!meta) return null;
+            if (typeof meta === 'string' && meta.startsWith('http')) return meta;
+            if (meta.webViewLink && typeof meta.webViewLink === 'string' && meta.webViewLink.startsWith('http')) return meta.webViewLink;
+            if (meta.driveFolderLink && typeof meta.driveFolderLink === 'string' && meta.driveFolderLink.startsWith('http')) return meta.driveFolderLink;
+            if (meta.driveFolderUrl && typeof meta.driveFolderUrl === 'string' && meta.driveFolderUrl.startsWith('http')) return meta.driveFolderUrl;
+            if (meta.link && typeof meta.link === 'string' && meta.link.startsWith('http')) return meta.link;
+            const fId = meta.id || meta.driveFolderId || meta.folderId;
+            if (fId && typeof fId === 'string' && fId.length > 3) return `https://drive.google.com/drive/folders/${fId.trim()}`;
+            return null;
+        };
+
+        const sessionMeta = sessionType === 'AN' ? item.scheduleId?.anFolder : item.scheduleId?.fnFolder;
+        const checkInFolderUrl = extractFolderLink(sessionMeta?.checkInFolder) || extractFolderLink(item.scheduleId?.checkInFolder) || extractFolderLink(item.driveAssets?.folders?.checkIn) || extractFolderLink(item.driveAssets?.folders?.geoTag) || resolvedDriveFolderUrl;
+        const attendanceFolderUrl = extractFolderLink(sessionMeta?.attendanceFolder) || extractFolderLink(item.scheduleId?.attendanceFolder) || extractFolderLink(item.driveAssets?.folders?.attendance) || resolvedDriveFolderUrl;
+        const studentActivitiesFolderUrl = extractFolderLink(sessionMeta?.studentActivitiesFolder) || extractFolderLink(item.scheduleId?.studentActivitiesFolder) || extractFolderLink(item.driveAssets?.folders?.studentActivity) || resolvedDriveFolderUrl;
+        const checkOutFolderUrl = extractFolderLink(sessionMeta?.checkOutFolder) || extractFolderLink(item.scheduleId?.checkOutFolder) || extractFolderLink(item.driveAssets?.folders?.checkOut) || resolvedDriveFolderUrl;
+
         return {
             ...item,
             attendancePdfUrl: attendancePdfUrl || null,
@@ -3703,11 +3756,17 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             studentsPhotoUrl: attendancePhoto || item.studentsPhotoUrl || null,
             activityPhotos,
             checkInPhoto: checkInPhoto || null,
+            checkOutGeoImageUrl: checkOutGeoImageUrl || null,
             signatureUrl: signatureUrl || null,
             checkInLocation: checkInLocation || null,
             documents: matchingDocs,
             driveFolderUrl: resolvedDriveFolderUrl || item.driveFolderUrl || null,
             driveFolderId: resolvedDriveFolderId || item.driveFolderId || null,
+            sessionFolderUrl: resolvedDriveFolderUrl,
+            checkInFolderUrl,
+            attendanceFolderUrl,
+            studentActivitiesFolderUrl,
+            checkOutFolderUrl,
         };
     });
 };
@@ -5774,9 +5833,10 @@ router.get('/late-requests', authenticate, async (req, res) => {
             Attendance.countDocuments(filter)
         ]);
 
-        const requests = rawRequests.map(doc => {
-            const item = doc.toObject ? doc.toObject() : { ...doc };
+        const plainRawRequests = rawRequests.map(doc => doc.toObject ? doc.toObject() : { ...doc });
+        const enrichedList = await enrichAttendanceRecordsWithDocuments(plainRawRequests);
 
+        const requests = enrichedList.map(item => {
             // 1. Resolve Course (fallback to scheduleId.courseId if attendance.courseId is missing)
             if (!item.courseId || (!item.courseId.title && !item.courseId.name)) {
                 if (item.scheduleId?.courseId) {
@@ -5805,7 +5865,7 @@ router.get('/late-requests', authenticate, async (req, res) => {
             }
 
             // 5. Proofs normalization
-            const checkInImg = item.imageUrl || item.checkInPhoto || item.checkInImage || item.checkIn?.photo || null;
+            const checkInImg = item.checkInPhoto || item.imageUrl || item.checkInImage || item.checkIn?.photo || null;
             item.imageUrl = checkInImg;
             item.checkInPhoto = checkInImg;
 
@@ -5816,37 +5876,6 @@ router.get('/late-requests', authenticate, async (req, res) => {
             if (!Array.isArray(item.activityPhotos)) {
                 item.activityPhotos = [];
             }
-
-            // 6. Resolve Google Drive folder link
-            const sessionType = String(item.session || item.scheduleId?.session || "FN").toUpperCase();
-            const sessionFolderLink = sessionType === "AN"
-                ? (item.scheduleId?.anFolder?.driveFolderLink || item.scheduleId?.anFolder?.driveFolderUrl)
-                : (item.scheduleId?.fnFolder?.driveFolderLink || item.scheduleId?.fnFolder?.driveFolderUrl);
-            const sessionFolderId = sessionType === "AN"
-                ? (item.scheduleId?.anFolder?.id || item.scheduleId?.anFolder?.driveFolderId)
-                : (item.scheduleId?.fnFolder?.id || item.scheduleId?.fnFolder?.driveFolderId);
-
-            const resolvedDriveFolderId =
-                sessionFolderId ||
-                item.driveFolderId ||
-                item.dayFolderId ||
-                item.scheduleId?.driveFolderId ||
-                item.scheduleId?.dayFolderId ||
-                item.collegeDriveFolderId ||
-                item.trainerId?.googleDriveFolderId ||
-                item.trainerId?.driveFolderId ||
-                item.collegeId?.googleDriveFolderId ||
-                item.collegeId?.driveFolderId;
-
-            item.driveFolderUrl =
-                sessionFolderLink ||
-                item.driveFolderUrl ||
-                item.driveFolderLink ||
-                item.scheduleId?.driveFolderLink ||
-                item.scheduleId?.driveFolderUrl ||
-                (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : "https://drive.google.com/drive/my-drive");
-
-            item.driveFolderId = resolvedDriveFolderId || item.driveFolderId;
 
             return item;
         });

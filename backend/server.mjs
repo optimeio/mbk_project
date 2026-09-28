@@ -268,6 +268,39 @@ const extractDriveFileId = (value) => {
   return null;
 };
 
+// Helper function to serve drive assets appropriately: stream PDFs and Excels inline, redirect images to preview
+const respondWithDriveAsset = async (res, driveId, filename = '', cleanPath = '') => {
+  const lower = (filename || cleanPath || '').toLowerCase();
+  const isPdf = lower.endsWith('.pdf');
+  const isExcel = lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv');
+
+  if (isPdf) {
+    try {
+      const stream = await streamDriveFile(driveId);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename || 'document.pdf'}"`);
+      return stream.pipe(res);
+    } catch (err) {
+      console.warn('[DRIVE-STREAM] PDF stream fallback to view link:', err.message);
+      return res.redirect(302, `https://drive.google.com/file/d/${driveId}/view`);
+    }
+  }
+
+  if (isExcel) {
+    try {
+      const stream = await streamDriveFile(driveId);
+      res.setHeader('Content-Type', lower.endsWith('.csv') ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename || 'attendance.xlsx'}"`);
+      return stream.pipe(res);
+    } catch (err) {
+      console.warn('[DRIVE-STREAM] Excel stream fallback to download:', err.message);
+      return res.redirect(302, `https://drive.google.com/uc?id=${driveId}&export=download`);
+    }
+  }
+
+  return res.redirect(302, `https://lh3.googleusercontent.com/d/${driveId}=w1200`);
+};
+
 app.get('/api/uploads/trainer-documents/:filename', async (req, res, next) => {
   const { filename } = req.params || {};
 
@@ -306,39 +339,6 @@ app.get('/api/uploads/trainer-documents/:filename', async (req, res, next) => {
       }
     });
   }
-
-  // Helper function to serve drive assets appropriately: stream PDFs and Excels inline, redirect images to preview
-  const respondWithDriveAsset = async (res, driveId, filename = '', cleanPath = '') => {
-    const lower = (filename || cleanPath || '').toLowerCase();
-    const isPdf = lower.endsWith('.pdf');
-    const isExcel = lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv');
-
-    if (isPdf) {
-      try {
-        const stream = await streamDriveFile(driveId);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `inline; filename="${filename || 'document.pdf'}"`);
-        return stream.pipe(res);
-      } catch (err) {
-        console.warn('[DRIVE-STREAM] PDF stream fallback to view link:', err.message);
-        return res.redirect(302, `https://drive.google.com/file/d/${driveId}/view`);
-      }
-    }
-
-    if (isExcel) {
-      try {
-        const stream = await streamDriveFile(driveId);
-        res.setHeader('Content-Type', lower.endsWith('.csv') ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename || 'attendance.xlsx'}"`);
-        return stream.pipe(res);
-      } catch (err) {
-        console.warn('[DRIVE-STREAM] Excel stream fallback to download:', err.message);
-        return res.redirect(302, `https://drive.google.com/uc?id=${driveId}&export=download`);
-      }
-    }
-
-    return res.redirect(302, `https://lh3.googleusercontent.com/d/${driveId}=w1200`);
-  };
 
   // Local file missing (most documents now live on Google Drive). Resolve the
   // canonical Drive copy by filename and redirect/stream there so the asset loads
@@ -452,8 +452,21 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
       if (isActivityFile) {
         try {
           const StudentActivity = (await import('./models/StudentActivity.js')).default;
-          const saDoc = await StudentActivity.findOne({ photoUrl: regex }).select('photoUrl driveFileId').lean();
-          const saDriveId = extractDriveFileId(saDoc?.driveFileId) || extractDriveFileId(saDoc?.photoUrl);
+          const saDoc = await StudentActivity.findOne({
+            $or: [
+              { photoUrl: regex },
+              { photoUrl: filename },
+              { 'photos.url': regex }
+            ]
+          }).select('photoUrl driveFileId photos').lean();
+
+          let saDriveId = extractDriveFileId(saDoc?.driveFileId) || extractDriveFileId(saDoc?.photoUrl);
+          if (!saDriveId && Array.isArray(saDoc?.photos)) {
+            for (const p of saDoc.photos) {
+              const ext = extractDriveFileId(p?.url || p?.driveFileId);
+              if (isValidDriveId(ext)) { saDriveId = ext; break; }
+            }
+          }
           if (isValidDriveId(saDriveId)) {
             return respondWithDriveAsset(res, saDriveId, filename, cleanPath);
           }
@@ -564,7 +577,7 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
             } else if (isActivityFile) {
               if (Array.isArray(record?.activityPhotos)) {
                 for (const ap of record.activityPhotos) {
-                  const extracted = extractDriveFileId(ap);
+                  const extracted = extractDriveFileId(typeof ap === 'string' ? ap : ap?.url || ap?.driveFileId);
                   if (isValidDriveId(extracted)) {
                     driveId = extracted;
                     break;
@@ -573,6 +586,14 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
               }
             } else if (isSignatureFile) {
               driveId = extractDriveFileId(record?.signatureUrl);
+            } else {
+              // Generic fallback across all record fields
+              driveId = extractDriveFileId(record?.checkInPhoto) ||
+                extractDriveFileId(record?.checkOutGeoImageUrl) ||
+                extractDriveFileId(record?.attendancePdfUrl) ||
+                extractDriveFileId(record?.attendanceExcelUrl) ||
+                extractDriveFileId(record?.studentsPhotoUrl) ||
+                extractDriveFileId(record?.attendancePhotoUrl);
             }
           }
 
@@ -601,7 +622,7 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
         // Ignore
       }
 
-      // 4. Check Course image
+      // 5. Check Course image
       try {
         const Course = (await import('./models/Course.js')).default;
         const cDoc = await Course.findOne({

@@ -46,8 +46,21 @@ import { getSecureImageUrl } from "@/utils/imageUtils";
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
 
-const resolveDriveFolderUrl = (record) => {
+const extractLinkOrId = (meta) => {
+  if (!meta) return null;
+  if (typeof meta === "string" && meta.startsWith("http")) return meta;
+  if (meta.webViewLink && typeof meta.webViewLink === "string" && meta.webViewLink.startsWith("http")) return meta.webViewLink;
+  if (meta.driveFolderLink && typeof meta.driveFolderLink === "string" && meta.driveFolderLink.startsWith("http")) return meta.driveFolderLink;
+  if (meta.driveFolderUrl && typeof meta.driveFolderUrl === "string" && meta.driveFolderUrl.startsWith("http")) return meta.driveFolderUrl;
+  if (meta.link && typeof meta.link === "string" && meta.link.startsWith("http")) return meta.link;
+  const fId = meta.id || meta.driveFolderId || meta.folderId;
+  if (fId && typeof fId === "string" && fId.length > 3) return `https://drive.google.com/drive/folders/${fId.trim()}`;
+  return null;
+};
+
+export const resolveSessionFolderUrl = (record) => {
   if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.sessionFolderUrl && typeof record.sessionFolderUrl === "string" && record.sessionFolderUrl.startsWith("http")) return record.sessionFolderUrl;
 
   const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
 
@@ -66,17 +79,13 @@ const resolveDriveFolderUrl = (record) => {
     if (record.scheduleId?.fnFolder?.driveFolderUrl && typeof record.scheduleId.fnFolder.driveFolderUrl === "string" && record.scheduleId.fnFolder.driveFolderUrl.startsWith("http")) return record.scheduleId.fnFolder.driveFolderUrl;
   }
 
-  // 2. Direct URLs on record or schedule or college
+  // 2. Direct URLs on record or schedule
   if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http")) return record.driveFolderUrl;
   if (record.driveFolderLink && typeof record.driveFolderLink === "string" && record.driveFolderLink.startsWith("http")) return record.driveFolderLink;
   if (record.dayFolderLink && typeof record.dayFolderLink === "string" && record.dayFolderLink.startsWith("http")) return record.dayFolderLink;
   if (record.scheduleId?.driveFolderUrl && typeof record.scheduleId.driveFolderUrl === "string" && record.scheduleId.driveFolderUrl.startsWith("http")) return record.scheduleId.driveFolderUrl;
   if (record.scheduleId?.driveFolderLink && typeof record.scheduleId.driveFolderLink === "string" && record.scheduleId.driveFolderLink.startsWith("http")) return record.scheduleId.driveFolderLink;
   if (record.scheduleId?.dayFolderLink && typeof record.scheduleId.dayFolderLink === "string" && record.scheduleId.dayFolderLink.startsWith("http")) return record.scheduleId.dayFolderLink;
-  if (record.collegeId?.driveFolderLink && typeof record.collegeId.driveFolderLink === "string" && record.collegeId.driveFolderLink.startsWith("http")) return record.collegeId.driveFolderLink;
-  if (record.collegeId?.driveFolderUrl && typeof record.collegeId.driveFolderUrl === "string" && record.collegeId.driveFolderUrl.startsWith("http")) return record.collegeId.driveFolderUrl;
-  if (record.scheduleId?.collegeId?.driveFolderLink && typeof record.scheduleId.collegeId.driveFolderLink === "string" && record.scheduleId.collegeId.driveFolderLink.startsWith("http")) return record.scheduleId.collegeId.driveFolderLink;
-  if (record.scheduleId?.collegeId?.driveFolderUrl && typeof record.scheduleId.collegeId.driveFolderUrl === "string" && record.scheduleId.collegeId.driveFolderUrl.startsWith("http")) return record.scheduleId.collegeId.driveFolderUrl;
 
   // 3. Folder IDs
   const sessionFolderId = sessionType === "AN"
@@ -91,43 +100,51 @@ const resolveDriveFolderUrl = (record) => {
     record.scheduleId?.dayFolderId ||
     record.collegeDriveFolderId ||
     record.trainerId?.googleDriveFolderId ||
-    record.trainerId?.driveFolderId ||
-    record.trainerId?.collegeDriveFolderId ||
-    record.collegeId?.googleDriveFolderId ||
-    record.collegeId?.driveFolderId ||
-    record.scheduleId?.collegeId?.googleDriveFolderId ||
-    record.scheduleId?.collegeId?.driveFolderId ||
-    record.courseId?.driveFolderId ||
-    record.departmentId?.driveFolderId;
+    record.trainerId?.driveFolderId;
 
   if (folderId && typeof folderId === "string" && folderId.trim().length > 3) {
     return `https://drive.google.com/drive/folders/${folderId.trim()}`;
   }
 
-  // 4. Check trainer.colleges array
-  if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
-    const colMatch = record.trainerId.colleges.find(
-      (c) =>
-        (record.collegeId && (c?.collegeId === record.collegeId?._id || c?.collegeId === record.collegeId || c?._id === record.collegeId?._id)) ||
-        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId?._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId?._id)) ||
-        c?.googleDriveFolderId ||
-        c?.driveFolderId
-    );
-    const colFolderId = colMatch?.googleDriveFolderId || colMatch?.driveFolderId || record.trainerId.colleges[0]?.googleDriveFolderId || record.trainerId.colleges[0]?.driveFolderId;
-    if (colFolderId && typeof colFolderId === "string" && colFolderId.trim().length > 3) {
-      return `https://drive.google.com/drive/folders/${colFolderId.trim()}`;
-    }
-  }
-
-  // 5. Check if any attached document has a parent drive file ID
-  if (Array.isArray(record.documents) && record.documents.length > 0) {
-    const docWithDrive = record.documents.find(d => d?.driveFileId || d?.driveViewLink);
-    if (docWithDrive?.driveFileId) {
-      return `https://drive.google.com/file/d/${docWithDrive.driveFileId}/view`;
-    }
-  }
-
   return "https://drive.google.com/drive/my-drive";
+};
+
+export const resolveDriveFolderUrl = resolveSessionFolderUrl;
+
+export const resolveCheckInFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.checkInFolderUrl && typeof record.checkInFolderUrl === "string" && record.checkInFolderUrl.startsWith("http")) return record.checkInFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const checkInMeta = sessionMeta?.checkInFolder || record.scheduleId?.checkInFolder || record.driveAssets?.folders?.checkIn || record.driveAssets?.folders?.geoTag;
+  return extractLinkOrId(checkInMeta) || resolveSessionFolderUrl(record);
+};
+
+export const resolveAttendanceFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.attendanceFolderUrl && typeof record.attendanceFolderUrl === "string" && record.attendanceFolderUrl.startsWith("http")) return record.attendanceFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const attMeta = sessionMeta?.attendanceFolder || record.scheduleId?.attendanceFolder || record.driveAssets?.folders?.attendance;
+  return extractLinkOrId(attMeta) || resolveSessionFolderUrl(record);
+};
+
+export const resolveActivitiesFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.studentActivitiesFolderUrl && typeof record.studentActivitiesFolderUrl === "string" && record.studentActivitiesFolderUrl.startsWith("http")) return record.studentActivitiesFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const actMeta = sessionMeta?.studentActivitiesFolder || record.scheduleId?.studentActivitiesFolder || record.driveAssets?.folders?.studentActivity;
+  return extractLinkOrId(actMeta) || resolveSessionFolderUrl(record);
+};
+
+export const resolveCheckOutFolderUrl = (record) => {
+  if (!record) return "https://drive.google.com/drive/my-drive";
+  if (record.checkOutFolderUrl && typeof record.checkOutFolderUrl === "string" && record.checkOutFolderUrl.startsWith("http")) return record.checkOutFolderUrl;
+  const sessionType = String(record.session || record.scheduleId?.session || "FN").toUpperCase();
+  const sessionMeta = sessionType === "AN" ? record.scheduleId?.anFolder : record.scheduleId?.fnFolder;
+  const outMeta = sessionMeta?.checkOutFolder || record.scheduleId?.checkOutFolder || record.driveAssets?.folders?.checkOut;
+  return extractLinkOrId(outMeta) || resolveSessionFolderUrl(record);
 };
 
 export default function TrainerAttendanceRequests() {
@@ -681,128 +698,189 @@ export default function TrainerAttendanceRequests() {
 
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
                     {/* Proof 1: Check-In */}
-                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#4338ca", display: "flex", alignItems: "center", gap: 4 }}>
-                        <Camera size={13} />
-                        <span>1. Check-In Photo</span>
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#4338ca", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Camera size={13} />
+                            <span>1. Check-In Photo</span>
+                          </div>
+                          <Button
+                            size="small"
+                            type="link"
+                            icon={<FolderOpen size={11} />}
+                            href={resolveCheckInFolderUrl(selectedRecord)}
+                            target="_blank"
+                            style={{ color: "#4338ca", padding: 0, fontSize: 11, height: "auto" }}
+                          >
+                            Drive
+                          </Button>
+                        </div>
+                        {checkInPhotoUrl ? (
+                          <Image
+                            src={getSecureImageUrl(checkInPhotoUrl)}
+                            alt="Check-In Proof"
+                            style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
+                            fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                          />
+                        ) : (
+                          <Alert message="No image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                        )}
                       </div>
-                      {checkInPhotoUrl ? (
-                        <Image
-                          src={getSecureImageUrl(checkInPhotoUrl)}
-                          alt="Check-In Proof"
-                          style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
-                        />
-                      ) : (
-                        <Alert message="No image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                      )}
                       {selectedRecord.checkInTime ? (
-                        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
+                        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>
                           Time: {dayjs(selectedRecord.checkInTime).format("hh:mm A")}
                         </div>
                       ) : null}
                     </div>
 
                     {/* Proof 2: Student Attendance Sheet */}
-                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#1d4ed8", display: "flex", alignItems: "center", gap: 4 }}>
-                        <FileSpreadsheet size={13} />
-                        <span>
-                          2. Student Attendance{' '}
-                          {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0
-                            ? `(${selectedRecord.studentAttendanceImageUrls.length} photo${selectedRecord.studentAttendanceImageUrls.length > 1 ? 's' : ''})`
-                            : ''}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {selectedRecord.attendancePdfUrl && (
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#1d4ed8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <FileSpreadsheet size={13} />
+                            <span>
+                              2. Student Attendance{' '}
+                              {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0
+                                ? `(${selectedRecord.studentAttendanceImageUrls.length})`
+                                : ''}
+                            </span>
+                          </div>
                           <Button
-                            type="primary"
-                            danger
-                            icon={<FileText size={13} />}
-                            href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
+                            size="small"
+                            type="link"
+                            icon={<FolderOpen size={11} />}
+                            href={resolveAttendanceFolderUrl(selectedRecord)}
                             target="_blank"
-                            style={{ width: "100%", fontSize: 11, height: 30 }}
+                            style={{ color: "#1d4ed8", padding: 0, fontSize: 11, height: "auto" }}
                           >
-                            View PDF Roster
+                            Drive
                           </Button>
-                        )}
-                        {selectedRecord.attendanceExcelUrl && (
-                          <Button
-                            type="primary"
-                            icon={<FileSpreadsheet size={13} />}
-                            href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
-                            target="_blank"
-                            style={{ width: "100%", fontSize: 11, height: 30, backgroundColor: "#15803d", borderColor: "#15803d" }}
-                          >
-                            Download Excel Roster
-                          </Button>
-                        )}
-                        {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0 ? (
-                          <Image.PreviewGroup>
-                            <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
-                              {selectedRecord.studentAttendanceImageUrls.map((img, i) => (
-                                <Image
-                                  key={i}
-                                  src={getSecureImageUrl(img)}
-                                  alt={`Attendance Sheet ${i + 1}`}
-                                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 4 }}
-                                />
-                              ))}
-                            </div>
-                          </Image.PreviewGroup>
-                        ) : cleanAttendanceSheetUrl ? (
-                          <Image
-                            src={getSecureImageUrl(cleanAttendanceSheetUrl)}
-                            alt="Student Sheet"
-                            style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 4 }}
-                          />
-                        ) : !selectedRecord.attendancePdfUrl && !selectedRecord.attendanceExcelUrl ? (
-                          <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                        ) : null}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {selectedRecord.attendancePdfUrl && (
+                            <Button
+                              type="primary"
+                              danger
+                              icon={<FileText size={13} />}
+                              href={getSecureImageUrl(selectedRecord.attendancePdfUrl)}
+                              target="_blank"
+                              style={{ width: "100%", fontSize: 11, height: 30 }}
+                            >
+                              View PDF Roster
+                            </Button>
+                          )}
+                          {selectedRecord.attendanceExcelUrl && (
+                            <Button
+                              type="primary"
+                              icon={<FileSpreadsheet size={13} />}
+                              href={getSecureImageUrl(selectedRecord.attendanceExcelUrl)}
+                              target="_blank"
+                              style={{ width: "100%", fontSize: 11, height: 30, backgroundColor: "#15803d", borderColor: "#15803d" }}
+                            >
+                              Download Excel Roster
+                            </Button>
+                          )}
+                          {Array.isArray(selectedRecord.studentAttendanceImageUrls) && selectedRecord.studentAttendanceImageUrls.length > 0 ? (
+                            <Image.PreviewGroup>
+                              <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+                                {selectedRecord.studentAttendanceImageUrls.map((img, i) => (
+                                  <Image
+                                    key={i}
+                                    src={getSecureImageUrl(img)}
+                                    alt={`Attendance Sheet ${i + 1}`}
+                                    style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 4 }}
+                                    fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                  />
+                                ))}
+                              </div>
+                            </Image.PreviewGroup>
+                          ) : cleanAttendanceSheetUrl ? (
+                            <Image
+                              src={getSecureImageUrl(cleanAttendanceSheetUrl)}
+                              alt="Student Sheet"
+                              style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 4 }}
+                              fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                            />
+                          ) : !selectedRecord.attendancePdfUrl && !selectedRecord.attendanceExcelUrl ? (
+                            <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                          ) : null}
+                        </div>
                       </div>
                     </div>
 
                     {/* Proof 3: Student Classroom Activities */}
-                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#7e22ce", display: "flex", alignItems: "center", gap: 4 }}>
-                        <Layers size={13} />
-                        <span>3. Activities ({uniqueActivities.length})</span>
-                      </div>
-                      {uniqueActivities.length > 0 ? (
-                        <Image.PreviewGroup>
-                          <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
-                            {uniqueActivities.map((photo, i) => (
-                              <Image
-                                key={i}
-                                src={getSecureImageUrl(photo)}
-                                alt={`Activity ${i + 1}`}
-                                style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
-                              />
-                            ))}
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#7e22ce", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Layers size={13} />
+                            <span>3. Activities ({uniqueActivities.length})</span>
                           </div>
-                        </Image.PreviewGroup>
-                      ) : (
-                        <Alert message="No activities" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                      )}
+                          <Button
+                            size="small"
+                            type="link"
+                            icon={<FolderOpen size={11} />}
+                            href={resolveActivitiesFolderUrl(selectedRecord)}
+                            target="_blank"
+                            style={{ color: "#7e22ce", padding: 0, fontSize: 11, height: "auto" }}
+                          >
+                            Drive
+                          </Button>
+                        </div>
+                        {uniqueActivities.length > 0 ? (
+                          <Image.PreviewGroup>
+                            <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+                              {uniqueActivities.map((photo, i) => (
+                                <Image
+                                  key={i}
+                                  src={getSecureImageUrl(photo)}
+                                  alt={`Activity ${i + 1}`}
+                                  style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
+                                  fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                />
+                              ))}
+                            </div>
+                          </Image.PreviewGroup>
+                        ) : (
+                          <Alert message="No activities" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                        )}
+                      </div>
                     </div>
 
                     {/* Proof 4: Check-Out Photo */}
-                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa" }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#047857", display: "flex", alignItems: "center", gap: 4 }}>
-                        <Camera size={13} />
-                        <span>4. Check-Out Photo</span>
+                    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#fafafa", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 8, color: "#047857", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Camera size={13} />
+                            <span>4. Check-Out Photo</span>
+                          </div>
+                          <Button
+                            size="small"
+                            type="link"
+                            icon={<FolderOpen size={11} />}
+                            href={resolveCheckOutFolderUrl(selectedRecord)}
+                            target="_blank"
+                            style={{ color: "#047857", padding: 0, fontSize: 11, height: "auto" }}
+                          >
+                            Drive
+                          </Button>
+                        </div>
+                        {cleanCheckOutPhotoUrl ? (
+                          <Image
+                            src={getSecureImageUrl(cleanCheckOutPhotoUrl)}
+                            alt="Check-Out Proof"
+                            style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
+                            fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                          />
+                        ) : (
+                          <Alert message="No check-out image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
+                        )}
                       </div>
-                      {cleanCheckOutPhotoUrl ? (
-                        <Image
-                          src={getSecureImageUrl(cleanCheckOutPhotoUrl)}
-                          alt="Check-Out Proof"
-                          style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
-                        />
-                      ) : (
-                        <Alert message="No check-out image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
-                      )}
                       {selectedRecord.checkOutTime ? (
-                        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 4 }}>
+                        <div style={{ fontSize: 10, color: "#6b7280", marginTop: 6 }}>
                           Time: {dayjs(selectedRecord.checkOutTime).format("hh:mm A")}
                         </div>
                       ) : null}
