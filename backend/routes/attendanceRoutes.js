@@ -3681,71 +3681,146 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
         activityPhotos = Array.from(new Set(activityPhotos.filter(Boolean)));
 
         // Resolve Drive folder URL and ID
-        const sessionType = String(item.session || item.scheduleId?.session || "FN").toUpperCase();
-        const sessionFolderLink = sessionType === "AN"
-            ? (item.driveAssets?.sessionFolder?.webViewLink || item.scheduleId?.anFolder?.driveFolderLink || item.scheduleId?.anFolder?.driveFolderUrl || item.anFolder?.driveFolderLink || item.anFolder?.driveFolderUrl)
-            : (item.driveAssets?.sessionFolder?.webViewLink || item.scheduleId?.fnFolder?.driveFolderLink || item.scheduleId?.fnFolder?.driveFolderUrl || item.fnFolder?.driveFolderLink || item.fnFolder?.driveFolderUrl);
+        const dayNum = Number(item.dayNumber || item.scheduleId?.dayNumber || 1);
+        const sessionType = String(item.session || item.scheduleId?.session || "FN").trim().toUpperCase();
+        const sessionKey = sessionType === "AN" ? "anFolder" : "fnFolder";
 
-        const sessionFolderId = sessionType === "AN"
-            ? (item.driveAssets?.sessionFolder?.id || item.scheduleId?.anFolder?.id || item.scheduleId?.anFolder?.driveFolderId || item.anFolder?.id || item.anFolder?.driveFolderId)
-            : (item.driveAssets?.sessionFolder?.id || item.scheduleId?.fnFolder?.id || item.scheduleId?.fnFolder?.driveFolderId || item.fnFolder?.id || item.fnFolder?.driveFolderId);
-
-        let trainerColFolderId = null;
+        // 1. Locate trainer's college day folder mapping
+        let trainerDayFolders = null;
         if (Array.isArray(item.trainerId?.colleges) && item.trainerId.colleges.length > 0) {
             const colIdStr = String(item.collegeId?._id || item.collegeId || item.scheduleId?.collegeId?._id || item.scheduleId?.collegeId || '');
-            const match = item.trainerId.colleges.find(c => String(c?.collegeId?._id || c?.collegeId || c?._id || '') === colIdStr || c?.googleDriveFolderId || c?.driveFolderId);
-            trainerColFolderId = match?.googleDriveFolderId || match?.driveFolderId || item.trainerId.colleges[0]?.googleDriveFolderId || item.trainerId.colleges[0]?.driveFolderId || null;
+            let matchedCollege = item.trainerId.colleges.find(c => {
+                const cId = String(c?.collegeId?._id || c?.collegeId || c?._id || '');
+                return cId && colIdStr && cId === colIdStr;
+            });
+            if (!matchedCollege) {
+                matchedCollege = item.trainerId.colleges.find(c => Array.isArray(c?.dayFolders) && c.dayFolders.length > 0) || item.trainerId.colleges[0];
+            }
+            if (Array.isArray(matchedCollege?.dayFolders)) {
+                trainerDayFolders = matchedCollege.dayFolders.find(d => Number(d?.day) === dayNum);
+            }
         }
 
-        const resolvedDriveFolderId =
-            sessionFolderId ||
-            item.driveFolderId ||
-            item.dayFolderId ||
-            item.scheduleId?.driveFolderId ||
-            item.scheduleId?.dayFolderId ||
-            item.collegeDriveFolderId ||
-            trainerColFolderId ||
-            item.trainerId?.googleDriveFolderId ||
-            item.trainerId?.driveFolderId ||
-            item.trainerId?.collegeDriveFolderId ||
-            item.collegeId?.googleDriveFolderId ||
-            item.collegeId?.driveFolderId ||
-            item.scheduleId?.collegeId?.googleDriveFolderId ||
-            item.scheduleId?.collegeId?.driveFolderId ||
-            null;
+        // 2. Locate schedule day meta from dayFoldersByDayNumber if available
+        const scheduleDayMeta = item.scheduleId?.dayFoldersByDayNumber?.[dayNum] || item.scheduleId?.dayFoldersByDayNumber?.[String(dayNum)] || null;
 
-        const resolvedDriveFolderUrl =
-            sessionFolderLink ||
-            item.driveFolderUrl ||
-            item.driveFolderLink ||
-            item.dayFolderLink ||
-            item.scheduleId?.driveFolderLink ||
-            item.scheduleId?.driveFolderUrl ||
-            item.scheduleId?.dayFolderLink ||
-            item.collegeId?.driveFolderLink ||
-            item.collegeId?.driveFolderUrl ||
-            item.scheduleId?.collegeId?.driveFolderLink ||
-            item.scheduleId?.collegeId?.driveFolderUrl ||
-            (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : null);
-
-        // Helper to resolve specific subfolder links
+        // 3. Helper to extract link or ID
         const extractFolderLink = (meta) => {
             if (!meta) return null;
-            if (typeof meta === 'string' && meta.startsWith('http')) return meta;
-            if (meta.webViewLink && typeof meta.webViewLink === 'string' && meta.webViewLink.startsWith('http')) return meta.webViewLink;
-            if (meta.driveFolderLink && typeof meta.driveFolderLink === 'string' && meta.driveFolderLink.startsWith('http')) return meta.driveFolderLink;
-            if (meta.driveFolderUrl && typeof meta.driveFolderUrl === 'string' && meta.driveFolderUrl.startsWith('http')) return meta.driveFolderUrl;
-            if (meta.link && typeof meta.link === 'string' && meta.link.startsWith('http')) return meta.link;
-            const fId = meta.id || meta.driveFolderId || meta.folderId;
-            if (fId && typeof fId === 'string' && fId.length > 3) return `https://drive.google.com/drive/folders/${fId.trim()}`;
+            if (typeof meta === 'string') {
+                const trimmed = meta.trim();
+                if (trimmed.startsWith('http')) return trimmed;
+                if (trimmed.length > 5 && !trimmed.includes('/') && !trimmed.includes(' ')) {
+                    return `https://drive.google.com/drive/folders/${trimmed}`;
+                }
+                return null;
+            }
+            if (typeof meta === 'object') {
+                if (meta.webViewLink && typeof meta.webViewLink === 'string' && meta.webViewLink.startsWith('http')) return meta.webViewLink;
+                if (meta.link && typeof meta.link === 'string' && meta.link.startsWith('http')) return meta.link;
+                if (meta.driveFolderLink && typeof meta.driveFolderLink === 'string' && meta.driveFolderLink.startsWith('http')) return meta.driveFolderLink;
+                if (meta.driveFolderUrl && typeof meta.driveFolderUrl === 'string' && meta.driveFolderUrl.startsWith('http')) return meta.driveFolderUrl;
+                const fId = meta.id || meta.driveFolderId || meta.folderId || meta.dayFolderId;
+                if (fId && typeof fId === 'string' && fId.trim().length > 5) {
+                    return `https://drive.google.com/drive/folders/${fId.trim()}`;
+                }
+            }
             return null;
         };
 
-        const sessionMeta = sessionType === 'AN' ? item.scheduleId?.anFolder : item.scheduleId?.fnFolder;
-        const checkInFolderUrl = extractFolderLink(sessionMeta?.checkInFolder) || extractFolderLink(item.scheduleId?.checkInFolder) || extractFolderLink(item.driveAssets?.folders?.checkIn) || extractFolderLink(item.driveAssets?.folders?.geoTag) || resolvedDriveFolderUrl;
-        const attendanceFolderUrl = extractFolderLink(sessionMeta?.attendanceFolder) || extractFolderLink(item.scheduleId?.attendanceFolder) || extractFolderLink(item.driveAssets?.folders?.attendance) || resolvedDriveFolderUrl;
-        const studentActivitiesFolderUrl = extractFolderLink(sessionMeta?.studentActivitiesFolder) || extractFolderLink(item.scheduleId?.studentActivitiesFolder) || extractFolderLink(item.driveAssets?.folders?.studentActivity) || resolvedDriveFolderUrl;
-        const checkOutFolderUrl = extractFolderLink(sessionMeta?.checkOutFolder) || extractFolderLink(item.scheduleId?.checkOutFolder) || extractFolderLink(item.driveAssets?.folders?.checkOut) || resolvedDriveFolderUrl;
+        // 4. Session Meta object
+        const sessionMeta =
+            item.driveAssets?.sessionFolder ||
+            item.scheduleId?.[sessionKey] ||
+            item?.[sessionKey] ||
+            scheduleDayMeta?.[sessionKey] ||
+            trainerDayFolders?.[sessionKey] ||
+            null;
+
+        // 5. Day Meta object
+        const dayMeta =
+            item.driveAssets?.dayFolder ||
+            scheduleDayMeta ||
+            trainerDayFolders ||
+            null;
+
+        // 6. Documents matching by type
+        const checkInDoc = matchingDocs.find(d => 
+            d.driveFolderId && (
+                d.fileType === 'geotag' || 
+                String(d.fileField || '').toLowerCase() === 'checkinphoto' || 
+                String(d.fileField || '').toLowerCase() === 'check_in_image' ||
+                /check.?in/i.test(d.fileName || '')
+            )
+        );
+
+        const attDoc = matchingDocs.find(d => 
+            d.driveFolderId && (
+                d.fileType === 'attendance' || 
+                String(d.fileField || '').toLowerCase().includes('attendance') ||
+                /attendance|sheet|roster/i.test(d.fileName || '')
+            )
+        );
+
+        const actDoc = matchingDocs.find(d => 
+            d.driveFolderId && (
+                d.fileType === 'activity' || 
+                String(d.fileField || '').toLowerCase().includes('activity') ||
+                /activity|classroom/i.test(d.fileName || '')
+            )
+        );
+
+        const checkOutDoc = matchingDocs.find(d => 
+            d.driveFolderId && (
+                d.fileType === 'checkout' || 
+                String(d.fileField || '').toLowerCase().includes('checkout') ||
+                /check.?out/i.test(d.fileName || '')
+            )
+        );
+
+        // 7. Session folder URL (Day X > FN or AN)
+        const resolvedSessionFolderUrl =
+            extractFolderLink(sessionMeta) ||
+            extractFolderLink(item.driveAssets?.sessionFolder) ||
+            extractFolderLink(dayMeta) ||
+            extractFolderLink(item.dayFolderLink || item.dayFolderId) ||
+            extractFolderLink(item.scheduleId?.dayFolderLink || item.scheduleId?.dayFolderId) ||
+            (item.driveFolderUrl && typeof item.driveFolderUrl === 'string' && item.driveFolderUrl.startsWith('http') ? item.driveFolderUrl : null) ||
+            (item.scheduleId?.driveFolderUrl && typeof item.scheduleId.driveFolderUrl === 'string' && item.scheduleId.driveFolderUrl.startsWith('http') ? item.scheduleId.driveFolderUrl : null) ||
+            "https://drive.google.com/drive/my-drive";
+
+        // 8. Specific Subfolders
+        const checkInFolderUrl =
+            extractFolderLink(sessionMeta?.checkInFolder) ||
+            extractFolderLink(dayMeta?.checkInFolder) ||
+            (checkInDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkInDoc.driveFolderId}` : null) ||
+            extractFolderLink(item.driveAssets?.folders?.checkIn || item.driveAssets?.folders?.geoTag) ||
+            extractFolderLink(dayMeta?.checkIn || dayMeta?.geo_tag) ||
+            resolvedSessionFolderUrl;
+
+        const attendanceFolderUrl =
+            extractFolderLink(sessionMeta?.attendanceFolder) ||
+            extractFolderLink(dayMeta?.attendanceFolder) ||
+            (attDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${attDoc.driveFolderId}` : null) ||
+            extractFolderLink(item.driveAssets?.folders?.attendance) ||
+            extractFolderLink(dayMeta?.attendance) ||
+            resolvedSessionFolderUrl;
+
+        const studentActivitiesFolderUrl =
+            extractFolderLink(sessionMeta?.studentActivitiesFolder) ||
+            extractFolderLink(dayMeta?.studentActivitiesFolder) ||
+            (actDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${actDoc.driveFolderId}` : null) ||
+            extractFolderLink(item.driveAssets?.folders?.studentActivity || item.driveAssets?.folders?.studentActivities) ||
+            extractFolderLink(dayMeta?.studentActivities) ||
+            resolvedSessionFolderUrl;
+
+        const checkOutFolderUrl =
+            extractFolderLink(sessionMeta?.checkOutFolder) ||
+            extractFolderLink(dayMeta?.checkOutFolder) ||
+            (checkOutDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkOutDoc.driveFolderId}` : null) ||
+            extractFolderLink(item.driveAssets?.folders?.checkOut) ||
+            extractFolderLink(dayMeta?.checkOut) ||
+            resolvedSessionFolderUrl;
 
         return {
             ...item,
@@ -3760,9 +3835,9 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             signatureUrl: signatureUrl || null,
             checkInLocation: checkInLocation || null,
             documents: matchingDocs,
-            driveFolderUrl: resolvedDriveFolderUrl || item.driveFolderUrl || null,
-            driveFolderId: resolvedDriveFolderId || item.driveFolderId || null,
-            sessionFolderUrl: resolvedDriveFolderUrl,
+            driveFolderUrl: resolvedSessionFolderUrl,
+            driveFolderId: sessionMeta?.id || dayMeta?.id || item.driveFolderId || null,
+            sessionFolderUrl: resolvedSessionFolderUrl,
             checkInFolderUrl,
             attendanceFolderUrl,
             studentActivitiesFolderUrl,
