@@ -53,11 +53,13 @@ const resolveDriveFolderUrl = (record) => {
 
   // 1. Check Session-specific direct URLs first
   if (sessionType === "AN") {
+    if (record.driveAssets?.sessionFolder?.webViewLink && typeof record.driveAssets.sessionFolder.webViewLink === "string" && record.driveAssets.sessionFolder.webViewLink.startsWith("http")) return record.driveAssets.sessionFolder.webViewLink;
     if (record.anFolder?.driveFolderLink && typeof record.anFolder.driveFolderLink === "string" && record.anFolder.driveFolderLink.startsWith("http")) return record.anFolder.driveFolderLink;
     if (record.scheduleId?.anFolder?.driveFolderLink && typeof record.scheduleId.anFolder.driveFolderLink === "string" && record.scheduleId.anFolder.driveFolderLink.startsWith("http")) return record.scheduleId.anFolder.driveFolderLink;
     if (record.anFolder?.driveFolderUrl && typeof record.anFolder.driveFolderUrl === "string" && record.anFolder.driveFolderUrl.startsWith("http")) return record.anFolder.driveFolderUrl;
     if (record.scheduleId?.anFolder?.driveFolderUrl && typeof record.scheduleId.anFolder.driveFolderUrl === "string" && record.scheduleId.anFolder.driveFolderUrl.startsWith("http")) return record.scheduleId.anFolder.driveFolderUrl;
   } else {
+    if (record.driveAssets?.sessionFolder?.webViewLink && typeof record.driveAssets.sessionFolder.webViewLink === "string" && record.driveAssets.sessionFolder.webViewLink.startsWith("http")) return record.driveAssets.sessionFolder.webViewLink;
     if (record.fnFolder?.driveFolderLink && typeof record.fnFolder.driveFolderLink === "string" && record.fnFolder.driveFolderLink.startsWith("http")) return record.fnFolder.driveFolderLink;
     if (record.scheduleId?.fnFolder?.driveFolderLink && typeof record.scheduleId.fnFolder.driveFolderLink === "string" && record.scheduleId.fnFolder.driveFolderLink.startsWith("http")) return record.scheduleId.fnFolder.driveFolderLink;
     if (record.fnFolder?.driveFolderUrl && typeof record.fnFolder.driveFolderUrl === "string" && record.fnFolder.driveFolderUrl.startsWith("http")) return record.fnFolder.driveFolderUrl;
@@ -78,8 +80,8 @@ const resolveDriveFolderUrl = (record) => {
 
   // 3. Folder IDs
   const sessionFolderId = sessionType === "AN"
-    ? (record.anFolder?.id || record.anFolder?.driveFolderId || record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId)
-    : (record.fnFolder?.id || record.fnFolder?.driveFolderId || record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId);
+    ? (record.driveAssets?.sessionFolder?.id || record.anFolder?.id || record.anFolder?.driveFolderId || record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId)
+    : (record.driveAssets?.sessionFolder?.id || record.fnFolder?.id || record.fnFolder?.driveFolderId || record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId);
 
   const folderId =
     sessionFolderId ||
@@ -117,29 +119,12 @@ const resolveDriveFolderUrl = (record) => {
     }
   }
 
-  // 5. Fallback: Google Drive Search URL with Trainer Name, College Name, Course Name
-  const trainerName =
-    record.trainerId?.userId?.name ||
-    record.trainerId?.name ||
-    record.trainerName ||
-    "";
-  const collegeName =
-    record.collegeId?.name ||
-    record.scheduleId?.collegeId?.name ||
-    record.collegeName ||
-    "";
-  const courseName =
-    record.courseId?.title ||
-    record.courseId?.name ||
-    record.scheduleId?.courseId?.title ||
-    record.scheduleId?.courseId?.name ||
-    record.syllabus ||
-    record.subject ||
-    "";
-
-  const searchTerms = [trainerName, collegeName, courseName].filter(Boolean).join(" ");
-  if (searchTerms.trim().length > 0) {
-    return `https://drive.google.com/drive/search?q=${encodeURIComponent(searchTerms.trim())}`;
+  // 5. Check if any attached document has a parent drive file ID
+  if (Array.isArray(record.documents) && record.documents.length > 0) {
+    const docWithDrive = record.documents.find(d => d?.driveFileId || d?.driveViewLink);
+    if (docWithDrive?.driveFileId) {
+      return `https://drive.google.com/file/d/${docWithDrive.driveFileId}/view`;
+    }
   }
 
   return "https://drive.google.com/drive/my-drive";
@@ -171,8 +156,17 @@ export default function TrainerAttendanceRequests() {
       }
       const res = await api.get(`/attendance/late-requests?${queryParams.toString()}`);
       if (res?.success) {
-        setRequests(Array.isArray(res.requests) ? res.requests : []);
-        setTotal(res.pagination?.total || 0);
+        setRequests(Array.isArray(res.requests) ? res.requests : Array.isArray(res.data) ? res.data : []);
+        setTotal(res.pagination?.total ?? res.total ?? (Array.isArray(res.requests) ? res.requests.length : 0));
+      } else if (Array.isArray(res?.requests)) {
+        setRequests(res.requests);
+        setTotal(res.pagination?.total || res.requests.length);
+      } else if (Array.isArray(res?.data)) {
+        setRequests(res.data);
+        setTotal(res.total || res.data.length);
+      } else if (Array.isArray(res)) {
+        setRequests(res);
+        setTotal(res.length);
       } else {
         setRequests([]);
         setTotal(0);
@@ -274,7 +268,7 @@ export default function TrainerAttendanceRequests() {
             <div style={{ fontWeight: 600, fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
               {schedDate ? dayjs(schedDate).format("DD MMM YYYY") : "-"}
             </div>
-            <Space direction="horizontal" size={4}>
+            <Space size={4}>
               {dayNum ? <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>Day {dayNum}</Tag> : null}
               <Tag color={sessionColor} style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>
                 {session}
@@ -544,46 +538,80 @@ export default function TrainerAttendanceRequests() {
                 padding: "16px",
               }}
             >
-              <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-                <Descriptions.Item label="Trainer Name">
-                  <strong>
-                    {selectedRecord.trainerId?.userId?.name || selectedRecord.trainerId?.name || "N/A"}
-                  </strong>
-                </Descriptions.Item>
-                <Descriptions.Item label="Trainer ID">
-                  {selectedRecord.trainerId?.trainerId || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Request Raised At">
-                  <span style={{ color: "#d97706", fontWeight: 600 }}>
-                    {selectedRecord.lateRequestSubmittedAt
-                      ? dayjs(selectedRecord.lateRequestSubmittedAt).format("DD MMM YYYY, hh:mm A")
-                      : "-"}
-                  </span>
-                </Descriptions.Item>
-                <Descriptions.Item label="Scheduled Date">
-                  <span style={{ color: "#4f46e5", fontWeight: 600 }}>
-                    {selectedRecord.scheduleId?.scheduledDate || selectedRecord.date
-                      ? dayjs(selectedRecord.scheduleId?.scheduledDate || selectedRecord.date).format("DD MMM YYYY")
-                      : "-"}
-                  </span>
-                </Descriptions.Item>
-                <Descriptions.Item label="Day Number">
-                  <Tag color="purple">
-                    Day {selectedRecord.dayNumber || selectedRecord.scheduleId?.dayNumber || "-"}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="Session">
-                  <Tag color={String(selectedRecord.session || selectedRecord.scheduleId?.session || "FN").toUpperCase() === "AN" ? "purple" : "blue"} style={{ fontWeight: 600 }}>
-                    {String(selectedRecord.session || selectedRecord.scheduleId?.session || "FN").toUpperCase() === "AN" ? "AN" : "FN"}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="College" span={2}>
-                  {selectedRecord.collegeId?.name || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Course">
-                  {selectedRecord.courseId?.title || selectedRecord.courseId?.name || "-"}
-                </Descriptions.Item>
-              </Descriptions>
+              <Descriptions
+                size="small"
+                column={{ xs: 1, sm: 2, md: 3 }}
+                items={[
+                  {
+                    key: "trainerName",
+                    label: "Trainer Name",
+                    children: (
+                      <strong>
+                        {selectedRecord.trainerId?.userId?.name || selectedRecord.trainerId?.name || "N/A"}
+                      </strong>
+                    ),
+                  },
+                  {
+                    key: "trainerId",
+                    label: "Trainer ID",
+                    children: selectedRecord.trainerId?.trainerId || "-",
+                  },
+                  {
+                    key: "submittedAt",
+                    label: "Request Raised At",
+                    children: (
+                      <span style={{ color: "#d97706", fontWeight: 600 }}>
+                        {selectedRecord.lateRequestSubmittedAt
+                          ? dayjs(selectedRecord.lateRequestSubmittedAt).format("DD MMM YYYY, hh:mm A")
+                          : "-"}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "scheduledDate",
+                    label: "Scheduled Date",
+                    children: (
+                      <span style={{ color: "#4f46e5", fontWeight: 600 }}>
+                        {selectedRecord.scheduleId?.scheduledDate || selectedRecord.date
+                          ? dayjs(selectedRecord.scheduleId?.scheduledDate || selectedRecord.date).format("DD MMM YYYY")
+                          : "-"}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "dayNumber",
+                    label: "Day Number",
+                    children: (
+                      <Tag color="purple">
+                        Day {selectedRecord.dayNumber || selectedRecord.scheduleId?.dayNumber || "-"}
+                      </Tag>
+                    ),
+                  },
+                  {
+                    key: "session",
+                    label: "Session",
+                    children: (
+                      <Tag
+                        color={String(selectedRecord.session || selectedRecord.scheduleId?.session || "FN").toUpperCase() === "AN" ? "purple" : "blue"}
+                        style={{ fontWeight: 600 }}
+                      >
+                        {String(selectedRecord.session || selectedRecord.scheduleId?.session || "FN").toUpperCase() === "AN" ? "AN" : "FN"}
+                      </Tag>
+                    ),
+                  },
+                  {
+                    key: "college",
+                    label: "College",
+                    span: 2,
+                    children: selectedRecord.collegeId?.name || "-",
+                  },
+                  {
+                    key: "course",
+                    label: "Course",
+                    children: selectedRecord.courseId?.title || selectedRecord.courseId?.name || "-",
+                  },
+                ]}
+              />
             </div>
 
             {/* Trainer Justification Reason */}

@@ -125,22 +125,6 @@ const resolveDayDriveFolderUrl = (day, college, trainers) => {
         return `https://drive.google.com/drive/folders/${folderId.trim()}`;
     }
 
-    // Fallback: Google Drive Search
-    const trainerName =
-        day.trainerName ||
-        (trainers && trainers.find(t => t._id === day.trainerId)?.userId?.name) ||
-        (trainers && trainers.find(t => t._id === day.trainerId)?.name) ||
-        day.trainerId?.userId?.name ||
-        day.trainerId?.name ||
-        "";
-    const collegeName = college?.name || day.collegeName || day.collegeId?.name || "";
-    const courseName = day.syllabusName || day.courseName || day.courseId?.title || "";
-
-    const searchTerms = [trainerName, collegeName, courseName].filter(Boolean).join(" ");
-    if (searchTerms.trim().length > 0) {
-        return `https://drive.google.com/drive/search?q=${encodeURIComponent(searchTerms.trim())}`;
-    }
-
     return "https://drive.google.com/drive/my-drive";
 };
 

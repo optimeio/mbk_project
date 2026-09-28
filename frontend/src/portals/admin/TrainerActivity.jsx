@@ -678,7 +678,7 @@ const TrainerActivity = () => {
           const excelUrl = item.attendanceExcelUrl;
           const checkOutUrl = item.checkOutImageUrl;
           const folderId = item.googleDriveFolderId || item.driveFolderId || item.collegeDriveFolderId || item.dayFolderId;
-          const driveLink = item.googleDriveFolderLink || item.driveFolderLink || item.collegeDriveFolderLink || (folderId ? `https://drive.google.com/drive/folders/${folderId}` : (item.trainerName || item.collegeName ? `https://drive.google.com/drive/search?q=${encodeURIComponent([item.trainerName, item.collegeName].filter(Boolean).join(' '))}` : 'https://drive.google.com/drive/my-drive'));
+          const driveLink = item.googleDriveFolderLink || item.driveFolderLink || item.collegeDriveFolderLink || (folderId ? `https://drive.google.com/drive/folders/${folderId}` : 'https://drive.google.com/drive/my-drive');
 
           return (
             <Space orientation="vertical" size={3}>

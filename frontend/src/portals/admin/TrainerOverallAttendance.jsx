@@ -444,11 +444,15 @@ const resolveDriveFolderUrl = (record) => {
 
   // 1. Check Session-specific direct URLs first
   if (sessionType === "AN") {
+    if (record.driveAssets?.sessionFolder?.webViewLink && typeof record.driveAssets.sessionFolder.webViewLink === "string" && record.driveAssets.sessionFolder.webViewLink.startsWith("http")) return record.driveAssets.sessionFolder.webViewLink;
+    if (record.scheduleId?.driveAssets?.sessionFolder?.webViewLink && typeof record.scheduleId.driveAssets.sessionFolder.webViewLink === "string" && record.scheduleId.driveAssets.sessionFolder.webViewLink.startsWith("http")) return record.scheduleId.driveAssets.sessionFolder.webViewLink;
     if (record.anFolder?.driveFolderLink && typeof record.anFolder.driveFolderLink === "string" && record.anFolder.driveFolderLink.startsWith("http")) return record.anFolder.driveFolderLink;
     if (record.scheduleId?.anFolder?.driveFolderLink && typeof record.scheduleId.anFolder.driveFolderLink === "string" && record.scheduleId.anFolder.driveFolderLink.startsWith("http")) return record.scheduleId.anFolder.driveFolderLink;
     if (record.anFolder?.driveFolderUrl && typeof record.anFolder.driveFolderUrl === "string" && record.anFolder.driveFolderUrl.startsWith("http")) return record.anFolder.driveFolderUrl;
     if (record.scheduleId?.anFolder?.driveFolderUrl && typeof record.scheduleId.anFolder.driveFolderUrl === "string" && record.scheduleId.anFolder.driveFolderUrl.startsWith("http")) return record.scheduleId.anFolder.driveFolderUrl;
   } else {
+    if (record.driveAssets?.sessionFolder?.webViewLink && typeof record.driveAssets.sessionFolder.webViewLink === "string" && record.driveAssets.sessionFolder.webViewLink.startsWith("http")) return record.driveAssets.sessionFolder.webViewLink;
+    if (record.scheduleId?.driveAssets?.sessionFolder?.webViewLink && typeof record.scheduleId.driveAssets.sessionFolder.webViewLink === "string" && record.scheduleId.driveAssets.sessionFolder.webViewLink.startsWith("http")) return record.scheduleId.driveAssets.sessionFolder.webViewLink;
     if (record.fnFolder?.driveFolderLink && typeof record.fnFolder.driveFolderLink === "string" && record.fnFolder.driveFolderLink.startsWith("http")) return record.fnFolder.driveFolderLink;
     if (record.scheduleId?.fnFolder?.driveFolderLink && typeof record.scheduleId.fnFolder.driveFolderLink === "string" && record.scheduleId.fnFolder.driveFolderLink.startsWith("http")) return record.scheduleId.fnFolder.driveFolderLink;
     if (record.fnFolder?.driveFolderUrl && typeof record.fnFolder.driveFolderUrl === "string" && record.fnFolder.driveFolderUrl.startsWith("http")) return record.fnFolder.driveFolderUrl;
@@ -469,8 +473,8 @@ const resolveDriveFolderUrl = (record) => {
 
   // 3. Folder IDs
   const sessionFolderId = sessionType === "AN"
-    ? (record.anFolder?.id || record.anFolder?.driveFolderId || record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId)
-    : (record.fnFolder?.id || record.fnFolder?.driveFolderId || record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId);
+    ? (record.driveAssets?.sessionFolder?.id || record.anFolder?.id || record.anFolder?.driveFolderId || record.scheduleId?.anFolder?.id || record.scheduleId?.anFolder?.driveFolderId)
+    : (record.driveAssets?.sessionFolder?.id || record.fnFolder?.id || record.fnFolder?.driveFolderId || record.scheduleId?.fnFolder?.id || record.scheduleId?.fnFolder?.driveFolderId);
 
   const folderId =
     sessionFolderId ||
@@ -497,40 +501,23 @@ const resolveDriveFolderUrl = (record) => {
   if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
     const colMatch = record.trainerId.colleges.find(
       (c) =>
-        (record.collegeId && (c?.collegeId === record.collegeId._id || c?.collegeId === record.collegeId || c?._id === record.collegeId._id)) ||
-        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId._id)) ||
+        (record.collegeId && (c?.collegeId === record.collegeId?._id || c?.collegeId === record.collegeId || c?._id === record.collegeId?._id)) ||
+        (record.scheduleId?.collegeId && (c?.collegeId === record.scheduleId.collegeId?._id || c?.collegeId === record.scheduleId.collegeId || c?._id === record.scheduleId.collegeId?._id)) ||
         c?.googleDriveFolderId ||
         c?.driveFolderId
     );
     const colFolderId = colMatch?.googleDriveFolderId || colMatch?.driveFolderId || record.trainerId.colleges[0]?.googleDriveFolderId || record.trainerId.colleges[0]?.driveFolderId;
-    if (colFolderId) {
+    if (colFolderId && typeof colFolderId === "string" && colFolderId.trim().length > 3) {
       return `https://drive.google.com/drive/folders/${colFolderId.trim()}`;
     }
   }
 
-  // 5. Fallback: Google Drive Search URL with Trainer Name, College Name, Course Name
-  const trainerName =
-    record.trainerId?.userId?.name ||
-    record.trainerId?.name ||
-    record.trainerName ||
-    "";
-  const collegeName =
-    record.collegeId?.name ||
-    record.scheduleId?.collegeId?.name ||
-    record.collegeName ||
-    "";
-  const courseName =
-    record.courseId?.title ||
-    record.courseId?.name ||
-    record.scheduleId?.courseId?.title ||
-    record.scheduleId?.courseId?.name ||
-    record.syllabus ||
-    record.subject ||
-    "";
-
-  const searchTerms = [trainerName, collegeName, courseName].filter(Boolean).join(" ");
-  if (searchTerms.trim().length > 0) {
-    return `https://drive.google.com/drive/search?q=${encodeURIComponent(searchTerms.trim())}`;
+  // 5. Check if any attached document has a parent drive file ID
+  if (Array.isArray(record.documents) && record.documents.length > 0) {
+    const docWithDrive = record.documents.find(d => d?.driveFileId || d?.driveViewLink);
+    if (docWithDrive?.driveFileId) {
+      return `https://drive.google.com/file/d/${docWithDrive.driveFileId}/view`;
+    }
   }
 
   return "https://drive.google.com/drive/my-drive";

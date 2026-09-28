@@ -3646,6 +3646,54 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
         });
         activityPhotos = Array.from(new Set(activityPhotos.filter(Boolean)));
 
+        // Resolve Drive folder URL and ID
+        const sessionType = String(item.session || item.scheduleId?.session || "FN").toUpperCase();
+        const sessionFolderLink = sessionType === "AN"
+            ? (item.driveAssets?.sessionFolder?.webViewLink || item.scheduleId?.anFolder?.driveFolderLink || item.scheduleId?.anFolder?.driveFolderUrl || item.anFolder?.driveFolderLink || item.anFolder?.driveFolderUrl)
+            : (item.driveAssets?.sessionFolder?.webViewLink || item.scheduleId?.fnFolder?.driveFolderLink || item.scheduleId?.fnFolder?.driveFolderUrl || item.fnFolder?.driveFolderLink || item.fnFolder?.driveFolderUrl);
+
+        const sessionFolderId = sessionType === "AN"
+            ? (item.driveAssets?.sessionFolder?.id || item.scheduleId?.anFolder?.id || item.scheduleId?.anFolder?.driveFolderId || item.anFolder?.id || item.anFolder?.driveFolderId)
+            : (item.driveAssets?.sessionFolder?.id || item.scheduleId?.fnFolder?.id || item.scheduleId?.fnFolder?.driveFolderId || item.fnFolder?.id || item.fnFolder?.driveFolderId);
+
+        let trainerColFolderId = null;
+        if (Array.isArray(item.trainerId?.colleges) && item.trainerId.colleges.length > 0) {
+            const colIdStr = String(item.collegeId?._id || item.collegeId || item.scheduleId?.collegeId?._id || item.scheduleId?.collegeId || '');
+            const match = item.trainerId.colleges.find(c => String(c?.collegeId?._id || c?.collegeId || c?._id || '') === colIdStr || c?.googleDriveFolderId || c?.driveFolderId);
+            trainerColFolderId = match?.googleDriveFolderId || match?.driveFolderId || item.trainerId.colleges[0]?.googleDriveFolderId || item.trainerId.colleges[0]?.driveFolderId || null;
+        }
+
+        const resolvedDriveFolderId =
+            sessionFolderId ||
+            item.driveFolderId ||
+            item.dayFolderId ||
+            item.scheduleId?.driveFolderId ||
+            item.scheduleId?.dayFolderId ||
+            item.collegeDriveFolderId ||
+            trainerColFolderId ||
+            item.trainerId?.googleDriveFolderId ||
+            item.trainerId?.driveFolderId ||
+            item.trainerId?.collegeDriveFolderId ||
+            item.collegeId?.googleDriveFolderId ||
+            item.collegeId?.driveFolderId ||
+            item.scheduleId?.collegeId?.googleDriveFolderId ||
+            item.scheduleId?.collegeId?.driveFolderId ||
+            null;
+
+        const resolvedDriveFolderUrl =
+            sessionFolderLink ||
+            item.driveFolderUrl ||
+            item.driveFolderLink ||
+            item.dayFolderLink ||
+            item.scheduleId?.driveFolderLink ||
+            item.scheduleId?.driveFolderUrl ||
+            item.scheduleId?.dayFolderLink ||
+            item.collegeId?.driveFolderLink ||
+            item.collegeId?.driveFolderUrl ||
+            item.scheduleId?.collegeId?.driveFolderLink ||
+            item.scheduleId?.collegeId?.driveFolderUrl ||
+            (resolvedDriveFolderId ? `https://drive.google.com/drive/folders/${resolvedDriveFolderId}` : null);
+
         return {
             ...item,
             attendancePdfUrl: attendancePdfUrl || null,
@@ -3657,7 +3705,9 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             checkInPhoto: checkInPhoto || null,
             signatureUrl: signatureUrl || null,
             checkInLocation: checkInLocation || null,
-            documents: matchingDocs
+            documents: matchingDocs,
+            driveFolderUrl: resolvedDriveFolderUrl || item.driveFolderUrl || null,
+            driveFolderId: resolvedDriveFolderId || item.driveFolderId || null,
         };
     });
 };
@@ -3802,6 +3852,15 @@ router.get('/', async (req, res) => {
                     'checkOutGeoDistanceMeters',
                     'checkOutVerifiedAt',
                     'driveSyncStatus',
+                    'driveFolderId',
+                    'driveFolderLink',
+                    'driveFolderUrl',
+                    'dayFolderId',
+                    'dayFolderLink',
+                    'collegeDriveFolderId',
+                    'fnFolder',
+                    'anFolder',
+                    'driveAssets',
                     'checkOutTime',
                     ...ATTENDANCE_LIST_CHECK_OUT_SELECT_FIELDS,
                     'checkOutGeoImageUrl',
@@ -3813,22 +3872,25 @@ router.get('/', async (req, res) => {
                 ].join(' '))
                 .populate({
                     path: 'trainerId',
-                    select: 'name trainerId userId email phone',
+                    select: 'name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId colleges',
                     populate: { path: 'userId', select: 'name email' }
                 })
                 .populate({
                     path: 'collegeId',
-                    select: 'name latitude longitude companyId code',
+                    select: 'name latitude longitude companyId code googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl',
                     populate: { path: 'companyId', select: 'name' }
                 })
                 .populate({
                     path: 'courseId',
-                    select: 'name title'
+                    select: 'name title code'
                 })
                 .populate({
                     path: 'scheduleId',
-                    select: 'subject dayNumber courseId scheduledDate date rawDate session startTime endTime',
-                    populate: { path: 'courseId', select: 'name title' }
+                    select: 'subject dayNumber courseId scheduledDate date rawDate session startTime endTime driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder driveAssets checkInFolder attendanceFolder studentActivitiesFolder checkOutFolder collegeId',
+                    populate: [
+                        { path: 'courseId', select: 'name title' },
+                        { path: 'collegeId', select: 'name googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl' }
+                    ]
                 })
                 .sort({ date: -1, createdAt: -1 })
                 .lean();
@@ -3916,6 +3978,15 @@ router.get('/', async (req, res) => {
                 'checkOutLongitude',
                 'checkOutGeoDistanceMeters',
                 'driveSyncStatus',
+                'driveFolderId',
+                'driveFolderLink',
+                'driveFolderUrl',
+                'dayFolderId',
+                'dayFolderLink',
+                'collegeDriveFolderId',
+                'fnFolder',
+                'anFolder',
+                'driveAssets',
                 ...ATTENDANCE_LIST_CHECK_OUT_SELECT_FIELDS,
                 'checkOutGeoImageUrl',
                 'checkOutGeoImageUrls',
@@ -3924,22 +3995,25 @@ router.get('/', async (req, res) => {
             ].join(' '))
             .populate({
                 path: 'trainerId',
-                select: 'name trainerId userId email phone',
+                select: 'name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId colleges',
                 populate: { path: 'userId', select: 'name email' }
             })
             .populate({
                 path: 'collegeId',
-                select: 'name latitude longitude companyId code',
+                select: 'name latitude longitude companyId code googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl',
                 populate: { path: 'companyId', select: 'name' }
             })
             .populate({
                 path: 'courseId',
-                select: 'name title'
+                select: 'name title code'
             })
             .populate({
                 path: 'scheduleId',
-                select: 'dayNumber subject courseId scheduledDate date rawDate session startTime endTime',
-                populate: { path: 'courseId', select: 'name title' }
+                select: 'dayNumber subject courseId scheduledDate date rawDate session startTime endTime driveFolderId dayFolderId driveFolderLink driveFolderUrl fnFolder anFolder driveAssets checkInFolder attendanceFolder studentActivitiesFolder checkOutFolder collegeId',
+                populate: [
+                    { path: 'courseId', select: 'name title' },
+                    { path: 'collegeId', select: 'name googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl' }
+                ]
             })
             .sort({ date: -1, createdAt: -1 })
             .lean();
@@ -3970,17 +4044,17 @@ router.get('/', async (req, res) => {
                 unrecordedSchedules = await Schedule.find(scheduleFilters)
                     .populate({
                         path: 'trainerId',
-                        select: 'name trainerId userId email phone',
+                        select: 'name trainerId userId email phone googleDriveFolderId driveFolderId collegeDriveFolderId colleges',
                         populate: { path: 'userId', select: 'name email' }
                     })
                     .populate({
                         path: 'collegeId',
-                        select: 'name latitude longitude companyId code',
+                        select: 'name latitude longitude companyId code googleDriveFolderId driveFolderId driveFolderLink driveFolderUrl',
                         populate: { path: 'companyId', select: 'name' }
                     })
                     .populate({
                         path: 'courseId',
-                        select: 'name title'
+                        select: 'name title code'
                     })
                     .lean();
             } catch (schErr) {
@@ -4056,6 +4130,12 @@ router.get('/', async (req, res) => {
                 attendancePhoto: null,
                 activityPhotos: [],
                 documents: [],
+                driveFolderId: s.driveFolderId || s.dayFolderId || null,
+                driveFolderUrl: s.driveFolderUrl || s.driveFolderLink || s.dayFolderLink || null,
+                driveFolderLink: s.driveFolderLink || s.driveFolderUrl || s.dayFolderLink || null,
+                fnFolder: s.fnFolder || null,
+                anFolder: s.anFolder || null,
+                driveAssets: s.driveAssets || null,
                 createdAt: s.createdAt || schedDate,
             };
 
