@@ -229,6 +229,10 @@ function TrainerListVirtualizedTable({
     columns: TABLE_COLUMNS,
     getRowId: (row, index) =>
       String(row?.id || row?._id || `trainer-row-${index}`),
+    autoResetPageIndex: false,
+    autoResetAll: false,
+    autoResetExpanded: false,
+    autoResetSorting: false,
     getCoreRowModel: getCoreRowModel(),
   });
 

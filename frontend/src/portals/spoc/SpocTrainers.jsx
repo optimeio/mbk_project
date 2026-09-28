@@ -314,6 +314,10 @@ const CompanyTrainers = () => {
       globalFilter: String(debouncedSearchTerm || "").trim().toLowerCase(),
     },
     onSortingChange: setSorting,
+    autoResetPageIndex: false,
+    autoResetAll: false,
+    autoResetExpanded: false,
+    autoResetSorting: false,
     globalFilterFn: (row, _columnId, filterValue) =>
       buildTrainerSearchIndex(row.original).includes(String(filterValue || "").toLowerCase()),
     getCoreRowModel: getCoreRowModel(),
