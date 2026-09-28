@@ -640,6 +640,44 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
       } catch (cErr) {
         // Ignore
       }
+
+      // 6. Direct Google Drive file search fallback by filename (handles files on Drive whose DB record was wiped or has raw local paths)
+      try {
+        const driveModule = await import('./services/googleDriveService.js');
+        const getClient = driveModule.getDriveClient || driveModule.getGoogleDriveClient || driveModule.default?.getDriveClient;
+        const driveClient = getClient ? await getClient() : null;
+        if (driveClient) {
+          const safeName = filename.replace(/'/g, "\\'");
+          const gdRes = await driveClient.files.list({
+            q: `name = '${safeName}' and trashed = false`,
+            fields: 'files(id, name, mimeType, webViewLink, webContentLink)',
+            pageSize: 5,
+            includeItemsFromAllDrives: true,
+            supportsAllDrives: true,
+          });
+          const foundFile = gdRes.data?.files?.[0];
+          if (foundFile?.id) {
+            return respondWithDriveAsset(res, foundFile.id, filename, cleanPath);
+          }
+
+          // Also try matching without timestamp prefix if filename format is like attendancePdf-1789802663348-287268001.pdf
+          const baseNameMatch = filename.match(/([a-zA-Z0-9_-]+)\.[a-zA-Z0-9]+$/);
+          if (baseNameMatch?.[1]) {
+            const partialRes = await driveClient.files.list({
+              q: `name contains '${baseNameMatch[1].replace(/'/g, "\\'")}' and trashed = false`,
+              fields: 'files(id, name, mimeType)',
+              pageSize: 5,
+              includeItemsFromAllDrives: true,
+              supportsAllDrives: true,
+            });
+            if (partialRes.data?.files?.[0]?.id) {
+              return respondWithDriveAsset(res, partialRes.data.files[0].id, filename, cleanPath);
+            }
+          }
+        }
+      } catch (gdDirectErr) {
+        console.warn('[SERVER-UPLOAD-FALLBACK] Direct Google Drive search error:', gdDirectErr.message);
+      }
     } catch (e) {
       console.warn('Upload fallback Drive resolution error:', e?.message);
     }

@@ -23,6 +23,7 @@ import {
     XCircleIcon
 } from '@heroicons/react/24/outline';
 import { FILE_BASE_URL } from '@/services/api';
+import { getSecureImageUrl } from '@/utils/imageUtils';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
 import { useSocket } from '@/context/SocketContext';
 import {
@@ -307,7 +308,7 @@ const AttendanceSubmissionRow = memo(function AttendanceSubmissionRow({
                             </span>
                             {submission.attendancePdfUrl && (
                                 <a
-                                    href={`${FILE_BASE_URL}/api/uploads/attendance/pdfs/${submission.attendancePdfUrl.split(/[/\\]/).pop()}?token=${accessToken}`}
+                                    href={getSecureImageUrl(submission.attendancePdfUrl)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="flex items-center font-bold text-indigo-600 hover:underline"
@@ -1077,7 +1078,7 @@ const AttendanceVerification = () => {
                                     <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                                         {selectedSubmission.attendancePdfUrl && (
                                             <a
-                                                href={`${FILE_BASE_URL}/api/uploads/attendance/pdfs/${selectedSubmission.attendancePdfUrl.split(/[/\\]/).pop()}?token=${accessToken}`}
+                                                href={getSecureImageUrl(selectedSubmission.attendancePdfUrl)}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="flex items-center rounded-2xl border border-indigo-100 bg-indigo-50/30 p-4 transition-colors hover:bg-indigo-50"

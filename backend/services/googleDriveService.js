@@ -1357,5 +1357,6 @@ module.exports = {
   deleteFromDrive,
   validateDriveConfiguration,
   getDriveClient,
+  getGoogleDriveClient: getDriveClient,
   streamDriveFile,
 };

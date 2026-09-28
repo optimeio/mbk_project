@@ -3560,7 +3560,23 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
         console.warn('Failed to load ScheduleDocuments or CheckIns for attendance enrichment:', e?.message);
     }
 
-    return attendance.map((item) => {
+    const enrichedList = await Promise.all(attendance.map(async (rawItem) => {
+        const item = { ...rawItem };
+
+        // 0. Normalize basic schedule fields if missing on attendance record
+        if (!item.dayNumber && item.scheduleId?.dayNumber) {
+            item.dayNumber = item.scheduleId.dayNumber;
+        }
+        if (!item.session && item.scheduleId?.session) {
+            item.session = item.scheduleId.session;
+        }
+        if (!item.collegeId && item.scheduleId?.collegeId) {
+            item.collegeId = item.scheduleId.collegeId;
+        }
+        if (!item.courseId && item.scheduleId?.courseId) {
+            item.courseId = item.scheduleId.courseId;
+        }
+
         const itemId = String(item._id || '');
         const itemScheduleId = String(item.scheduleId?._id || item.scheduleId || '');
         const itemTrainerId = String(item.trainerId?._id || item.trainerId || '');
@@ -3616,9 +3632,9 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
                 } else if (f.fieldName === 'checkOutGeoImage' || f.fieldName === 'checkOutPhoto') {
                     if (!checkOutGeoImageUrl || !checkOutGeoImageUrl.startsWith('http')) checkOutGeoImageUrl = cdn;
                 } else if (f.fieldName === 'attendancePdf') {
-                    if (!attendancePdfUrl || !attendancePdfUrl.startsWith('http')) attendancePdfUrl = preview;
+                    attendancePdfUrl = preview;
                 } else if (f.fieldName === 'attendanceExcel') {
-                    if (!attendanceExcelUrl || !attendanceExcelUrl.startsWith('http')) attendanceExcelUrl = preview;
+                    attendanceExcelUrl = preview;
                 } else if (f.fieldName === 'studentAttendanceImages' || f.fieldName === 'attendancePhoto') {
                     if (!attendancePhoto || !attendancePhoto.startsWith('http')) attendancePhoto = cdn;
                 }
@@ -3648,9 +3664,9 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
                 const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv') || docField === 'attendanceexcel';
 
                 if (isPdf) {
-                    attendancePdfUrl = docUrl;
+                    attendancePdfUrl = doc.driveFileId ? `https://drive.google.com/file/d/${doc.driveFileId}/preview` : docUrl;
                 } else if (isExcel) {
-                    attendanceExcelUrl = docUrl;
+                    attendanceExcelUrl = doc.driveFileId ? `https://drive.google.com/file/d/${doc.driveFileId}/preview` : docUrl;
                 } else if (!lowerName.includes('checkin') && !lowerName.includes('checkout') && !lowerName.includes('activity')) {
                     attendancePhoto = docUrl;
                 }
@@ -3665,7 +3681,7 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             }
         });
 
-        // Clean & deduplicate activityPhotos (remove redundant local /uploads/ paths when Drive URLs exist)
+        // Clean & deduplicate activityPhotos
         let activityPhotos = Array.isArray(item.activityPhotos) ? [...item.activityPhotos] : [];
         const driveActivityUrls = activityPhotos.filter(p => typeof p === 'string' && (p.startsWith('http') || p.includes('googleusercontent') || p.includes('drive.google')));
         if (driveActivityUrls.length > 0) {
@@ -3687,11 +3703,14 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
 
         // 1. Locate trainer's college day folder mapping
         let trainerDayFolders = null;
+        let matchedCollege = null;
         if (Array.isArray(item.trainerId?.colleges) && item.trainerId.colleges.length > 0) {
             const colIdStr = String(item.collegeId?._id || item.collegeId || item.scheduleId?.collegeId?._id || item.scheduleId?.collegeId || '');
-            let matchedCollege = item.trainerId.colleges.find(c => {
+            const colNameStr = String(item.collegeId?.name || item.scheduleId?.collegeId?.name || '').trim().toLowerCase();
+            matchedCollege = item.trainerId.colleges.find(c => {
                 const cId = String(c?.collegeId?._id || c?.collegeId || c?._id || '');
-                return cId && colIdStr && cId === colIdStr;
+                const cName = String(c?.collegeName || '').trim().toLowerCase();
+                return (cId && colIdStr && cId === colIdStr) || (cName && colNameStr && cName === colNameStr);
             });
             if (!matchedCollege) {
                 matchedCollege = item.trainerId.colleges.find(c => Array.isArray(c?.dayFolders) && c.dayFolders.length > 0) || item.trainerId.colleges[0];
@@ -3729,7 +3748,7 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
         };
 
         // 4. Session Meta object
-        const sessionMeta =
+        let sessionMeta =
             item.driveAssets?.sessionFolder ||
             item.scheduleId?.[sessionKey] ||
             item?.[sessionKey] ||
@@ -3738,13 +3757,43 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             null;
 
         // 5. Day Meta object
-        const dayMeta =
+        let dayMeta =
             item.driveAssets?.dayFolder ||
             scheduleDayMeta ||
             trainerDayFolders ||
             null;
 
-        // 6. Documents matching by type
+        // 6. On-demand ensure trainer college hierarchy if session folder is missing
+        if (!sessionMeta?.id && !trainerDayFolders?.[sessionKey]?.id && item.trainerId && (item.collegeId?.name || item.scheduleId?.collegeId?.name || matchedCollege?.collegeName)) {
+            try {
+                const { ensureTrainerCollegeHierarchy } = require('../modules/drive/driveTrainerDocuments.service.js');
+                const collegeName = item.collegeId?.name || item.scheduleId?.collegeId?.name || matchedCollege?.collegeName;
+                const hierarchy = await ensureTrainerCollegeHierarchy({
+                    trainer: item.trainerId,
+                    collegeName,
+                    totalDays: 12
+                });
+                if (hierarchy?.dayFoldersByDayNumber) {
+                    const dayData = hierarchy.dayFoldersByDayNumber[dayNum];
+                    if (dayData) {
+                        trainerDayFolders = dayData;
+                        sessionMeta = dayData[sessionKey] || dayData.fnFolder;
+                        dayMeta = dayData;
+                        const { persistTrainerCollegeDayFolders } = require('../modules/drive/trainerScheduleDriveFolders.service.js');
+                        persistTrainerCollegeDayFolders({
+                            trainer: item.trainerId,
+                            collegeId: item.collegeId?._id || item.collegeId,
+                            collegeName,
+                            hierarchy
+                        }).catch(() => {});
+                    }
+                }
+            } catch (hErr) {
+                console.warn('[ATTENDANCE-ENRICH] On-demand hierarchy check failed:', hErr.message);
+            }
+        }
+
+        // 7. Documents matching by type
         const checkInDoc = matchingDocs.find(d => 
             d.driveFolderId && (
                 d.fileType === 'geotag' || 
@@ -3778,48 +3827,61 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             )
         );
 
-        // 7. Session folder URL (Day X > FN or AN)
+        // 8. Session folder URL (Day X > FN or AN)
         const resolvedSessionFolderUrl =
             extractFolderLink(sessionMeta) ||
             extractFolderLink(item.driveAssets?.sessionFolder) ||
+            extractFolderLink(trainerDayFolders?.[sessionKey]) ||
+            extractFolderLink(scheduleDayMeta?.[sessionKey]) ||
             extractFolderLink(dayMeta) ||
-            extractFolderLink(item.dayFolderLink || item.dayFolderId) ||
-            extractFolderLink(item.scheduleId?.dayFolderLink || item.scheduleId?.dayFolderId) ||
-            (item.driveFolderUrl && typeof item.driveFolderUrl === 'string' && item.driveFolderUrl.startsWith('http') ? item.driveFolderUrl : null) ||
-            (item.scheduleId?.driveFolderUrl && typeof item.scheduleId.driveFolderUrl === 'string' && item.scheduleId.driveFolderUrl.startsWith('http') ? item.scheduleId.driveFolderUrl : null) ||
+            extractFolderLink(trainerDayFolders) ||
+            extractFolderLink(scheduleDayMeta) ||
+            extractFolderLink(item.driveAssets?.dayFolder) ||
             "https://drive.google.com/drive/my-drive";
 
-        // 8. Specific Subfolders
+        // 9. Specific Subfolders
         const checkInFolderUrl =
             extractFolderLink(sessionMeta?.checkInFolder) ||
+            extractFolderLink(trainerDayFolders?.[sessionKey]?.checkInFolder) ||
+            extractFolderLink(trainerDayFolders?.checkInFolder) ||
             extractFolderLink(dayMeta?.checkInFolder) ||
+            extractFolderLink(scheduleDayMeta?.[sessionKey]?.checkInFolder) ||
             (checkInDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkInDoc.driveFolderId}` : null) ||
             extractFolderLink(item.driveAssets?.folders?.checkIn || item.driveAssets?.folders?.geoTag) ||
-            extractFolderLink(dayMeta?.checkIn || dayMeta?.geo_tag) ||
+            extractFolderLink(dayMeta?.checkIn || dayMeta?.geo_tag || trainerDayFolders?.checkIn || trainerDayFolders?.geo_tag) ||
             resolvedSessionFolderUrl;
 
         const attendanceFolderUrl =
             extractFolderLink(sessionMeta?.attendanceFolder) ||
+            extractFolderLink(trainerDayFolders?.[sessionKey]?.attendanceFolder) ||
+            extractFolderLink(trainerDayFolders?.attendanceFolder) ||
             extractFolderLink(dayMeta?.attendanceFolder) ||
+            extractFolderLink(scheduleDayMeta?.[sessionKey]?.attendanceFolder) ||
             (attDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${attDoc.driveFolderId}` : null) ||
             extractFolderLink(item.driveAssets?.folders?.attendance) ||
-            extractFolderLink(dayMeta?.attendance) ||
+            extractFolderLink(dayMeta?.attendance || trainerDayFolders?.attendance) ||
             resolvedSessionFolderUrl;
 
         const studentActivitiesFolderUrl =
             extractFolderLink(sessionMeta?.studentActivitiesFolder) ||
+            extractFolderLink(trainerDayFolders?.[sessionKey]?.studentActivitiesFolder) ||
+            extractFolderLink(trainerDayFolders?.studentActivitiesFolder) ||
             extractFolderLink(dayMeta?.studentActivitiesFolder) ||
+            extractFolderLink(scheduleDayMeta?.[sessionKey]?.studentActivitiesFolder) ||
             (actDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${actDoc.driveFolderId}` : null) ||
             extractFolderLink(item.driveAssets?.folders?.studentActivity || item.driveAssets?.folders?.studentActivities) ||
-            extractFolderLink(dayMeta?.studentActivities) ||
+            extractFolderLink(dayMeta?.studentActivities || trainerDayFolders?.studentActivities) ||
             resolvedSessionFolderUrl;
 
         const checkOutFolderUrl =
             extractFolderLink(sessionMeta?.checkOutFolder) ||
+            extractFolderLink(trainerDayFolders?.[sessionKey]?.checkOutFolder) ||
+            extractFolderLink(trainerDayFolders?.checkOutFolder) ||
             extractFolderLink(dayMeta?.checkOutFolder) ||
+            extractFolderLink(scheduleDayMeta?.[sessionKey]?.checkOutFolder) ||
             (checkOutDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkOutDoc.driveFolderId}` : null) ||
             extractFolderLink(item.driveAssets?.folders?.checkOut) ||
-            extractFolderLink(dayMeta?.checkOut) ||
+            extractFolderLink(dayMeta?.checkOut || trainerDayFolders?.checkOut) ||
             resolvedSessionFolderUrl;
 
         return {
@@ -3843,7 +3905,9 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             studentActivitiesFolderUrl,
             checkOutFolderUrl,
         };
-    });
+    }));
+
+    return enrichedList;
 };
 
 // Get all attendance records (for SPOC Admin verification page)
@@ -5908,10 +5972,9 @@ router.get('/late-requests', authenticate, async (req, res) => {
             Attendance.countDocuments(filter)
         ]);
 
-        const plainRawRequests = rawRequests.map(doc => doc.toObject ? doc.toObject() : { ...doc });
-        const enrichedList = await enrichAttendanceRecordsWithDocuments(plainRawRequests);
+        const plainRawRequests = rawRequests.map(doc => {
+            const item = doc.toObject ? doc.toObject() : { ...doc };
 
-        const requests = enrichedList.map(item => {
             // 1. Resolve Course (fallback to scheduleId.courseId if attendance.courseId is missing)
             if (!item.courseId || (!item.courseId.title && !item.courseId.name)) {
                 if (item.scheduleId?.courseId) {
@@ -5954,6 +6017,8 @@ router.get('/late-requests', authenticate, async (req, res) => {
 
             return item;
         });
+
+        const requests = await enrichAttendanceRecordsWithDocuments(plainRawRequests);
 
         return res.json({
             success: true,
