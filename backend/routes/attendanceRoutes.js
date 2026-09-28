@@ -3763,34 +3763,30 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             trainerDayFolders ||
             null;
 
-        // 6. On-demand ensure trainer college hierarchy if session folder is missing
+        // 6. Background async ensure trainer college hierarchy if session folder is missing (non-blocking)
         if (!sessionMeta?.id && !trainerDayFolders?.[sessionKey]?.id && item.trainerId && (item.collegeId?.name || item.scheduleId?.collegeId?.name || matchedCollege?.collegeName)) {
-            try {
-                const { ensureTrainerCollegeHierarchy } = require('../modules/drive/driveTrainerDocuments.service.js');
-                const collegeName = item.collegeId?.name || item.scheduleId?.collegeId?.name || matchedCollege?.collegeName;
-                const hierarchy = await ensureTrainerCollegeHierarchy({
-                    trainer: item.trainerId,
-                    collegeName,
-                    totalDays: 12
-                });
-                if (hierarchy?.dayFoldersByDayNumber) {
-                    const dayData = hierarchy.dayFoldersByDayNumber[dayNum];
-                    if (dayData) {
-                        trainerDayFolders = dayData;
-                        sessionMeta = dayData[sessionKey] || dayData.fnFolder;
-                        dayMeta = dayData;
+            const collegeName = item.collegeId?.name || item.scheduleId?.collegeId?.name || matchedCollege?.collegeName;
+            setImmediate(async () => {
+                try {
+                    const { ensureTrainerCollegeHierarchy } = require('../modules/drive/driveTrainerDocuments.service.js');
+                    const hierarchy = await ensureTrainerCollegeHierarchy({
+                        trainer: item.trainerId,
+                        collegeName,
+                        totalDays: 12
+                    });
+                    if (hierarchy?.dayFoldersByDayNumber) {
                         const { persistTrainerCollegeDayFolders } = require('../modules/drive/trainerScheduleDriveFolders.service.js');
-                        persistTrainerCollegeDayFolders({
+                        await persistTrainerCollegeDayFolders({
                             trainer: item.trainerId,
                             collegeId: item.collegeId?._id || item.collegeId,
                             collegeName,
                             hierarchy
-                        }).catch(() => {});
+                        });
                     }
+                } catch (hErr) {
+                    console.warn('[ATTENDANCE-ENRICH-BG] Background hierarchy check skipped:', hErr.message);
                 }
-            } catch (hErr) {
-                console.warn('[ATTENDANCE-ENRICH] On-demand hierarchy check failed:', hErr.message);
-            }
+            });
         }
 
         // 7. Documents matching by type
