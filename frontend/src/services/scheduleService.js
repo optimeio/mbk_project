@@ -161,4 +161,5 @@ const scheduleService = {
     }
 };
 
+export { scheduleService };
 export default scheduleService;

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   CalendarDays,
   Clock,
@@ -22,7 +23,13 @@ import {
 import dayjs from "dayjs";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/services/api";
+import { scheduleService } from "@/services/scheduleService";
 import { toCalendarYMD, formatCalendarDate } from "@/utils/dateUtils";
+
+const LateAttendanceRequestModal = dynamic(
+  () => import("@/portals/trainer/TrainerSchedule/LateAttendanceRequestModal"),
+  { ssr: false }
+);
 
 export default function TrainerUpcomingSchedule() {
   const { currentUser } = useAuth();
@@ -31,6 +38,9 @@ export default function TrainerUpcomingSchedule() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
+  const [selectedLateSchedule, setSelectedLateSchedule] = useState(null);
+  const [showLateRequestModal, setShowLateRequestModal] = useState(false);
+  const handledAutoOpenIdRef = useRef(null);
 
   const trainerId =
     currentUser?.trainerProfileId ||
@@ -70,6 +80,48 @@ export default function TrainerUpcomingSchedule() {
   useEffect(() => {
     fetchSchedules();
   }, [fetchSchedules]);
+
+  // Auto-open Late Attendance Request modal if query param is provided
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const openRequestId = params.get("openRequest") || params.get("scheduleId");
+    if (!openRequestId || handledAutoOpenIdRef.current === openRequestId) return;
+
+    const target = schedules.find((s) => {
+      const idStr = String(s?.id || s?._id || s?.scheduleId || "");
+      return idStr === String(openRequestId);
+    });
+
+    if (target) {
+      handledAutoOpenIdRef.current = openRequestId;
+      setSelectedLateSchedule(target);
+      setShowLateRequestModal(true);
+      return;
+    }
+
+    if (!loading && schedules.length > 0) {
+      let isCancelled = false;
+      scheduleService
+        .getSchedule(openRequestId)
+        .then((res) => {
+          if (isCancelled) return;
+          const rawData = res?.schedule || res?.data || res;
+          if (rawData && (rawData._id || rawData.id)) {
+            handledAutoOpenIdRef.current = openRequestId;
+            setSelectedLateSchedule(rawData);
+            setShowLateRequestModal(true);
+          }
+        })
+        .catch((err) => {
+          console.warn("Could not fetch schedule for late request modal:", err);
+        });
+
+      return () => {
+        isCancelled = true;
+      };
+    }
+  }, [schedules, loading]);
 
   // Filter for upcoming (today & future) schedules
   const upcomingList = useMemo(() => {
@@ -341,14 +393,18 @@ export default function TrainerUpcomingSchedule() {
                         Awaiting Admin Approval
                       </span>
                     ) : isToday && isClosedToday ? (
-                      <Link
-                        href={`/trainer/schedule?openRequest=${encodeURIComponent(scheduleId)}`}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition active:scale-95"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLateSchedule(sched);
+                          setShowLateRequestModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 px-4 py-2 text-xs font-bold text-white shadow-sm transition active:scale-95 cursor-pointer"
                       >
                         <Clock className="h-3.5 w-3.5" />
                         <span>Request Attendance</span>
                         <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
+                      </button>
                     ) : isToday ? (
                       <Link
                         href={`/trainer/activities?scheduleId=${encodeURIComponent(scheduleId)}`}
@@ -373,6 +429,36 @@ export default function TrainerUpcomingSchedule() {
           </div>
         )}
       </section>
+
+      {/* ── Modal: Late Attendance & Missing Proofs Request Modal ──── */}
+      {showLateRequestModal && selectedLateSchedule && (
+        <LateAttendanceRequestModal
+          selectedSchedule={selectedLateSchedule}
+          onClose={() => {
+            setShowLateRequestModal(false);
+            setSelectedLateSchedule(null);
+            if (typeof window !== "undefined" && (window.location.search.includes("openRequest") || window.location.search.includes("scheduleId"))) {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("openRequest");
+              url.searchParams.delete("scheduleId");
+              const cleanUrl = url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : "");
+              window.history.replaceState({}, "", cleanUrl);
+            }
+          }}
+          onSuccess={() => {
+            setShowLateRequestModal(false);
+            setSelectedLateSchedule(null);
+            if (typeof window !== "undefined" && (window.location.search.includes("openRequest") || window.location.search.includes("scheduleId"))) {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("openRequest");
+              url.searchParams.delete("scheduleId");
+              const cleanUrl = url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : "");
+              window.history.replaceState({}, "", cleanUrl);
+            }
+            fetchSchedules();
+          }}
+        />
+      )}
     </div>
   );
 }
