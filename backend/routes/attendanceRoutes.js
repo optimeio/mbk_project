@@ -3828,6 +3828,7 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
         );
 
         // 8. Session folder URL (Day X > FN or AN)
+        const defaultRootLink = "https://drive.google.com/drive/folders/1Sy_OM3laf4VJBmsfamvIAHQMV7hYjPDl";
         const resolvedSessionFolderUrl =
             extractFolderLink(sessionMeta) ||
             extractFolderLink(item.driveAssets?.sessionFolder) ||
@@ -3837,7 +3838,9 @@ const enrichAttendanceRecordsWithDocuments = async (attendance = []) => {
             extractFolderLink(trainerDayFolders) ||
             extractFolderLink(scheduleDayMeta) ||
             extractFolderLink(item.driveAssets?.dayFolder) ||
-            "https://drive.google.com/drive/my-drive";
+            extractFolderLink(matchedCollege?.googleDriveFolderId || matchedCollege?.driveFolderId || matchedCollege?.dayFolders?.[0]?.fnFolder) ||
+            extractFolderLink(item.trainerId?.googleDriveFolderId || item.trainerId?.driveFolderId) ||
+            defaultRootLink;
 
         // 9. Specific Subfolders
         const checkInFolderUrl =

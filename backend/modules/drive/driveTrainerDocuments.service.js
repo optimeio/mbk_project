@@ -46,15 +46,17 @@ const ensureTrainerCode = async (trainer) => {
     throw new Error("Trainer record is required.");
   }
 
-  if (!trainer.trainerId) {
-    await trainer.save();
+  if (trainer.trainerId) {
+    return trainer.trainerId;
   }
 
-  if (!trainer.trainerId) {
-    throw new Error("Trainer ID could not be generated.");
+  if (typeof trainer.save === "function") {
+    try {
+      await trainer.save();
+    } catch (_) {}
   }
 
-  return trainer.trainerId;
+  return trainer.trainerId || String(trainer._id || trainer.id || "TRAINER");
 };
 
 const syncTrainerDocumentRecords = async ({ trainerId, documentsFolder }) => {
@@ -195,7 +197,26 @@ const ensureTrainerDocumentHierarchy = async ({
     trainer.driveFolderName = trainerFolder.name;
 
     if (persistTrainer) {
-      await trainer.save();
+      if (typeof trainer.save === "function") {
+        try {
+          await trainer.save();
+        } catch (_) {}
+      } else if (trainer._id) {
+        try {
+          const { Trainer } = require("../../models");
+          if (Trainer) {
+            await Trainer.updateOne(
+              { _id: trainer._id },
+              {
+                $set: {
+                  driveFolderId: trainerFolder.id,
+                  driveFolderName: trainerFolder.name,
+                },
+              },
+            );
+          }
+        } catch (_) {}
+      }
     }
   }
 

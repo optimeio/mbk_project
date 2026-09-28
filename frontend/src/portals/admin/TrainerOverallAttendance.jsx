@@ -502,33 +502,43 @@ const getHierarchyMeta = (record) => {
   return { sessionMeta, dayMeta, trainerDayFolders, sessionKey, dayNum };
 };
 
+const ROOT_TRAINER_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1Sy_OM3laf4VJBmsfamvIAHQMV7hYjPDl";
+
 export const resolveSessionFolderUrl = (record) => {
-  if (!record) return "https://drive.google.com/drive/my-drive";
-  if (record.sessionFolderUrl && typeof record.sessionFolderUrl === "string" && record.sessionFolderUrl.startsWith("http")) return record.sessionFolderUrl;
+  if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
+  if (record.sessionFolderUrl && typeof record.sessionFolderUrl === "string" && record.sessionFolderUrl.startsWith("http") && !record.sessionFolderUrl.includes("my-drive")) return record.sessionFolderUrl;
+  if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http") && !record.driveFolderUrl.includes("my-drive")) return record.driveFolderUrl;
 
-  const { sessionMeta, dayMeta } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
 
-  const sessionLink = extractLinkOrId(sessionMeta);
-  if (sessionLink) return sessionLink;
+  const sessionLink = extractLinkOrId(sessionMeta) || extractLinkOrId(trainerDayFolders?.[sessionKey]);
+  if (sessionLink && !sessionLink.includes("my-drive")) return sessionLink;
 
-  const dayLink = extractLinkOrId(dayMeta) || extractLinkOrId(record.dayFolderLink || record.dayFolderId) || extractLinkOrId(record.scheduleId?.dayFolderLink || record.scheduleId?.dayFolderId);
-  if (dayLink) return dayLink;
+  const dayLink = extractLinkOrId(dayMeta) || extractLinkOrId(trainerDayFolders) || extractLinkOrId(record.dayFolderLink || record.dayFolderId) || extractLinkOrId(record.scheduleId?.dayFolderLink || record.scheduleId?.dayFolderId);
+  if (dayLink && !dayLink.includes("my-drive")) return dayLink;
 
-  return "https://drive.google.com/drive/my-drive";
+  const trainerLink = extractLinkOrId(record.trainerId?.googleDriveFolderId || record.trainerId?.driveFolderId);
+  if (trainerLink && !trainerLink.includes("my-drive")) return trainerLink;
+
+  const collegeLink = extractLinkOrId(record.collegeId?.googleDriveFolderId || record.collegeId?.driveFolderId || record.collegeId?.driveFolderLink || record.scheduleId?.collegeId?.googleDriveFolderId || record.scheduleId?.collegeId?.driveFolderId);
+  if (collegeLink && !collegeLink.includes("my-drive")) return collegeLink;
+
+  return ROOT_TRAINER_DRIVE_FOLDER_URL;
 };
 
 export const resolveDriveFolderUrl = resolveSessionFolderUrl;
 
 export const resolveCheckInFolderUrl = (record) => {
-  if (!record) return "https://drive.google.com/drive/my-drive";
-  if (record.checkInFolderUrl && typeof record.checkInFolderUrl === "string" && record.checkInFolderUrl.startsWith("http")) return record.checkInFolderUrl;
+  if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
+  if (record.checkInFolderUrl && typeof record.checkInFolderUrl === "string" && record.checkInFolderUrl.startsWith("http") && !record.checkInFolderUrl.includes("my-drive")) return record.checkInFolderUrl;
 
-  const { sessionMeta, dayMeta } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
   const docs = Array.isArray(record.documents) ? record.documents : (Array.isArray(record.scheduleDocuments) ? record.scheduleDocuments : []);
   const checkInDoc = docs.find((d) => d?.driveFolderId && (d.fileType === "geotag" || String(d.fileField || "").toLowerCase().includes("checkin") || /check.?in/i.test(d.fileName || "")));
 
   return (
     extractLinkOrId(sessionMeta?.checkInFolder) ||
+    extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkInFolder) ||
     extractLinkOrId(dayMeta?.checkInFolder) ||
     (checkInDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkInDoc.driveFolderId}` : null) ||
     extractLinkOrId(record.driveAssets?.folders?.checkIn || record.driveAssets?.folders?.geoTag) ||
@@ -538,15 +548,16 @@ export const resolveCheckInFolderUrl = (record) => {
 };
 
 export const resolveAttendanceFolderUrl = (record) => {
-  if (!record) return "https://drive.google.com/drive/my-drive";
-  if (record.attendanceFolderUrl && typeof record.attendanceFolderUrl === "string" && record.attendanceFolderUrl.startsWith("http")) return record.attendanceFolderUrl;
+  if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
+  if (record.attendanceFolderUrl && typeof record.attendanceFolderUrl === "string" && record.attendanceFolderUrl.startsWith("http") && !record.attendanceFolderUrl.includes("my-drive")) return record.attendanceFolderUrl;
 
-  const { sessionMeta, dayMeta } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
   const docs = Array.isArray(record.documents) ? record.documents : (Array.isArray(record.scheduleDocuments) ? record.scheduleDocuments : []);
   const attDoc = docs.find((d) => d?.driveFolderId && (d.fileType === "attendance" || String(d.fileField || "").toLowerCase().includes("attendance") || /attendance|sheet|roster/i.test(d.fileName || "")));
 
   return (
     extractLinkOrId(sessionMeta?.attendanceFolder) ||
+    extractLinkOrId(trainerDayFolders?.[sessionKey]?.attendanceFolder) ||
     extractLinkOrId(dayMeta?.attendanceFolder) ||
     (attDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${attDoc.driveFolderId}` : null) ||
     extractLinkOrId(record.driveAssets?.folders?.attendance) ||
@@ -556,15 +567,16 @@ export const resolveAttendanceFolderUrl = (record) => {
 };
 
 export const resolveActivitiesFolderUrl = (record) => {
-  if (!record) return "https://drive.google.com/drive/my-drive";
-  if (record.studentActivitiesFolderUrl && typeof record.studentActivitiesFolderUrl === "string" && record.studentActivitiesFolderUrl.startsWith("http")) return record.studentActivitiesFolderUrl;
+  if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
+  if (record.studentActivitiesFolderUrl && typeof record.studentActivitiesFolderUrl === "string" && record.studentActivitiesFolderUrl.startsWith("http") && !record.studentActivitiesFolderUrl.includes("my-drive")) return record.studentActivitiesFolderUrl;
 
-  const { sessionMeta, dayMeta } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
   const docs = Array.isArray(record.documents) ? record.documents : (Array.isArray(record.scheduleDocuments) ? record.scheduleDocuments : []);
   const actDoc = docs.find((d) => d?.driveFolderId && (d.fileType === "activity" || String(d.fileField || "").toLowerCase().includes("activity") || /activity|classroom/i.test(d.fileName || "")));
 
   return (
     extractLinkOrId(sessionMeta?.studentActivitiesFolder) ||
+    extractLinkOrId(trainerDayFolders?.[sessionKey]?.studentActivitiesFolder) ||
     extractLinkOrId(dayMeta?.studentActivitiesFolder) ||
     (actDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${actDoc.driveFolderId}` : null) ||
     extractLinkOrId(record.driveAssets?.folders?.studentActivity || record.driveAssets?.folders?.studentActivities) ||
@@ -574,15 +586,16 @@ export const resolveActivitiesFolderUrl = (record) => {
 };
 
 export const resolveCheckOutFolderUrl = (record) => {
-  if (!record) return "https://drive.google.com/drive/my-drive";
-  if (record.checkOutFolderUrl && typeof record.checkOutFolderUrl === "string" && record.checkOutFolderUrl.startsWith("http")) return record.checkOutFolderUrl;
+  if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
+  if (record.checkOutFolderUrl && typeof record.checkOutFolderUrl === "string" && record.checkOutFolderUrl.startsWith("http") && !record.checkOutFolderUrl.includes("my-drive")) return record.checkOutFolderUrl;
 
-  const { sessionMeta, dayMeta } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
   const docs = Array.isArray(record.documents) ? record.documents : (Array.isArray(record.scheduleDocuments) ? record.scheduleDocuments : []);
   const checkOutDoc = docs.find((d) => d?.driveFolderId && (d.fileType === "checkout" || String(d.fileField || "").toLowerCase().includes("checkout") || /check.?out/i.test(d.fileName || "")));
 
   return (
     extractLinkOrId(sessionMeta?.checkOutFolder) ||
+    extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkOutFolder) ||
     extractLinkOrId(dayMeta?.checkOutFolder) ||
     (checkOutDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkOutDoc.driveFolderId}` : null) ||
     extractLinkOrId(record.driveAssets?.folders?.checkOut) ||
