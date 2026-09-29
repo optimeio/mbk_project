@@ -576,11 +576,21 @@ app.use(['/api/uploads', '/uploads'], async (req, res) => {
               driveId = extractDriveFileId(record?.attendancePdfUrl) || extractDriveFileId(record?.attendanceExcelUrl) || extractDriveFileId(record?.studentsPhotoUrl) || extractDriveFileId(record?.attendancePhotoUrl) || extractDriveFileId(record?.attendanceDocumentUrl);
             } else if (isActivityFile) {
               if (Array.isArray(record?.activityPhotos)) {
-                for (const ap of record.activityPhotos) {
-                  const extracted = extractDriveFileId(typeof ap === 'string' ? ap : ap?.url || ap?.driveFileId);
-                  if (isValidDriveId(extracted)) {
-                    driveId = extracted;
-                    break;
+                // First try matching specific photo by filename/regex
+                const matchedAp = record.activityPhotos.find(ap => {
+                  const apStr = typeof ap === 'string' ? ap : ap?.url || ap?.fileName || '';
+                  return regex.test(apStr) || (filename && apStr.includes(filename));
+                });
+                if (matchedAp) {
+                  driveId = extractDriveFileId(typeof matchedAp === 'string' ? matchedAp : matchedAp?.url || matchedAp?.driveFileId);
+                }
+                if (!driveId) {
+                  for (const ap of record.activityPhotos) {
+                    const extracted = extractDriveFileId(typeof ap === 'string' ? ap : ap?.url || ap?.driveFileId);
+                    if (isValidDriveId(extracted)) {
+                      driveId = extracted;
+                      break;
+                    }
                   }
                 }
               }

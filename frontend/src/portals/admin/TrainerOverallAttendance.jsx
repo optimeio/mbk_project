@@ -60,7 +60,7 @@ import {
 } from "@tanstack/react-table";
 import { List } from "react-window";
 import Link from "next/link";
-import { getSecureImageUrl, isValidGoogleDriveId } from "@/utils/imageUtils";
+import { getSecureImageUrl, isValidGoogleDriveId, extractGoogleDriveFileId } from "@/utils/imageUtils";
 import useDebouncedValue from "@/hooks/useDebouncedValue";
 import { QUERY_GC_TIMES, QUERY_STALE_TIMES } from "@/shared/config/queryPolicies";
 import { mapInBatches, runOnIdle } from "@/shared/lib/mainThread";
@@ -355,7 +355,6 @@ const getStudentActivityEntries = (record = {}) => {
   const checkOutRef = record?.checkOutGeoImageUrl;
 
   let rawPhotos = Array.isArray(record?.activityPhotos) ? record.activityPhotos.filter(Boolean) : [];
-  // If drive URLs are available, filter out un-synced local paths
   const drivePhotos = rawPhotos.filter(p => typeof p === 'string' && (p.startsWith('http') || p.includes('googleusercontent') || p.includes('drive.google')));
   const effectivePhotos = drivePhotos.length > 0 ? drivePhotos : rawPhotos;
 
@@ -383,24 +382,33 @@ const getStudentActivityEntries = (record = {}) => {
     });
   }
 
-  const docs = Array.isArray(record?.documents) ? record.documents : [];
-  docs.forEach((doc, idx) => {
+  const docs = Array.isArray(record?.documents) ? record.documents : (Array.isArray(record?.scheduleDocuments) ? record.scheduleDocuments : []);
+  docs.forEach((doc) => {
     const docField = String(doc?.fileField || '').toLowerCase();
-    const docName = String(doc?.fileName || '').toLowerCase();
+    const docName = String(doc?.fileName || doc?.name || '').toLowerCase();
     if (docField === 'activityphotos' || docField === 'activityphoto' || docField === 'activityvideos' || doc?.fileType === 'activity' || /activity|classroom/i.test(docName)) {
       const docUrl = doc?.fileUrl || (isValidGoogleDriveId(doc?.driveFileId) ? `https://lh3.googleusercontent.com/d/${doc.driveFileId}=w1200` : null);
       if (docUrl && docUrl !== checkInRef && docUrl !== checkOutRef) {
-        activities.push({
-          type: docName.endsWith('.mp4') || docField === 'activityvideos' ? 'video' : 'image',
-          title: doc.fileName || `Activity Photo ${activities.length + 1}`,
-          url: getSecureImageUrl(docUrl),
-          originalUrl: docUrl,
-        });
+        const isDriveUrl = typeof docUrl === 'string' && (docUrl.startsWith('http') || isValidGoogleDriveId(doc?.driveFileId));
+        // Avoid adding duplicate local paths when Drive URLs already exist
+        if (isDriveUrl || drivePhotos.length === 0) {
+          activities.push({
+            type: docName.endsWith('.mp4') || docField === 'activityvideos' ? 'video' : 'image',
+            title: doc.fileName || `Activity Photo ${activities.length + 1}`,
+            url: getSecureImageUrl(docUrl),
+            originalUrl: docUrl,
+            driveFileId: doc.driveFileId,
+          });
+        }
       }
     }
   });
 
-  return deduplicateByUrl(activities);
+  const deduplicated = deduplicateByUrl(activities);
+  return deduplicated.map((act, index) => ({
+    ...act,
+    title: act.type === 'video' ? `Activity Video ${index + 1}` : `Activity Photo ${index + 1}`
+  }));
 };
 
 const normalizeGeoStatus = (recordOrStatus) => {
@@ -461,17 +469,20 @@ const extractLinkOrId = (meta) => {
 };
 
 const getHierarchyMeta = (record) => {
-  if (!record) return { sessionMeta: null, dayMeta: null };
+  if (!record) return { sessionMeta: null, dayMeta: null, trainerDayFolders: null, sessionKey: "fnFolder", dayNum: 1 };
   const dayNum = Number(record.dayNumber || record.scheduleId?.dayNumber || 1);
   const sessionType = String(record.session || record.scheduleId?.session || "FN").trim().toUpperCase();
   const sessionKey = sessionType === "AN" ? "anFolder" : "fnFolder";
 
   let trainerDayFolders = null;
+  let matchedCollege = null;
   if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
     const colIdStr = String(record.collegeId?._id || record.collegeId || record.scheduleId?.collegeId?._id || record.scheduleId?.collegeId || "");
-    let matchedCollege = record.trainerId.colleges.find((c) => {
+    const colNameStr = String(record.collegeId?.name || record.scheduleId?.collegeId?.name || "").trim().toLowerCase();
+    matchedCollege = record.trainerId.colleges.find((c) => {
       const cId = String(c?.collegeId?._id || c?.collegeId || c?._id || "");
-      return cId && colIdStr && cId === colIdStr;
+      const cName = String(c?.collegeName || "").trim().toLowerCase();
+      return (cId && colIdStr && cId === colIdStr) || (cName && colNameStr && cName === colNameStr);
     });
     if (!matchedCollege) {
       matchedCollege = record.trainerId.colleges.find((c) => Array.isArray(c?.dayFolders) && c.dayFolders.length > 0) || record.trainerId.colleges[0];
@@ -485,21 +496,19 @@ const getHierarchyMeta = (record) => {
 
   const sessionMeta =
     record.driveAssets?.sessionFolder ||
-    record.scheduleId?.driveAssets?.sessionFolder ||
+    trainerDayFolders?.[sessionKey] ||
+    scheduleDayMeta?.[sessionKey] ||
     record.scheduleId?.[sessionKey] ||
     record[sessionKey] ||
-    scheduleDayMeta?.[sessionKey] ||
-    trainerDayFolders?.[sessionKey] ||
     null;
 
   const dayMeta =
     record.driveAssets?.dayFolder ||
-    record.scheduleId?.driveAssets?.dayFolder ||
     scheduleDayMeta ||
     trainerDayFolders ||
     null;
 
-  return { sessionMeta, dayMeta, trainerDayFolders, sessionKey, dayNum };
+  return { sessionMeta, dayMeta, trainerDayFolders, sessionKey, dayNum, matchedCollege };
 };
 
 const ROOT_TRAINER_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1Sy_OM3laf4VJBmsfamvIAHQMV7hYjPDl";
@@ -507,9 +516,8 @@ const ROOT_TRAINER_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1S
 export const resolveSessionFolderUrl = (record) => {
   if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
   if (record.sessionFolderUrl && typeof record.sessionFolderUrl === "string" && record.sessionFolderUrl.startsWith("http") && !record.sessionFolderUrl.includes("my-drive")) return record.sessionFolderUrl;
-  if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http") && !record.driveFolderUrl.includes("my-drive")) return record.driveFolderUrl;
 
-  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey, matchedCollege } = getHierarchyMeta(record);
 
   const sessionLink = extractLinkOrId(sessionMeta) || extractLinkOrId(trainerDayFolders?.[sessionKey]);
   if (sessionLink && !sessionLink.includes("my-drive")) return sessionLink;
@@ -517,11 +525,15 @@ export const resolveSessionFolderUrl = (record) => {
   const dayLink = extractLinkOrId(dayMeta) || extractLinkOrId(trainerDayFolders) || extractLinkOrId(record.dayFolderLink || record.dayFolderId) || extractLinkOrId(record.scheduleId?.dayFolderLink || record.scheduleId?.dayFolderId);
   if (dayLink && !dayLink.includes("my-drive")) return dayLink;
 
+  const collegeLink =
+    extractLinkOrId(matchedCollege?.googleDriveFolderId || matchedCollege?.driveFolderId) ||
+    extractLinkOrId(record.collegeId?.googleDriveFolderId || record.collegeId?.driveFolderId || record.collegeId?.driveFolderLink || record.scheduleId?.collegeId?.googleDriveFolderId || record.scheduleId?.collegeId?.driveFolderId);
+  if (collegeLink && !collegeLink.includes("my-drive")) return collegeLink;
+
+  if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http") && !record.driveFolderUrl.includes("my-drive")) return record.driveFolderUrl;
+
   const trainerLink = extractLinkOrId(record.trainerId?.googleDriveFolderId || record.trainerId?.driveFolderId);
   if (trainerLink && !trainerLink.includes("my-drive")) return trainerLink;
-
-  const collegeLink = extractLinkOrId(record.collegeId?.googleDriveFolderId || record.collegeId?.driveFolderId || record.collegeId?.driveFolderLink || record.scheduleId?.collegeId?.googleDriveFolderId || record.scheduleId?.collegeId?.driveFolderId);
-  if (collegeLink && !collegeLink.includes("my-drive")) return collegeLink;
 
   return ROOT_TRAINER_DRIVE_FOLDER_URL;
 };
@@ -537,12 +549,11 @@ export const resolveCheckInFolderUrl = (record) => {
   const checkInDoc = docs.find((d) => d?.driveFolderId && (d.fileType === "geotag" || String(d.fileField || "").toLowerCase().includes("checkin") || /check.?in/i.test(d.fileName || "")));
 
   return (
-    extractLinkOrId(sessionMeta?.checkInFolder) ||
-    extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkInFolder) ||
-    extractLinkOrId(dayMeta?.checkInFolder) ||
+    extractLinkOrId(sessionMeta?.checkInFolder || sessionMeta?.geoTagFolder) ||
+    extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkInFolder || trainerDayFolders?.[sessionKey]?.geoTagFolder) ||
     (checkInDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkInDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.checkInFolder || dayMeta?.geoTagFolder || dayMeta?.checkIn || dayMeta?.geo_tag || trainerDayFolders?.checkIn || trainerDayFolders?.geo_tag) ||
     extractLinkOrId(record.driveAssets?.folders?.checkIn || record.driveAssets?.folders?.geoTag) ||
-    extractLinkOrId(dayMeta?.checkIn || dayMeta?.geo_tag) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -558,10 +569,9 @@ export const resolveAttendanceFolderUrl = (record) => {
   return (
     extractLinkOrId(sessionMeta?.attendanceFolder) ||
     extractLinkOrId(trainerDayFolders?.[sessionKey]?.attendanceFolder) ||
-    extractLinkOrId(dayMeta?.attendanceFolder) ||
     (attDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${attDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.attendanceFolder || dayMeta?.attendance || trainerDayFolders?.attendance) ||
     extractLinkOrId(record.driveAssets?.folders?.attendance) ||
-    extractLinkOrId(dayMeta?.attendance) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -577,10 +587,9 @@ export const resolveActivitiesFolderUrl = (record) => {
   return (
     extractLinkOrId(sessionMeta?.studentActivitiesFolder) ||
     extractLinkOrId(trainerDayFolders?.[sessionKey]?.studentActivitiesFolder) ||
-    extractLinkOrId(dayMeta?.studentActivitiesFolder) ||
     (actDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${actDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.studentActivitiesFolder || dayMeta?.studentActivities || trainerDayFolders?.studentActivities) ||
     extractLinkOrId(record.driveAssets?.folders?.studentActivity || record.driveAssets?.folders?.studentActivities) ||
-    extractLinkOrId(dayMeta?.studentActivities) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -596,10 +605,9 @@ export const resolveCheckOutFolderUrl = (record) => {
   return (
     extractLinkOrId(sessionMeta?.checkOutFolder) ||
     extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkOutFolder) ||
-    extractLinkOrId(dayMeta?.checkOutFolder) ||
     (checkOutDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkOutDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.checkOutFolder || dayMeta?.checkOut || trainerDayFolders?.checkOut) ||
     extractLinkOrId(record.driveAssets?.folders?.checkOut) ||
-    extractLinkOrId(dayMeta?.checkOut) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -2548,6 +2556,13 @@ const TrainerOverallAttendance = () => {
                                           style={{ width: '100%', height: 180, objectFit: 'contain' }}
                                           preview={{ mask: 'Click to Preview' }}
                                           fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                          onError={(e) => {
+                                            const driveId = entry.driveFileId || extractGoogleDriveFileId(entry.previewUrl) || extractGoogleDriveFileId(entry.url);
+                                            if (driveId && !e.currentTarget.dataset.fallbackTried) {
+                                              e.currentTarget.dataset.fallbackTried = "true";
+                                              e.currentTarget.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                            }
+                                          }}
                                         />
                                       </div>
                                       <Text strong style={{ fontSize: '12px', marginTop: 8, display: 'block' }}>{entry.label}</Text>
@@ -2629,6 +2644,13 @@ const TrainerOverallAttendance = () => {
                                               style={{ width: '100%', maxHeight: 280, objectFit: 'contain' }}
                                               preview={{ mask: 'Click to Preview' }}
                                               fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                              onError={(e) => {
+                                                const driveId = file.driveFileId || extractGoogleDriveFileId(file.url) || extractGoogleDriveFileId(file.originalUrl);
+                                                if (driveId && !e.currentTarget.dataset.fallbackTried) {
+                                                  e.currentTarget.dataset.fallbackTried = "true";
+                                                  e.currentTarget.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                                }
+                                              }}
                                             />
                                           </div>
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -2732,6 +2754,13 @@ const TrainerOverallAttendance = () => {
                                             style={{ width: '100%', height: 200, objectFit: 'contain' }}
                                             preview={{ mask: 'Click to Preview' }}
                                             fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                            onError={(e) => {
+                                              const driveId = item.driveFileId || extractGoogleDriveFileId(item.url) || extractGoogleDriveFileId(item.originalUrl);
+                                              if (driveId && !e.currentTarget.dataset.fallbackTried) {
+                                                e.currentTarget.dataset.fallbackTried = "true";
+                                                e.currentTarget.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                              }
+                                            }}
                                           />
                                         </div>
                                       ) : (
@@ -2810,6 +2839,13 @@ const TrainerOverallAttendance = () => {
                                         style={{ width: '100%', height: 180, objectFit: 'contain' }}
                                         preview={{ mask: 'Click to Preview' }}
                                         fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                        onError={(e) => {
+                                          const driveId = entry.driveFileId || extractGoogleDriveFileId(entry.previewUrl) || extractGoogleDriveFileId(entry.url);
+                                          if (driveId && !e.currentTarget.dataset.fallbackTried) {
+                                            e.currentTarget.dataset.fallbackTried = "true";
+                                            e.currentTarget.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                          }
+                                        }}
                                       />
                                     </div>
                                     <Text type="secondary" style={{ fontSize: '12px', marginTop: 6, display: 'block' }}>

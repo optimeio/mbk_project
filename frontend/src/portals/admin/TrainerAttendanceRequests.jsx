@@ -41,7 +41,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { api } from "@/services/api";
-import { getSecureImageUrl } from "@/utils/imageUtils";
+import { getSecureImageUrl, extractGoogleDriveFileId } from "@/utils/imageUtils";
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -76,9 +76,10 @@ const getHierarchyMeta = (record) => {
   const sessionKey = sessionType === "AN" ? "anFolder" : "fnFolder";
 
   let trainerDayFolders = null;
+  let matchedCollege = null;
   if (Array.isArray(record.trainerId?.colleges) && record.trainerId.colleges.length > 0) {
     const colIdStr = String(record.collegeId?._id || record.collegeId || record.scheduleId?.collegeId?._id || record.scheduleId?.collegeId || "");
-    let matchedCollege = record.trainerId.colleges.find((c) => {
+    matchedCollege = record.trainerId.colleges.find((c) => {
       const cId = String(c?.collegeId?._id || c?.collegeId || c?._id || "");
       return cId && colIdStr && cId === colIdStr;
     });
@@ -95,20 +96,18 @@ const getHierarchyMeta = (record) => {
   const sessionMeta =
     record.driveAssets?.sessionFolder ||
     record.scheduleId?.driveAssets?.sessionFolder ||
+    scheduleDayMeta?.[sessionKey] ||
     record.scheduleId?.[sessionKey] ||
     record[sessionKey] ||
-    scheduleDayMeta?.[sessionKey] ||
-    trainerDayFolders?.[sessionKey] ||
     null;
 
   const dayMeta =
     record.driveAssets?.dayFolder ||
-    record.scheduleId?.driveAssets?.dayFolder ||
     scheduleDayMeta ||
     trainerDayFolders ||
     null;
 
-  return { sessionMeta, dayMeta, trainerDayFolders, sessionKey, dayNum };
+  return { sessionMeta, dayMeta, trainerDayFolders, sessionKey, dayNum, matchedCollege };
 };
 
 const ROOT_TRAINER_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1Sy_OM3laf4VJBmsfamvIAHQMV7hYjPDl";
@@ -116,9 +115,8 @@ const ROOT_TRAINER_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1S
 export const resolveSessionFolderUrl = (record) => {
   if (!record) return ROOT_TRAINER_DRIVE_FOLDER_URL;
   if (record.sessionFolderUrl && typeof record.sessionFolderUrl === "string" && record.sessionFolderUrl.startsWith("http") && !record.sessionFolderUrl.includes("my-drive")) return record.sessionFolderUrl;
-  if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http") && !record.driveFolderUrl.includes("my-drive")) return record.driveFolderUrl;
 
-  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey } = getHierarchyMeta(record);
+  const { sessionMeta, dayMeta, trainerDayFolders, sessionKey, matchedCollege } = getHierarchyMeta(record);
 
   const sessionLink = extractLinkOrId(sessionMeta) || extractLinkOrId(trainerDayFolders?.[sessionKey]);
   if (sessionLink && !sessionLink.includes("my-drive")) return sessionLink;
@@ -126,11 +124,15 @@ export const resolveSessionFolderUrl = (record) => {
   const dayLink = extractLinkOrId(dayMeta) || extractLinkOrId(trainerDayFolders) || extractLinkOrId(record.dayFolderLink || record.dayFolderId) || extractLinkOrId(record.scheduleId?.dayFolderLink || record.scheduleId?.dayFolderId);
   if (dayLink && !dayLink.includes("my-drive")) return dayLink;
 
+  const collegeLink =
+    extractLinkOrId(matchedCollege?.googleDriveFolderId || matchedCollege?.driveFolderId) ||
+    extractLinkOrId(record.collegeId?.googleDriveFolderId || record.collegeId?.driveFolderId || record.collegeId?.driveFolderLink || record.scheduleId?.collegeId?.googleDriveFolderId || record.scheduleId?.collegeId?.driveFolderId);
+  if (collegeLink && !collegeLink.includes("my-drive")) return collegeLink;
+
+  if (record.driveFolderUrl && typeof record.driveFolderUrl === "string" && record.driveFolderUrl.startsWith("http") && !record.driveFolderUrl.includes("my-drive")) return record.driveFolderUrl;
+
   const trainerLink = extractLinkOrId(record.trainerId?.googleDriveFolderId || record.trainerId?.driveFolderId);
   if (trainerLink && !trainerLink.includes("my-drive")) return trainerLink;
-
-  const collegeLink = extractLinkOrId(record.collegeId?.googleDriveFolderId || record.collegeId?.driveFolderId || record.collegeId?.driveFolderLink || record.scheduleId?.collegeId?.googleDriveFolderId || record.scheduleId?.collegeId?.driveFolderId);
-  if (collegeLink && !collegeLink.includes("my-drive")) return collegeLink;
 
   return ROOT_TRAINER_DRIVE_FOLDER_URL;
 };
@@ -146,12 +148,11 @@ export const resolveCheckInFolderUrl = (record) => {
   const checkInDoc = docs.find((d) => d?.driveFolderId && (d.fileType === "geotag" || String(d.fileField || "").toLowerCase().includes("checkin") || /check.?in/i.test(d.fileName || "")));
 
   return (
-    extractLinkOrId(sessionMeta?.checkInFolder) ||
-    extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkInFolder) ||
-    extractLinkOrId(dayMeta?.checkInFolder) ||
+    extractLinkOrId(sessionMeta?.checkInFolder || sessionMeta?.geoTagFolder) ||
+    extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkInFolder || trainerDayFolders?.[sessionKey]?.geoTagFolder) ||
     (checkInDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkInDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.checkInFolder || dayMeta?.geoTagFolder || dayMeta?.checkIn || dayMeta?.geo_tag || trainerDayFolders?.checkIn || trainerDayFolders?.geo_tag) ||
     extractLinkOrId(record.driveAssets?.folders?.checkIn || record.driveAssets?.folders?.geoTag) ||
-    extractLinkOrId(dayMeta?.checkIn || dayMeta?.geo_tag) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -167,10 +168,9 @@ export const resolveAttendanceFolderUrl = (record) => {
   return (
     extractLinkOrId(sessionMeta?.attendanceFolder) ||
     extractLinkOrId(trainerDayFolders?.[sessionKey]?.attendanceFolder) ||
-    extractLinkOrId(dayMeta?.attendanceFolder) ||
     (attDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${attDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.attendanceFolder || dayMeta?.attendance || trainerDayFolders?.attendance) ||
     extractLinkOrId(record.driveAssets?.folders?.attendance) ||
-    extractLinkOrId(dayMeta?.attendance) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -186,10 +186,9 @@ export const resolveActivitiesFolderUrl = (record) => {
   return (
     extractLinkOrId(sessionMeta?.studentActivitiesFolder) ||
     extractLinkOrId(trainerDayFolders?.[sessionKey]?.studentActivitiesFolder) ||
-    extractLinkOrId(dayMeta?.studentActivitiesFolder) ||
     (actDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${actDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.studentActivitiesFolder || dayMeta?.studentActivities || trainerDayFolders?.studentActivities) ||
     extractLinkOrId(record.driveAssets?.folders?.studentActivity || record.driveAssets?.folders?.studentActivities) ||
-    extractLinkOrId(dayMeta?.studentActivities) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -205,10 +204,9 @@ export const resolveCheckOutFolderUrl = (record) => {
   return (
     extractLinkOrId(sessionMeta?.checkOutFolder) ||
     extractLinkOrId(trainerDayFolders?.[sessionKey]?.checkOutFolder) ||
-    extractLinkOrId(dayMeta?.checkOutFolder) ||
     (checkOutDoc?.driveFolderId ? `https://drive.google.com/drive/folders/${checkOutDoc.driveFolderId}` : null) ||
+    extractLinkOrId(dayMeta?.checkOutFolder || dayMeta?.checkOut || trainerDayFolders?.checkOut) ||
     extractLinkOrId(record.driveAssets?.folders?.checkOut) ||
-    extractLinkOrId(dayMeta?.checkOut) ||
     resolveSessionFolderUrl(record)
   );
 };
@@ -788,6 +786,16 @@ export default function TrainerAttendanceRequests() {
                             alt="Check-In Proof"
                             style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
                             fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                            onError={(e) => {
+                              const imgEl = e.currentTarget;
+                              if (imgEl && !imgEl.dataset.fallbackTried) {
+                                imgEl.dataset.fallbackTried = "true";
+                                const driveId = extractGoogleDriveFileId(checkInPhotoUrl);
+                                if (driveId) {
+                                  imgEl.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                }
+                              }
+                            }}
                           />
                         ) : (
                           <Alert message="No image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
@@ -858,6 +866,16 @@ export default function TrainerAttendanceRequests() {
                                     alt={`Attendance Sheet ${i + 1}`}
                                     style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 4 }}
                                     fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                    onError={(e) => {
+                                      const imgEl = e.currentTarget;
+                                      if (imgEl && !imgEl.dataset.fallbackTried) {
+                                        imgEl.dataset.fallbackTried = "true";
+                                        const driveId = extractGoogleDriveFileId(img);
+                                        if (driveId) {
+                                          imgEl.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                        }
+                                      }
+                                    }}
                                   />
                                 ))}
                               </div>
@@ -868,6 +886,16 @@ export default function TrainerAttendanceRequests() {
                               alt="Student Sheet"
                               style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 4 }}
                               fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                              onError={(e) => {
+                                const imgEl = e.currentTarget;
+                                if (imgEl && !imgEl.dataset.fallbackTried) {
+                                  imgEl.dataset.fallbackTried = "true";
+                                  const driveId = extractGoogleDriveFileId(cleanAttendanceSheetUrl);
+                                  if (driveId) {
+                                    imgEl.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                  }
+                                }
+                              }}
                             />
                           ) : !selectedRecord.attendancePdfUrl && !selectedRecord.attendanceExcelUrl ? (
                             <Alert message="No roster doc" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />
@@ -905,6 +933,16 @@ export default function TrainerAttendanceRequests() {
                                   alt={`Activity ${i + 1}`}
                                   style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 4 }}
                                   fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                                  onError={(e) => {
+                                    const imgEl = e.currentTarget;
+                                    if (imgEl && !imgEl.dataset.fallbackTried) {
+                                      imgEl.dataset.fallbackTried = "true";
+                                      const driveId = extractGoogleDriveFileId(photo);
+                                      if (driveId) {
+                                        imgEl.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                      }
+                                    }
+                                  }}
                                 />
                               ))}
                             </div>
@@ -940,6 +978,16 @@ export default function TrainerAttendanceRequests() {
                             alt="Check-Out Proof"
                             style={{ width: "100%", height: 110, objectFit: "cover", borderRadius: 4 }}
                             fallback="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='18' height='18' x='3' y='3' rx='2' ry='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>"
+                            onError={(e) => {
+                              const imgEl = e.currentTarget;
+                              if (imgEl && !imgEl.dataset.fallbackTried) {
+                                imgEl.dataset.fallbackTried = "true";
+                                const driveId = extractGoogleDriveFileId(cleanCheckOutPhotoUrl);
+                                if (driveId) {
+                                  imgEl.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+                                }
+                              }
+                            }}
                           />
                         ) : (
                           <Alert message="No check-out image" type="warning" showIcon style={{ padding: "4px 8px", fontSize: 11 }} />

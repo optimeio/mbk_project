@@ -43,7 +43,7 @@ export const isValidGoogleDriveId = (id) => {
     return /^[a-zA-Z0-9_-]{15,100}$/.test(id);
 };
 
-const extractGoogleDriveFileId = (value = '') => {
+export const extractGoogleDriveFileId = (value = '') => {
     if (typeof value !== 'string' || !value) return null;
     if (value.startsWith('local-')) return null;
     if (isValidGoogleDriveId(value)) return value;
@@ -85,7 +85,7 @@ export const isDocumentFile = (value = '') => {
     );
 };
 
-const toGoogleDrivePreviewUrl = (value) => {
+export const toGoogleDrivePreviewUrl = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) return value;
     if (isDocumentFile(value)) {
@@ -95,7 +95,7 @@ const toGoogleDrivePreviewUrl = (value) => {
     return `https://lh3.googleusercontent.com/d/${fileId}`;
 };
 
-const toGoogleDriveImagePreviewUrl = (value) => {
+export const toGoogleDriveImagePreviewUrl = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) return value;
     if (isDocumentFile(value)) {
@@ -104,7 +104,7 @@ const toGoogleDriveImagePreviewUrl = (value) => {
     return `https://lh3.googleusercontent.com/d/${fileId}=w1200`;
 };
 
-const toGoogleDriveEmbedUrl = (value) => {
+export const toGoogleDriveEmbedUrl = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) return null;
     return `https://drive.google.com/file/d/${fileId}/preview`;
@@ -116,7 +116,7 @@ export const toGoogleDriveDownloadUrl = (value) => {
     return `https://drive.google.com/uc?id=${fileId}&export=download`;
 };
 
-const getGoogleDriveImagePreviewCandidates = (value) => {
+export const getGoogleDriveImagePreviewCandidates = (value) => {
     const fileId = extractGoogleDriveFileId(value);
     if (!fileId) {
         return value ? [value] : [];
@@ -137,6 +137,12 @@ const getGoogleDriveImagePreviewCandidates = (value) => {
             `https://drive.google.com/uc?id=${fileId}`,
         ]),
     );
+};
+
+export const getAlternateImageUrl = (value) => {
+    const fileId = extractGoogleDriveFileId(value);
+    if (!fileId) return null;
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
 };
 
 /**

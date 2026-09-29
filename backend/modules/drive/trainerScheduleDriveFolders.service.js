@@ -39,6 +39,9 @@ const buildScheduleFolderStateFromDayMeta = (dayNumber, dayMeta = {}, schedule =
     dayFolderId: dayMeta.id || dayMeta.dayFolderId || null,
     dayFolderName: dayMeta.name || `Day ${dayNumber}`,
     dayFolderLink: dayMeta.link || null,
+    sessionFolderId: sessionMeta.id || null,
+    sessionFolderName: sessionMeta.name || (sessionKey === 'anFolder' ? 'AN' : 'FN'),
+    sessionFolderLink: sessionMeta.link || null,
     attendanceFolderId:
       sessionMeta.attendanceFolder?.id ||
       dayMeta.attendanceFolder?.id ||
@@ -59,9 +62,36 @@ const buildScheduleFolderStateFromDayMeta = (dayNumber, dayMeta = {}, schedule =
       sessionMeta.checkInFolder?.link ||
       dayMeta.geoTagFolder?.link ||
       null,
-    driveFolderId: dayMeta.id || dayMeta.dayFolderId || null,
-    driveFolderName: dayMeta.name || `Day ${dayNumber}`,
-    driveFolderLink: dayMeta.link || null,
+    checkInFolderId:
+      sessionMeta.checkInFolder?.id ||
+      dayMeta.checkInFolder?.id ||
+      dayMeta.checkIn ||
+      null,
+    checkInFolderLink:
+      sessionMeta.checkInFolder?.link ||
+      dayMeta.checkInFolder?.link ||
+      null,
+    studentActivitiesFolderId:
+      sessionMeta.studentActivitiesFolder?.id ||
+      dayMeta.studentActivitiesFolder?.id ||
+      dayMeta.studentActivities ||
+      null,
+    studentActivitiesFolderLink:
+      sessionMeta.studentActivitiesFolder?.link ||
+      dayMeta.studentActivitiesFolder?.link ||
+      null,
+    checkOutFolderId:
+      sessionMeta.checkOutFolder?.id ||
+      dayMeta.checkOutFolder?.id ||
+      dayMeta.checkOut ||
+      null,
+    checkOutFolderLink:
+      sessionMeta.checkOutFolder?.link ||
+      dayMeta.checkOutFolder?.link ||
+      null,
+    driveFolderId: sessionMeta.id || dayMeta.id || dayMeta.dayFolderId || null,
+    driveFolderName: sessionMeta.name || dayMeta.name || `Day ${dayNumber}`,
+    driveFolderLink: sessionMeta.link || dayMeta.link || null,
   };
 };
 
@@ -99,9 +129,16 @@ const persistTrainerCollegeDayFolders = async ({
       ([dayKey, folders]) => ({
         day: Number(dayKey),
         dayFolderId: folders.id,
-        attendance: folders.attendanceFolder?.id || null,
-        geo_tag: folders.geoTagFolder?.id || null,
+        dayFolderName: folders.name || `Day ${dayKey}`,
+        dayFolderLink: folders.link || null,
+        attendance: folders.attendanceFolder?.id || folders.fnFolder?.attendanceFolder?.id || null,
+        geo_tag: folders.geoTagFolder?.id || folders.fnFolder?.checkInFolder?.id || null,
         excel_sheet: null,
+        checkIn: folders.checkInFolder?.id || folders.fnFolder?.checkInFolder?.id || null,
+        studentActivities: folders.studentActivitiesFolder?.id || folders.fnFolder?.studentActivitiesFolder?.id || null,
+        checkOut: folders.checkOutFolder?.id || folders.fnFolder?.checkOutFolder?.id || null,
+        fnFolder: folders.fnFolder || null,
+        anFolder: folders.anFolder || null,
       }),
     );
   }
